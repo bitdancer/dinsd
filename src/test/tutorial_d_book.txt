@@ -10,10 +10,10 @@ Dinsd was initially developed while I went through the book
     An Introduction to Relational Database Theory
     by Hugh Darwen
 
-This book uses his and C. J. Date's notional ``D`` language, *Tutorial D*, and
-gives various examples and problems based on *Tutorial D* to elucidate the
-concepts of Relational Algebra.  ``D`` and *Tutorial D* are in turn defined
-fully in Hugh and C. J.'s seminal work
+This book uses his and C. J. Date's notional ``D`` implementation, *Tutorial
+D*, and gives various examples and problems based on *Tutorial D* to elucidate
+the concepts of Relational Algebra.  ``D`` and *Tutorial D* are in turn
+defined fully in Hugh and C. J.'s seminal work
 
     The Third Manifesto
 
@@ -21,18 +21,28 @@ This file writes out various examples in dinsd that correspond to examples
 and/or problems from the book, as well as other examples that were inspired by
 the book or explored during the writing of dinsd.  The examples here do not
 particularly follow the book, as writing the implementation required hoping
-around a bit in the conceptual space.
+around a bit in the conceptual space, but the general pattern does follow
+the book.
 
 Where reference is made to specific page numbers or figures in AIRTD, this is
 based on the bookboon.com edition of the book as available for download on
 November 1st, 2012.
 
-This file is primarily a literate test file rather than a tutorial, but if you
-can make your way through it you will understand all the basics of dinsd.
+This file contains blocks of tests that are meant to exercise edge cases as
+well as the primary test cases and examples, because it is the test document
+that I used as I was building the system.  It is, therefore, a cross between a
+design document, a literate test document, and a detailed discussion of the
+system mechanics.  It may not be the best possible introduction to dinsd, but
+if you can make your way through it you will have a fairly deep understanding
+of dinsd and its relationship to TTM and its correspondence (or lack thereof)
+to *Tutorial D*.
 
 
-Defining Relations (and a few words about databases)
-----------------------------------------------------
+Scalars, Rows, and Relations (and a Few Words About Databases)
+--------------------------------------------------------------
+
+Databases and Terminology
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The concept of a database holding a set of relations is central to *Tutorial
 D*, but the process for defining a database is only introduced implicitly.  We
@@ -66,11 +76,15 @@ than trying to reuse the world ``tuple`` in a Python context.
 So, a relation consists of a name and a header.  The header consists of a list
 of attributes, with each attribute having a type.
 
+
+Types, User Defined Types, and Scalars
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Python is strictly typed.  Defining new types in Python is very simple:  you
-define a class.  (Classes are, in fact, of type ``type`` in Python).  So,
-to define the type for an attribute, we need a class that is that type.  For
-standard types (``int``, ``str``, etc), we can use the Python built in
-types.  For what TTM calls "user defined types", we define a new class.
+define a class.  (Classes are, in fact, of type ``type`` in Python).  So, to
+define the type for an attribute, we need a class that is that type.  For
+standard types (``int``, ``str``, etc), we can use the Python built in types.
+For what TTM calls "user defined types", we define a new class.
 
 In order to maintain consistency, every user defined scaler type (ie:
 non-relation type) used with dinsd must conform to the common syntax and
@@ -90,12 +104,15 @@ D*.  We'll discuss why it is true for dinsd below.)
 In addition to the conformance checking in the ``__init__`` method, there are
 some auxiliary methods that every user defined scaler type must have.
 Therefore dinsd provides a base type for such user defines scalers, named
-``Scaler``.  The ``Scaler`` type always stores its value in an attribute named
-'value'.   There is nothing preventing an application from defining a type
-without using ``Scaler`` as the superclass, but if an application does so it
-is responsible for implementing the equivalents of all of the methods that
-``Scaler`` provides.  (Specifically, it must provide all the methods to define
-a total ordering, as required by TTM.)
+``Scaler``.  A simple ``Scaler`` type must always store its value in an attribute
+named ``value``.
+
+There is nothing preventing an application from defining a type without using
+``Scaler`` as the superclass, or using ``Scaler`` and implementing a more
+complex value store, but if an application does so it is responsible for
+correctly implementing the equivalents of all of the methods that ``Scaler``
+provides.  Specifically, it must provide all the methods to define a total
+ordering of the values, as required by TTM.
 
 So, we can now define the ``SID`` and ``CID`` types that are introduced in
 chapter 2 of AIRDT:
@@ -182,23 +199,28 @@ To prove that this (straightforward Python) implementation is correct:
         ...
     TypeError: unorderable types: SID() > CID()
 
+
+Defining and Instantiating Relations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 A relation in dinsd is also a class, which is nice because in TTM it is also a
-type, making this consistent between TTM and dinsd/Python.  For a relation,
-the class (type) definition consists of a list of attributes and their types.
+type, making this consistent between TTM and dinsd/Python.  As mentioned
+above, for a relation, the class (type) definition consists of a list of
+attributes and their types.
 
 We will demonstrate this by defining the example relation used throughout the
 first couple chapters of AIRDT.  This corresponds to the  *Tutorial D* type
-definition is given on page 42 of AIRDT.
+definition that is given on page 42 of AIRDT.
 
     >>> class IsEnrolledOn(dbdef.Relation):
     ...     student_id = SID
     ...     name = str
     ...     course_id = CID
 
-Because relations share a common semantic, we don't need to define an
-explicit ``__init__`` function.  All ``Relation`` types automatically
-have an ``__init__`` method that allows us to construct a relation of
-that type by providing data to extend the relation.
+Because relations share a common semantic, we don't need to define an explicit
+``__init__`` function.  All ``Relation`` types automatically have an
+``__init__`` method that allows us to construct a relation (relvar) of that
+type by providing data to extend the relation.
 
 The most verbose and most general way of creating such a relation instance is
 as follows:
@@ -215,22 +237,45 @@ This corresponds directly to the relation definition in example 2.3 on page
 45.  As I indicated earlier, we are using the term ``row`` instead of the term
 ``tuple`` to avoid confusion with the Python ``tuple`` type.
 
-You will note that whereas in *Tutorial D* places the onus on the system to
-figure out which defined relation type any given relation literal is an
-instance of, and which defined TUPLE type any given TUPLE literal is, in dinsd
-we give a name to the relation type and use it to reference explicitly which
-type of relation variable or TUPLE (row) we are defining.  (This is consistent
-with TTM, as far as I could figure out.)
+You may wonder about the odd (at least to Python eyes) method name '_row_'.  A
+relation must be able to hold attributes with any "normal" name...we do not
+want there to be an "reserved" identifiers the way there are in some SQL
+dialects.  So any valid Python identifier is a valid attribute name...except
+ones that start with '_'.  We can thus use names that start with '_' as the
+names of non-relation-attribute attributes of the Python class.  However, the
+normal Python convention is that names that start with a single '_' are
+"private" names, and not part of the API.  In order to distinguish dinsd
+method names that *are* part of the API, we also suffix the name with a '_'.
+Thus, attribute identifiers in dinsd that both start and end with a '_'
+are *methods* that are part of the public API.
+
+If you compare the above "relation literal" with the one from example 2.3 in
+AIRDT, you might notice a major difference between disnd and *Tutorial D*, one
+of the ones that makes dinsd not technically compatible with TTM.  In TTM
+(and *Tutorial D*) a type is completely characterized by the names of the
+attributes and the types of the values.  If two definitions or two literals
+refer to the *same* set of names, with the value associated with each name
+having the *same* type, then the two are considered to be *exactly* the same
+type for all purposes.  Python, on the other hand, bases type identity on the
+identity of the *object* that defines the type.  Thus in our version of the
+Relation literal above, we must explicitly name the type that we are
+instantiating, so that Python can follow the pointer to the single type object
+that defines this Relation type.  While this technically violates TTM, in
+practice we allow relvars that have conformant types in the TTM sense to fully
+interoperate.  Thus in practice the difference has a consequence only in the
+way in which Relations and Tuples are created, and not on the way in which
+they are used.
 
 You will also note that dinsd does not provide any direct syntax for defining
-a row, unlike *Tutorial D*, which provides the TUPLE keyword.  A row selector
-function is accessible only from the corresponding Relation type that uses the
-same header.  This probably does not fully conform to TTM, but I haven't found
-a need to define a row without also defining the corresponding Relation, so I
-don't think it is a significant omission.
+a row independent of any Relation, unlike *Tutorial D*, which provides the
+TUPLE keyword for both type and literal definition.  In disd a row selector
+function is accessible only from the corresponding `Relation` type that uses
+the same header.  This also does not fully conform to TTM, but I haven't
+found a need to define a row without also defining the corresponding Relation,
+so I don't think it is a significant omission.
 
-The instantiation above is *very* wordy.  Given that we know which type of
-relation we are instantiating, we can provide usefully simpler
+The instantiation above is *very* wordy.  Given that in dinsd we know which
+type of relation we are instantiating, we can provide usefully simpler
 representations.
 
 First, we know that the body of the relation is a list of rows, so there is no
@@ -262,10 +307,10 @@ instead of dictionaries, and takes the first such tuple as the ordered list
 of attributes and each subsequent tuple as a correspondingly ordered list
 of attribute values.
 
-Finally, by taking advantage of the fact that we not only know the type of the
-attributes, but we have a selector function for that type, we can produce a
-minimally simple representation by relaxing from the purity of explicitly
-specifying the type of each scaler literal:
+Finally, by taking advantage of the fact that we know the type of the
+attributes and have access to the selector function for that type, we can
+produce a minimally simple representation by not requiring the type of the
+attribute value to explicitly specified in the literal:
 
     >>> is_enrolled_on4 = IsEnrolledOn(
     ...     ('student_id', 'course_id', 'name'),
@@ -288,13 +333,13 @@ and an instance of that type must be reported as valid.
 It might appear as though there is another step of simplification we could do:
 not require the first tuple of attribute names, but instead assume the same
 ordering as that used in the relation definition.  Although it would
-technically be possible to do this in Python (by using an OrderedDict for the
-Relation class dictionary) it is not a natural fit for normal Python
+technically be possible to do this in Python (by using an ``OrderedDict`` for
+the Relation class dictionary) it is not a natural fit for normal Python
 semantics, and would (unlike, I believe, the previous simplifications)
 definitely violate the spirit of TTM by making the meaning of a relation
 literal dependent on the order of definition of the attributes in the relation
-definition.  The final simplification above is not dependent on the definition
-order, only on the types.
+definition.  In contrast, the final simplification above is not dependent on
+the definition order, only on the types, which cannot change.
 
 So, in dinsd you can choose the level of correspondence to the *Tutorial D*
 literal notation that you prefer.  All of the above representations produce
@@ -333,6 +378,9 @@ convenient format for inspecting the relation:
     | C2        | Anne     | S1         |
     | C3        | Cindy    | S3         |
     +-----------+----------+------------+
+
+Testing the Edges
+~~~~~~~~~~~~~~~~~
 
 So much for the basics and the simple initial example from AIRDT Chapter 2.
 Let's take a look at some edge cases to make sure the code handles them.
@@ -403,7 +451,7 @@ You will note that as with the ``repr``  and ``str`` of a ``Relation``, the
 a ``Relation``, but is provided for completeness.
 
 The same type checking happens when instantiating a Relation using the
-shorthand:
+shorthand, and additionally reports which row is in error:
 
     >>> IsEnrolledOn(('course_id', 'name'),
     ...               ('S1', 'Anne'))
@@ -435,3 +483,88 @@ shorthand:
     Traceback (most recent call last):
         ...
     TypeError: Expected 'S' followed by one to three digits; 'C1' is invalid in row 2
+
+
+
+Relational Operators
+--------------------
+
+Analogous to how the classes used for defining row and relation types are
+collected into the dinsd ``dbdef`` namespace, the methods used to define
+various relational operators are defined in their own namespace, in this case
+named ``op``.  It is annoying to type ``op.`` in front of the operators,
+though, since we type them much more often than the dbdef class names.
+So we'll import each operator at the start of the section discussing it.
+
+
+Example Relations
+~~~~~~~~~~~~~~~~~
+
+Here are the two relations used in the examples in Chapter 4 of AIRDT:
+
+    >>> class IsCalled(dbdef.Relation):
+    ...     student_id = SID
+    ...     name = str
+    >>> is_called = IsCalled(
+    ...     ('student_id',  'name'),
+    ...     ('S1',          'Anne'),
+    ...     ('S2',          'Boris'),
+    ...     ('S3',          'Cindy'),
+    ...     ('S4',          'Devinder'),
+    ...     ('S5',          'Boris'),
+    ...     )
+    >>> print(is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+    >>> class IsEnrolledOn(dbdef.Relation):
+    ...     student_id = SID
+    ...     course_id = CID
+    >>> is_enrolled_on = IsEnrolledOn(
+    ...     ('student_id',  'course_id'),
+    ...     ('S1',          'C1'),
+    ...     ('S1',          'C2'),
+    ...     ('S2',          'C1'),
+    ...     ('S3',          'C3'),
+    ...     ('S4',          'C1'),
+    ...     )
+    >>> print(is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S3         |
+    +-----------+------------+
+
+Here we have changed the meaning of the names IsEnrolledOn and is_enrolled_on.
+We would not be allowed to do this in *Tutorial D* or *TTM* without first
+declaring variables as discarded and *then* defining new types for them.
+Python sees that as pointless busywork and does not require it, but it is one
+of the things that makes dinsd not TTM compliant.  (We will see later,
+however, that disd *does* implement semi-statically-typed relvars inside
+databases.)
+
+Python keeps track of objects by pointer, though, not by name, so to Python
+the type of the relation pointed to now by is_enrolled_on is different from
+the type of the relation pointed to by the old is_enrolled_on variables, even
+though the two relation types have the same identifier:
+
+    >>> type(is_enrolled_on).__name__ == type(is_enrolled_on2).__name__
+    True
+    >>> type(is_enrolled_on) == type(is_enrolled_on2)
+    False
+
+That is, Python is *strongly typed*, even though it is also *dynamically
+typed*.  (In fact, if you consider that it is really the object that is typed,
+and that there are no real 'variables' in Python, just names that contain
+references to objects, disnd probably does technically comply with TTM...but
+not with its spirit, which requires static typing.)
