@@ -568,3 +568,21 @@ typed*.  (In fact, if you consider that it is really the object that is typed,
 and that there are no real 'variables' in Python, just names that contain
 references to objects, disnd probably does technically comply with TTM...but
 not with its spirit, which requires static typing.)
+
+join
+~~~~
+
+    >>> from dinsd.op import join
+
+Here is the straightforward ``join`` of the two tables above:
+
+    >>> print(join(is_enrolled_on, is_called))
+    +-----------+----------+------------+
+    | course_id | name     | student_id |
+    +-----------+----------+------------+
+    | C1        | Anne     | S1         |
+    | C1        | Boris    | S2         |
+    | C1        | Devinder | S4         |
+    | C2        | Anne     | S1         |
+    | C3        | Cindy    | S3         |
+    +-----------+----------+------------+

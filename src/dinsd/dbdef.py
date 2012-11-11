@@ -95,6 +95,9 @@ class Row(RichCompareMixin, Mapping):
             ', '.join('{}={}'.format(k, v)
                         for k, v in sorted(self.__dict__.items())))
 
+    def _as_dict_(self):
+        return self.__dict__.copy()
+
 
 class RelationMeta(type):
 
