@@ -1,0 +1,396 @@
+Disnd and An Introduction to Relational Database Theory
+=======================================================
+
+
+Introduction
+------------
+
+Dinsd was initially developed while I went through the book
+
+    An Introduction to Relational Database Theory
+    by Hugh Darwen
+
+This book uses his and C. J. Date's notional ``D`` language, *Tutorial D*, and
+gives various examples and problems based on *Tutorial D* to elucidate the
+concepts of Relational Algebra.  ``D`` and *Tutorial D* are in turn defined
+fully in Hugh and C. J.'s seminal work
+
+    The Third Manifesto
+
+This file writes out various examples in dinsd that correspond to examples
+and/or problems from the book, as well as other examples that were inspired by
+the book or explored during the writing of dinsd.  The examples here do not
+particularly follow the book, as writing the implementation required hoping
+around a bit in the conceptual space.
+
+Where reference is made to specific page numbers or figures in AIRTD, this is
+based on the bookboon.com edition of the book as available for download on
+November 1st, 2012.
+
+This file is primarily a literate test file rather than a tutorial, but if you
+can make your way through it you will understand all the basics of dinsd.
+
+
+Defining Relations (and a few words about databases)
+----------------------------------------------------
+
+The concept of a database holding a set of relations is central to *Tutorial
+D*, but the process for defining a database is only introduced implicitly.  We
+will do the same, talking about the conceptual framework of the database,
+but defer the discussion of the syntax for defining one until later.
+
+A database in dinsd consists of a container for the database, and a name and
+definition for all of the relations that are stored in the container.  This is
+what is usually called a "schema" in SQL.  Dinsd refers to it as a "DBDef"
+(Database Definition).  Unlike a traditional SQL DBMS, dinsd does not store
+the ``DBDef`` "in the catalog"; instead the Python program holds the
+``DBDef``, and only the data is stored in the persistent store.  This means
+that dnsd is not by itself a DBMS...in order to have a dinsd based DBMS, you
+would need to write an application that would manage ``DBDef`` definitions as
+data objects, and persist them.  While this is conceptually possible, it is
+not something I need for the first intended application of dinsd and so is not
+addressed here.
+
+The facilities for defining databases and relations are provided by the dinsd
+module ``dbdef``.
+
+    >>> from dinsd import dbdef
+
+A database is a set of relations.  Per TTM and AIRDT, a relation consists of a
+header plus a set of ``tuples`` that conform to that header.  Since Python
+already uses the term ``tuple`` to refer to a different concept, we will fall
+back to the less precise but more widely recognized term ``row``.  I'm sure
+the authors of TTM would/will be annoyed by this, but it is less confusing
+than trying to reuse the world ``tuple`` in a Python context.
+
+So, a relation consists of a name and a header.  The header consists of a list
+of attributes, with each attribute having a type.
+
+Python is strictly typed.  Defining new types in Python is very simple:  you
+define a class.  (Classes are, in fact, of type ``type`` in Python).  So,
+to define the type for an attribute, we need a class that is that type.  For
+standard types (``int``, ``str``, etc), we can use the Python built in
+types.  For what TTM calls "user defined types", we define a new class.
+
+In order to maintain consistency, every user defined scaler type (ie:
+non-relation type) used with dinsd must conform to the common syntax and
+semantics of the Python built in types:  the type constructor at a minimum
+accepts one argument, and either raises an error if the argument (the
+"selector" in TTM/AIRDT terms) cannot be converted into a valid instance of
+the type, or a valid instance of the type if it can be.  In Python terms, this
+means that the class's ``__init__`` method must accept at least one positional
+argument.  (For the purposes of dinsd, this argument should always be present,
+even if it is optional in the class definition for other reasons.)
+
+It is also critical that, like the Python built in types, the user defined
+type accept an instance of itself as a valid selector, and return an
+equivalent instance.  (Note that this requirement is not true for *Tutorial
+D*.  We'll discuss why it is true for dinsd below.)
+
+In addition to the conformance checking in the ``__init__`` method, there are
+some auxiliary methods that every user defined scaler type must have.
+Therefore dinsd provides a base type for such user defines scalers, named
+``Scaler``.  The ``Scaler`` type always stores its value in an attribute named
+'value'.   There is nothing preventing an application from defining a type
+without using ``Scaler`` as the superclass, but if an application does so it
+is responsible for implementing the equivalents of all of the methods that
+``Scaler`` provides.  (Specifically, it must provide all the methods to define
+a total ordering, as required by TTM.)
+
+So, we can now define the ``SID`` and ``CID`` types that are introduced in
+chapter 2 of AIRDT:
+
+    >>> class ID(dbdef.Scaler):
+    ...
+    ...     def __init__(self, id):
+    ...         if isinstance(id, self.__class__):
+    ...             self.value = id.value
+    ...             return
+    ...         if not isinstance(id, str):
+    ...             raise TypeError(
+    ...                 "Expected str but passed {}".format(type(id)))
+    ...         if (2 <= len(id) <=4 and id.startswith(self.firstchar) and
+    ...                 id[1:].isdigit()):
+    ...             self.value = id
+    ...         else:
+    ...             raise TypeError(
+    ...                 "Expected '{}' followed by one to three digits; {!r} "
+    ...                 "is invalid".format(self.firstchar, id))
+    ...
+    >>> class SID(ID):
+    ...     firstchar = 'S'
+    ...
+    >>> class CID(ID):
+    ...     firstchar = 'C'
+
+This definition corresponds to example 2.4 on page 47 of AIRDT.  It looks
+somewhat more complicated, but this is primarily because defining the error
+messages resulting from "selection" failure, whereas example 2.4 is leaving
+those error messages to be automatically generated by the *Tutorial D* system.
+
+Semantically the examples are equivalent.  We are using Python built
+in functions for the checks, whereas in *Tutorial D* the check functions are
+user defined (and their definition is deferred to later in the book).
+The *Tutorial D* ``C CHAR`` declaration corresponds to our ``self.value =
+id``, with the difference that our self.value is not typed.  The *value* has a
+type, which our code is constraining to be ``str`` (Python's equivalent
+of *Tutorial D*'s ``CHAR``), but as is normal in Python the name we store it
+under is not itself typed.
+
+To prove that this (straightforward Python) implementation is correct:
+
+    >>> SID('S1')
+    SID('S1')
+    >>> CID('C1')
+    CID('C1')
+    >>> SID(SID('S1'))
+    SID('S1')
+    >>> print(SID('S2'))
+    S2
+    >>> SID('1')
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'S' followed by one to three digits; '1' is invalid
+    >>> CID(1)
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected str but passed <class 'int'>
+    >>> SID('C1')
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'S' followed by one to three digits; 'C1' is invalid
+    >>> CID('C0003')
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'C' followed by one to three digits; 'C0003' is invalid
+    >>> SID(CID('C1'))
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected str but passed <class '__main__.CID'>
+    >>> SID('S1') == SID('S1')
+    True
+    >>> SID('S1') != CID('C1')
+    True
+    >>> SID('S2') == SID(SID('S2'))
+    True
+
+
+A relation in dinsd is also a class, which is nice because in TTM it is also a
+type, making this consistent between TTM and dinsd/Python.  For a relation,
+the class (type) definition consists of a list of attributes and their types.
+
+We will demonstrate this by defining the example relation used throughout the
+first couple chapters of AIRDT.  This corresponds to the  *Tutorial D* type
+definition is given on page 42 of AIRDT.
+
+    >>> class IsEnrolledOn(dbdef.Relation):
+    ...     student_id = SID
+    ...     name = str
+    ...     course_id = CID
+
+Because relations share a common semantic, we don't need to define an
+explicit ``__init__`` function.  All ``Relation`` types automatically
+have an ``__init__`` method that allows us to construct a relation of
+that type by providing data to extend the relation.
+
+The most verbose and most general way of creating such a relation instance is
+as follows:
+
+    >>> is_enrolled_on = IsEnrolledOn(
+    ...     IsEnrolledOn._row_({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
+    ...     IsEnrolledOn._row_({'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'}),
+    ...     IsEnrolledOn._row_({'student_id': SID('S2'), 'course_id': CID('C1'), 'name': 'Boris'}),
+    ...     IsEnrolledOn._row_({'student_id': SID('S3'), 'course_id': CID('C3'), 'name': 'Cindy'}),
+    ...     IsEnrolledOn._row_({'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'}),
+    ...     )
+
+This corresponds directly to the relation definition in example 2.3 on page
+45.  As I indicated earlier, we are using the term ``row`` instead of the term
+``tuple`` to avoid confusion with the Python ``tuple`` type.
+
+You will note that whereas in *Tutorial D* places the onus on the system to
+figure out which defined relation type any given relation literal is an
+instance of, and which defined TUPLE type any given TUPLE literal is, in dinsd
+we give a name to the relation type and use it to reference explicitly which
+type of relation variable or TUPLE (row) we are defining.  (This is consistent
+with TTM, as far as I could figure out.)
+
+You will also note that dinsd does not provide any direct syntax for defining
+a row, unlike *Tutorial D*, which provides the TUPLE keyword.  A row selector
+function is accessible only from the corresponding Relation type that uses the
+same header.  This probably does not fully conform to TTM, but I haven't found
+a need to define a row without also defining the corresponding Relation, so I
+don't think it is a significant omission.
+
+The instantiation above is *very* wordy.  Given that we know which type of
+relation we are instantiating, we can provide usefully simpler
+representations.
+
+First, we know that the body of the relation is a list of rows, so there is no
+need to pass in explicitly constructed rows.  Instead, if the init method is
+passed a simple Python dictionary, it can do the conversion-to-row itself:
+
+    >>> is_enrolled_on2 = IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
+    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
+    ...     {'student_id': SID('S2'), 'course_id': CID('C1'), 'name': 'Boris'},
+    ...     {'student_id': SID('S3'), 'course_id': CID('C3'), 'name': 'Cindy'},
+    ...     {'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'},
+    ...     )
+
+Second, by relaxing from the purity of never using ordered tuples we can
+significantly reduce the typing required to enter a relation literal:
+
+    >>> is_enrolled_on3 = IsEnrolledOn(
+    ...     ('student_id', 'course_id', 'name'),
+    ...     (SID('S1'), CID('C1'), 'Anne'),
+    ...     (SID('S1'), CID('C2'), 'Anne'),
+    ...     (SID('S2'), CID('C1'), 'Boris'),
+    ...     (SID('S3'), CID('C3'), 'Cindy'),
+    ...     (SID('S4'), CID('C1'), 'Devinder'),
+    ...     )
+
+Here the ``__init__`` method sees that it is being passed (Python) tuples
+instead of dictionaries, and takes the first such tuple as the ordered list
+of attributes and each subsequent tuple as a correspondingly ordered list
+of attribute values.
+
+Finally, by taking advantage of the fact that we not only know the type of the
+attributes, but we have a selector function for that type, we can produce a
+minimally simple representation by relaxing from the purity of explicitly
+specifying the type of each scaler literal:
+
+    >>> is_enrolled_on4 = IsEnrolledOn(
+    ...     ('student_id', 'course_id', 'name'),
+    ...     ('S1', 'C1', 'Anne'),
+    ...     ('S1', 'C2', 'Anne'),
+    ...     ('S2', 'C1', 'Boris'),
+    ...     ('S3', 'C3', 'Cindy'),
+    ...     ('S4', 'C1', 'Devinder'),
+    ...     )
+
+There is no loss of type-safety here, since each selector is passed through
+the type constructor, which will raise an error if the argument value does
+not conform to the selector.
+
+You can see now why it is critical that the type constructor accept an
+instance of itself as valid:  the relation constructor will always pass the
+value of an attribute through the corresponding type function for validation,
+and an instance of that type must be reported as valid.
+
+It might appear as though there is another step of simplification we could do:
+not require the first tuple of attribute names, but instead assume the same
+ordering as that used in the relation definition.  Although it would
+technically be possible to do this in Python (by using an OrderedDict for the
+Relation class dictionary) it is not a natural fit for normal Python
+semantics, and would (unlike, I believe, the previous simplifications)
+definitely violate the spirit of TTM by making the meaning of a relation
+literal dependent on the order of definition of the attributes in the relation
+definition.  The final simplification above is not dependent on the definition
+order, only on the types.
+
+So, in dinsd you can choose the level of correspondence to the *Tutorial D*
+literal notation that you prefer.  All of the above representations produce
+the same relvar value:
+
+    >>> is_enrolled_on == is_enrolled_on2 == is_enrolled_on3 == is_enrolled_on4
+    True
+
+It's ``repr`` is one of the more compact version of the literal representation:
+
+    >>> is_enrolled_on     # doctest: +NORMALIZE_WHITESPACE
+    IsEnrolledOn(('course_id', 'name',    'student_id'),
+                   (CID('C1'), 'Anne',     SID('S1')),
+                   (CID('C1'), 'Boris',    SID('S2')),
+                   (CID('C1'), 'Devinder', SID('S4')),
+                   (CID('C2'), 'Anne',     SID('S1')),
+                   (CID('C3'), 'Cindy',    SID('S3')))
+
+Of course, the real repr is a single line and so is not as pretty as the
+example makes it look.  We've lined up the example so that you can notice that
+the attributes are sorted alphabetically, and the rows are sorted according to
+their values as tuples.  We could also just allow them to be in their
+"natural" order, but in Python that is semi-random and it is more convenient
+to have a consistent ordering in the representation.
+
+The ``str`` (printed) representation is likewise sorted, but is in a more
+convenient format for inspecting the relation:
+
+    >>> print(is_enrolled_on)
+    +-----------+----------+------------+
+    | course_id | name     | student_id |
+    +-----------+----------+------------+
+    | C1        | Anne     | S1         |
+    | C1        | Boris    | S2         |
+    | C1        | Devinder | S4         |
+    | C2        | Anne     | S1         |
+    | C3        | Cindy    | S3         |
+    +-----------+----------+------------+
+
+So much for the basics and the simple initial example from AIRDT Chapter 2.
+Let's take a look at some edge cases to make sure the code handles them.
+
+First of all, we can create an empty Relation:
+
+    >>> is_enrolled_on = IsEnrolledOn()
+    >>> is_enrolled_on
+    IsEnrolledOn(('course_id', 'name', 'student_id')
+    >>> print(is_enrolled_on)
+    +-----------+------+------------+
+    | course_id | name | student_id |
+    +-----------+------+------------+
+    +-----------+------+------------+
+
+The dictionary passed to the _row_ constructor must have the right number of
+values:
+
+    >>> IsEnrolledOn._row_({})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 0
+    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo'})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2
+    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo',
+    ...                         'course_id': 'C1', 'bar': 1})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 4
+
+And the attribute names must match those defined in the relation:
+
+    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo', 'bad': 1})
+    Traceback (most recent call last):
+        ...
+    TypeError: Invalid attribute name bad
+
+The values must be valid:
+
+    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo', 'course_id': 1})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected str but passed <class 'int'>
+    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo', 'course_id': 'S1'})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'C' followed by one to three digits; 'S1' is invalid
+
+But it is OK to use the selector form ('C1') rather than the full scaler
+value form (CID('C1')):
+
+    >>> r = IsEnrolledOn._row_(
+    ...         {'student_id': 'S1', 'name': 'foo', 'course_id': 'C1'})
+
+A row also has a distinct ``repr`` and ``str``:
+
+    >>> r                       # doctest: +NORMALIZE_WHITESPACE
+    IsEnrolledOn._row_({'course_id': CID('C1'), 'name': 'foo', 'student_id':
+                        SID('S1')})
+    >>> print(r)
+    (course_id=C1, name=foo, student_id=S1)
+
+You will note that as with the ``repr``  and ``str`` of a ``Relation``, the
+``repr`` and ``str`` of a ``row`` is sorted by the attribute names.  The
+``str`` representation of a ``row`` is not nearly as useful as that of
+a ``Relation``, but is provided for completeness.
