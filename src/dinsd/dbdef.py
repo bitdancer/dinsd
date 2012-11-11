@@ -63,7 +63,7 @@ class Row(RichCompareMixin, Mapping):
                                 self._degree_, len(attrdict)))
         for attr, value in attrdict.items():
             try:
-                setattr(self, attr, self._header[attr](value))
+                setattr(self, attr, self._header_[attr](value))
             except KeyError:
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None
@@ -105,8 +105,9 @@ class RelationMeta(type):
         attrs = [x for x in dct if not x.startswith('_')]
         dct['_degree_'] = len(attrs)
         dct['_attr_names_'] = sorted(attrs)
+        dct['_header_'] = {n: dct[n] for n in attrs}
         class _rowclass_(Row):
-            _header = dct           # XXX: is there a better way to do this?
+            _header_ = dct['_header_']
             _degree_ = len(attrs)
             _relation_name_ = name
         dct['_row_'] = _rowclass_

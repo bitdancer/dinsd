@@ -720,7 +720,108 @@ Join is associative:
     ...         ('student_id', 'course_id'),
     ...         ('S1',         'C3'),
     ...         ('S5',         'C3'),
+    ...         ('S3',         'C3'),
     ...         )
     >>> (is_enrolled_on & is_called) & last_year == (
     ...     is_enrolled_on & (is_called & last_year))
     True
+
+
+intersect
+~~~~~~~~~
+
+    >>> from dinsd.op import intersect
+
+This is really a special case of ``join``: the case where all of the
+attributes of the two relations being joined are the same.  It is
+equivalent to the set-intersection of the two relations:
+
+    >>> repeat_enrollment = intersect(is_enrolled_on, last_year)
+    >>> print(display(repeat_enrollment, 'student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S3         | C3        |
+    +------------+-----------+
+    >>> repeat_enrollment == is_enrolled_on & last_year
+    True
+
+There are two reasons to use ``intersect`` instead of ``join``.  The
+first is that because the domain of operation is constrained, the
+implementation may be faster.  The better reason to use it is that it
+declares your intention to join two sets with the same attributes,
+and will raise an error if the two sets do not have the same
+attributes:
+
+    >>> intersect(is_called, is_enrolled_on)
+    Traceback (most recent call last):
+        ...
+    TypeError: Cannot take intersection of unlike relations
+
+
+times
+~~~~~
+
+    >>> from dinsd.op import times
+
+Another special case of ``join``.  I'm not as fond of this operator name, but
+I can't think of a better one.  In this case, there are *no* attributes in
+common between the two relations, and the result of the join is the Cartesian
+product of the two sets of values.
+
+Use cases for this are not common, so we won't even try to come up with a
+sensible example:
+
+    >>> class Foo(dbdef.Relation):
+    ...     bar = str
+    >>> foo = Foo(('bar',), ('fizz',), ('gin',))
+    >>> print(times(last_year, foo))
+    +------+-----------+------------+
+    | bar  | course_id | student_id |
+    +------+-----------+------------+
+    | fizz | C3        | S1         |
+    | fizz | C3        | S3         |
+    | fizz | C3        | S5         |
+    | gin  | C3        | S1         |
+    | gin  | C3        | S3         |
+    | gin  | C3        | S5         |
+    +------+-----------+------------+
+
+Here there is not likely to be any performance gain by using ``times``, but
+the pedagogical value of getting an error if you try to ``times`` relations
+that share columns is probably even more valuable.
+
+    >>> times(is_called, last_year)
+    Traceback (most recent call last):
+        ...
+    TypeError: Cannot multiply relations that share attributes
+
+Like ``join``, ``intersect`` and ``times`` may be called with more than
+two relations:
+
+    >>> two_years_ago = IsEnrolledOn()
+    >>> print(intersect(is_enrolled_on, last_year, two_years_ago))
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    +-----------+------------+
+    >>> class Bar(dbdef.Relation):
+    ...     foo = str
+    >>> bar = Bar(('foo',), ('gin',), ('fiz',))
+    >>> print(times(last_year, bar, foo))
+    +------+-----------+-----+------------+
+    | bar  | course_id | foo | student_id |
+    +------+-----------+-----+------------+
+    | fizz | C3        | fiz | S1         |
+    | fizz | C3        | fiz | S3         |
+    | fizz | C3        | fiz | S5         |
+    | fizz | C3        | gin | S1         |
+    | fizz | C3        | gin | S3         |
+    | fizz | C3        | gin | S5         |
+    | gin  | C3        | fiz | S1         |
+    | gin  | C3        | fiz | S3         |
+    | gin  | C3        | fiz | S5         |
+    | gin  | C3        | gin | S1         |
+    | gin  | C3        | gin | S3         |
+    | gin  | C3        | gin | S5         |
+    +------+-----------+-----+------------+
