@@ -52,3 +52,6 @@ def _binary_join(first, second):
             attrs.update(row2._as_dict_())
             new_rel._rows_.add(new_Rel._row_(attrs))
     return new_rel
+
+# Make '&' the same as binary join for Relations.
+Relation.__and__ = lambda self, other: _binary_join(self, other)

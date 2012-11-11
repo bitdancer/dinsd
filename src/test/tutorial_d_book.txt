@@ -624,3 +624,28 @@ Here is the straightforward ``join`` of the two tables above:
     | S3         | Cindy    | C3        |
     | S4         | Devinder | C1        |
     +------------+----------+-----------+
+
+In *Tutorial D* the ``JOIN`` relational operator can be used both as a prefix
+function and as a infix operator.  In Python we can't define new infix
+operators, but we can override existing ones.  Since ``JOIN`` is, at base, the
+logical ``and`` operator, it would make sense to override ``and`` for the
+infix version of join.  However, we can't do that in Python, because ``and``
+is a short circuit operator, whereas both arguments to a function must be
+evaluated before the function can be called, and we can only override an
+operator by defining a function.
+
+What we can do, however, is override the arithmetic ``&`` operator:
+
+    >>> j2 = is_enrolled_on & is_called
+    >>> print(display(j2, 'student_id', 'name', 'course_id'))
+    +------------+----------+-----------+
+    | student_id | name     | course_id |
+    +------------+----------+-----------+
+    | S1         | Anne     | C1        |
+    | S1         | Anne     | C2        |
+    | S2         | Boris    | C1        |
+    | S3         | Cindy    | C3        |
+    | S4         | Devinder | C1        |
+    +------------+----------+-----------+
+    >>> j == j2
+    True
