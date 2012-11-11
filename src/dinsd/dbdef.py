@@ -10,10 +10,15 @@ class Scaler:
     def __repr__(self):
         return "{}({!r})".format(self.__class__.__name__, self.value)
 
+    # XXX: I'm sure there's a better way to do this, but this works (thanks,
+    # Regbro).
+
     def _cmpkey(self):
         return self.value
 
     def _compare(self, other, method):
+        if type(self) != type(other):
+            return NotImplemented
         try:
             return method(self._cmpkey(), other._cmpkey())
         except (AttributeError, TypeError):

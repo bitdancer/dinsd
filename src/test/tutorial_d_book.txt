@@ -173,7 +173,14 @@ To prove that this (straightforward Python) implementation is correct:
     True
     >>> SID('S2') == SID(SID('S2'))
     True
-
+    >>> SID('S1') < SID('S2')
+    True
+    >>> CID('C7') >= CID('C7')
+    True
+    >>> SID('S1') > CID('C2')
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: SID() > CID()
 
 A relation in dinsd is also a class, which is nice because in TTM it is also a
 type, making this consistent between TTM and dinsd/Python.  For a relation,
