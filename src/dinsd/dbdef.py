@@ -1,5 +1,5 @@
 from collections import Mapping
-from operator import itemgetter
+from operator import attrgetter
 
 
 class Scaler:
@@ -130,8 +130,10 @@ class Relation(metaclass=RelationMeta):
     def __eq__(self, other):
         if type(self) != type(other):
             return False
-        return all(x == y for x, y in zip(self._rows_, other._rows_))
-
+        getter = attrgetter(*self._attr_names_)
+        return all(x == y for x, y in zip(
+                            (getter(x) for x in self._rows_),
+                            (getter(x) for x in other._rows_)))
 
     def __repr__(self):
         r = "{}((".format(self.__class__.__name__)
@@ -140,7 +142,7 @@ class Relation(metaclass=RelationMeta):
             return r + ')'
         r += '), '
         rows = []
-        for row in sorted(self._rows_, key=itemgetter(*self._attr_names_)):
+        for row in sorted(self._rows_, key=attrgetter(*self._attr_names_)):
             rows.append('(' + ', '.join([repr(row[x]) 
                                          for x in self._attr_names_]) + ')')
         r += ', '.join(rows) + ')'
@@ -148,7 +150,7 @@ class Relation(metaclass=RelationMeta):
 
     def __str__(self):
         toprint = [self._attr_names_]
-        getter = itemgetter(*self._attr_names_)
+        getter = attrgetter(*self._attr_names_)
         toprint.extend(sorted([str(x)
                         for x in getter(row)] for row in self._rows_))
         widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
