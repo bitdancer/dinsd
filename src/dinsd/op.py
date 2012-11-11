@@ -2,9 +2,9 @@ from operator import attrgetter
 from collections import defaultdict
 from dinsd.dbdef import Relation
 
-def display(relvar, *columns):
+def display(relvar, *columns, **kw):
     relvar._validate_attr_list(columns)
-    return relvar._display_(*columns)
+    return relvar._display_(*columns, **kw)
 
 def join(first, *relvars):
     joined = first
@@ -79,3 +79,22 @@ def times(first, *relvars):
         if first._header_.keys() & rel._header_.keys():
             raise TypeError("Cannot multiply relations that share attributes")
     return join(first, *relvars)
+
+
+def rename(relation, **renames):
+    new_attrs = relation._header_.copy()
+    holder = {}
+    for old, new in renames.items():
+        holder[new] = new_attrs.pop(old)
+    new_attrs.update(holder)
+    new_Rel_name = 'renamed_' + '_'.join(sorted(new_attrs.keys()))
+    new_Rel = type(new_Rel_name, (Relation,), new_attrs)
+    new_rel = new_Rel()
+    for row in relation._rows_:
+        row_data = row._as_dict_()
+        holder = {}
+        for old, new in renames.items():
+            holder[new] = row_data.pop(old)
+        row_data.update(holder)
+        new_rel._rows_.add(new_Rel._row_(row_data))
+    return new_rel

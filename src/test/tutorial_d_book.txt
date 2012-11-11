@@ -830,3 +830,117 @@ two relations:
     | gin  | C3        | gin | S3         |
     | gin  | C3        | gin | S5         |
     +------+-----------+-----+------------+
+
+
+rename
+~~~~~~
+
+    >>> from dinsd.op import rename
+
+This is operator is not one discussed in the original literature on the
+relational algebra (according to AITDM), but is needed for certain logical
+operations.  It allows us to construct a new relation that is identical to an
+existing relation except that one or more of the attributes have different
+names.  This is required in order to perform logical operations on relations
+where we need to *not* treat the attributes as the same, even though they have
+the same data in them (we'll an example of this below).
+
+We can rename a single attribute:
+
+    >>> sid_is_called = rename(is_called, student_id='sid')
+    >>> print(display(sid_is_called, 'sid', 'name'))
+    +-----+----------+
+    | sid | name     |
+    +-----+----------+
+    | S1  | Anne     |
+    | S2  | Boris    |
+    | S3  | Cindy    |
+    | S4  | Devinder |
+    | S5  | Boris    |
+    +-----+----------+
+
+Or more than one attribute:
+
+    >>> sid_is_called = rename(is_called, student_id='sid', name='called')
+    >>> print(display(sid_is_called, 'sid', 'called'))
+    +-----+----------+
+    | sid | called   |
+    +-----+----------+
+    | S1  | Anne     |
+    | S2  | Boris    |
+    | S3  | Cindy    |
+    | S4  | Devinder |
+    | S5  | Boris    |
+    +-----+----------+
+
+We can't rename a non-existent attribute;
+
+    >>> sid_is_called = rename(is_called, fred='called')
+    Traceback (most recent call last):
+        ...
+    KeyError: 'fred'
+
+We support the revised semantics of *Tutorial D* that allows attribute names
+to be swapped in one call:
+
+    >>> sid_is_called = rename(is_called, student_id='name',
+    ...                                   name='student_id')
+    >>> print(sid_is_called)
+    +------+------------+
+    | name | student_id |
+    +------+------------+
+    | S1   | Anne       |
+    | S2   | Boris      |
+    | S3   | Cindy      |
+    | S4   | Devinder   |
+    | S5   | Boris      |
+    +------+------------+
+
+Rename is a read-only operation, it does not modify the source relation:
+
+    >>> sid_is_called == is_called
+    False
+    >>> print(display(is_called, 'student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    +------------+----------+
+
+Example 4.3 on page 98 of AITDM uses ``rename`` and ``join`` to discover all
+pairs of students that share the same name:
+
+    >>> shared_name = is_called & rename(is_called, student_id='student_id2')
+    >>> print(display(shared_name, 'student_id', 'name', 'student_id2'))
+    +------------+----------+-------------+
+    | student_id | name     | student_id2 |
+    +------------+----------+-------------+
+    | S1         | Anne     | S1          |
+    | S2         | Boris    | S2          |
+    | S2         | Boris    | S5          |
+    | S3         | Cindy    | S3          |
+    | S4         | Devinder | S4          |
+    | S5         | Boris    | S2          |
+    | S5         | Boris    | S5          |
+    +------------+----------+-------------+
+
+This table doesn't quite look like the one on page 98.  We can fix that using
+the 'sort' keyword of ``display``:
+
+    >>> print(display(shared_name, 'student_id', 'name', 'student_id2',
+    ...                 sort=['name', 'student_id', 'student_id2']))
+    +------------+----------+-------------+
+    | student_id | name     | student_id2 |
+    +------------+----------+-------------+
+    | S1         | Anne     | S1          |
+    | S2         | Boris    | S2          |
+    | S2         | Boris    | S5          |
+    | S5         | Boris    | S2          |
+    | S5         | Boris    | S5          |
+    | S3         | Cindy    | S3          |
+    | S4         | Devinder | S4          |
+    +------------+----------+-------------+

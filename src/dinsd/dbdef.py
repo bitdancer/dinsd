@@ -1,5 +1,5 @@
 from collections import Mapping
-from operator import attrgetter
+from operator import attrgetter, itemgetter
 
 
 class RichCompareMixin:
@@ -173,11 +173,19 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         r += ', '.join(rows) + ')'
         return r
 
-    def _display_(self, *columns):
+    def _display_(self, *columns, sort=[]):
         toprint = [columns]
         getter = attrgetter(*columns)
-        toprint.extend(sorted([str(x)
-                        for x in getter(row)] for row in self._rows_))
+        tosort = [sort] if isinstance(sort, str) else sort
+        if not tosort:
+            tosort = columns
+        indexes = []
+        for c in tosort:
+            indexes.append(columns.index(c))
+        sortgetter = itemgetter(*indexes)
+        toprint.extend(sorted([[str(x)
+                        for x in getter(row)] for row in self._rows_],
+                        key=sortgetter))
         widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
         sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
         tline = lambda row: ('| ' +
