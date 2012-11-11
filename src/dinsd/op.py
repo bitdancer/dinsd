@@ -2,6 +2,10 @@ from operator import attrgetter
 from collections import defaultdict
 from dinsd.dbdef import Relation
 
+def display(relvar, *columns):
+    relvar._validate_attr_list(columns)
+    return relvar._display_(*columns)
+
 def join(first, second, *relvars):
     joined = first
     relvars = (second,) + relvars

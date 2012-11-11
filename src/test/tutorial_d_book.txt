@@ -569,6 +569,43 @@ and that there are no real 'variables' in Python, just names that contain
 references to objects, disnd probably does technically comply with TTM...but
 not with its spirit, which requires static typing.)
 
+
+display
+~~~~~~~
+
+``display`` is not a relational algebra function, but we introduce it here
+because it is useful in the examples, and it is located in the ``op``
+namespace.
+
+    >>> from dinsd.op import display
+
+The value returned by ``display`` is very similar to the value returned
+by turning a relation in to a string, except that we can control the
+order of the columns in the resulting table display.  Using ``display``
+we can print the relations in the same column order that is used in AITDM:
+
+    >>> print(display(is_called, 'student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    +------------+----------+
+    >>> print(display(is_enrolled_on, 'student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S3         | C3        |
+    | S4         | C1        |
+    +------------+-----------+
+
+
 join
 ~~~~
 
@@ -576,13 +613,14 @@ join
 
 Here is the straightforward ``join`` of the two tables above:
 
-    >>> print(join(is_enrolled_on, is_called))
-    +-----------+----------+------------+
-    | course_id | name     | student_id |
-    +-----------+----------+------------+
-    | C1        | Anne     | S1         |
-    | C1        | Boris    | S2         |
-    | C1        | Devinder | S4         |
-    | C2        | Anne     | S1         |
-    | C3        | Cindy    | S3         |
-    +-----------+----------+------------+
+    >>> j = join(is_enrolled_on, is_called)
+    >>> print(display(j, 'student_id', 'name', 'course_id'))
+    +------------+----------+-----------+
+    | student_id | name     | course_id |
+    +------------+----------+-----------+
+    | S1         | Anne     | C1        |
+    | S1         | Anne     | C2        |
+    | S2         | Boris    | C1        |
+    | S3         | Cindy    | C3        |
+    | S4         | Devinder | C1        |
+    +------------+----------+-----------+

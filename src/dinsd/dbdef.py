@@ -123,13 +123,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._rows_ = {self._row_(x) for x in args}
             return
         attrlist = args[0]
-        if len(attrlist) != self._degree_:
-            raise TypeError(
-                "Expected {} attributes, got {} in header row".format(
-                    self._degree_, len(attrlist)))
-        for attr in attrlist:
-            # Make sure this error happens on header row if it happens.
-            getattr(self, attr)
+        self._validate_attr_list(attrlist)
         rows = set()
         for i, row in enumerate(args[1:], start=1):
             if len(row) != self._degree_:
@@ -141,6 +135,15 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             except TypeError as e:
                 raise TypeError(str(e) + " in row {}".format(i))
         self._rows_ = rows
+
+    def _validate_attr_list(self, attrlist):
+        if len(attrlist) != self._degree_:
+            raise TypeError(
+                "Expected {} attributes, got {} in header row".format(
+                    self._degree_, len(attrlist)))
+        # Make sure the names name our attributes (AttributeError otherwise)
+        for attr in attrlist:
+            getattr(self, attr)
 
     def __iter__(self):
         return iter(self._rows_)
@@ -169,9 +172,9 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         r += ', '.join(rows) + ')'
         return r
 
-    def __str__(self):
-        toprint = [self._attr_names_]
-        getter = attrgetter(*self._attr_names_)
+    def _display_(self, *columns):
+        toprint = [columns]
+        getter = attrgetter(*columns)
         toprint.extend(sorted([str(x)
                         for x in getter(row)] for row in self._rows_))
         widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
@@ -179,7 +182,10 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         tline = lambda row: ('| ' +
                              ' | '.join(v.ljust(w)
                                         for v, w in zip(row, widths)) + ' |')
-        r = [sep, tline(self._attr_names_), sep]
+        r = [sep, tline(columns), sep]
         r.extend(tline(row) for row in toprint[1:])
         r.append(sep)
         return '\n'.join(r)
+
+    def __str__(self):
+        return self._display_(*self._attr_names_)
