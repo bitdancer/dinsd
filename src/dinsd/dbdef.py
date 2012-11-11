@@ -33,7 +33,7 @@ class Scaler:
         return self._compare(other, lambda s,o: s <= o)
 
     def __eq__(self, other):
-       return self._compare(other, lambda s,o: s == o)
+        return self._compare(other, lambda s,o: s == o)
 
     def __ge__(self, other):
         return self._compare(other, lambda s,o: s >= o)
@@ -43,6 +43,9 @@ class Scaler:
 
     def __ne__(self, other):
         return self._compare(other, lambda s,o: s != o) 
+
+    def __hash__(self):
+        return hash(self.value)
 
 
 class Row(Mapping):
@@ -67,6 +70,9 @@ class Row(Mapping):
     def __iter__(self):
         return iter(self.__dict__)
 
+    def __hash__(self):
+        return hash(tuple(self.__dict__.values()))
+
     def __repr__(self):
         return "{}._row_({{{}}})".format(self._relation_name_,
             ', '.join("{!r}: {!r}".format(k, v)
@@ -83,7 +89,7 @@ class RelationMeta(type):
     def __new__(cls, name, bases, dct):
         attrs = [x for x in dct if not x.startswith('_')]
         dct['_degree_'] = len(attrs)
-        dct['_sorted_attrs_'] = sorted(attrs)
+        dct['_attr_names_'] = sorted(attrs)
         class _rowclass_(Row):
             _header = dct           # XXX: is there a better way to do this?
             _degree_ = len(attrs)
@@ -96,10 +102,10 @@ class Relation(metaclass=RelationMeta):
 
     def __init__(self, *args):
         if len(args) == 0:
-            self.rows = []
+            self._rows_ = set()
             return
         if hasattr(args[0], 'items'):
-            self.rows = [self._row_(x) for x in args]
+            self._rows_ = {self._row_(x) for x in args}
             return
         attrlist = args[0]
         if len(attrlist) != self._degree_:
@@ -109,55 +115,48 @@ class Relation(metaclass=RelationMeta):
         for attr in attrlist:
             # Make sure this error happens on header row if it happens.
             getattr(self, attr)
-        rows = []
+        rows = set()
         for i, row in enumerate(args[1:], start=1):
             if len(row) != self._degree_:
                 raise TypeError(
                     "Expected {} attributes, got {} in row {}".format(
                         self._degree_, len(row), i))
             try:
-                rows.append(self._row_({k: v for k, v in zip(attrlist, row)}))
+                rows.add(self._row_({k: v for k, v in zip(attrlist, row)}))
             except TypeError as e:
-                raise TypeError(str(e) + " in row {}".format(i)) from None
-        self.rows = rows
-
-    #@classmethod
-    #def _row_(self, d):
-    #    if len(d) != self._degree_:
-    #        raise TypeError("Expected {} attributes, got {}".format(
-    #                            self._degree_, len(d)))
-    #    return {k: getattr(self, k)(v) for k, v in d.items()}
+                raise TypeError(str(e) + " in row {}".format(i))
+        self._rows_ = rows
 
     def __eq__(self, other):
         if type(self) != type(other):
             return False
-        return all(x == y for x, y in zip(self.rows, other.rows))
+        return all(x == y for x, y in zip(self._rows_, other._rows_))
 
 
     def __repr__(self):
         r = "{}((".format(self.__class__.__name__)
-        r += ', '.join([repr(x) for x in self._sorted_attrs_])
-        if not self.rows:
+        r += ', '.join([repr(x) for x in self._attr_names_])
+        if not self._rows_:
             return r + ')'
         r += '), '
         rows = []
-        for row in sorted(self.rows, key=itemgetter(*self._sorted_attrs_)):
+        for row in sorted(self._rows_, key=itemgetter(*self._attr_names_)):
             rows.append('(' + ', '.join([repr(row[x]) 
-                                         for x in self._sorted_attrs_]) + ')')
+                                         for x in self._attr_names_]) + ')')
         r += ', '.join(rows) + ')'
         return r
 
     def __str__(self):
-        toprint = [self._sorted_attrs_]
-        getter = itemgetter(*self._sorted_attrs_)
+        toprint = [self._attr_names_]
+        getter = itemgetter(*self._attr_names_)
         toprint.extend(sorted([str(x)
-                        for x in getter(row)] for row in self.rows))
+                        for x in getter(row)] for row in self._rows_))
         widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
         sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
         tline = lambda row: ('| ' +
                              ' | '.join(v.ljust(w)
                                         for v, w in zip(row, widths)) + ' |')
-        r = [sep, tline(self._sorted_attrs_), sep]
+        r = [sep, tline(self._attr_names_), sep]
         r.extend(tline(row) for row in toprint[1:])
         r.append(sep)
         return '\n'.join(r)
