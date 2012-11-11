@@ -649,3 +649,43 @@ What we can do, however, is override the arithmetic ``&`` operator:
     +------------+----------+-----------+
     >>> j == j2
     True
+
+The above join discussion takes us up to figure 4.2 on page 89 of AITDM, for
+those following along in the book :).
+
+On page 93 there is a discussion of cases where we *can't* perform a join.  In
+particular, if two tables have columns with the same name but different types,
+we cannot join them:
+
+    >>> class PermissiveIds(dbdef.Relation):
+    ...     student_id = str
+    ...     name = str
+    >>> permissive_is_called = PermissiveIds(
+    ...     ('student_id', 'name'),
+    ...     ('S1', 'Anne'),
+    ...     ('S2', 'Boris'),
+    ...     )
+    >>> permissive_is_called & is_enrolled_on   # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    TypeError: Duplicate attribute name ('student_id') with different type
+        (first: <class 'str'>, second: <class '__main__.SID'> found in joined
+        relvars of type <class '__main__.PermissiveIds'> and <class
+        '__main__.IsEnrolledOn'>
+
+An error like this in a multijoin also indicates in which argument the error
+was detected:
+
+    >>> join(is_enrolled_on, is_called,
+    ...         permissive_is_called)         # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    TypeError: Duplicate attribute name ('student_id') with different type
+        (first: <class '__main__.SID'>, second: <class 'str'> found in joined
+        relvars of type <class 'dinsd.dbdef.join_course_id_name_student_id'>
+        and <class '__main__.PermissiveIds'> (error detected while processing
+        argument 2)
+
+In this error message you also get a peak at the names that are used for the
+automatically generated ``Relation`` types used for the ``join`` result: a
+concatenation of ``join`` and the attribute names, separated by '_'s.

@@ -13,7 +13,8 @@ def join(first, second, *relvars):
         try:
             joined = _binary_join(joined, rel)
         except TypeError as e:
-            raise TypeError(str(e) + " in argument {}".format(i))
+            raise TypeError(str(e) + " (error detected while processing "
+                            "argument {})".format(i))
     return joined
 
 def _binary_join(first, second):
@@ -23,11 +24,12 @@ def _binary_join(first, second):
         if attr in combined_attrs:
             if getattr(second, attr) != combined_attrs[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
-                    "with different type (existing: {}, new: {} "
-                    "found in joined relvar of type {}".format(
+                    "with different type (first: {}, second: {} "
+                    "found in joined relvars of type {} and {}".format(
                         attr,
                         combined_attrs[attr],
                         getattr(second, attr),
+                        type(first),
                         type(second),
                         ))
             common_attrs.append(attr)
