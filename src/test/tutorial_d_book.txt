@@ -673,7 +673,7 @@ we cannot join them:
         relvars of type <class '__main__.PermissiveIds'> and <class
         '__main__.IsEnrolledOn'>
 
-An error like this in a multijoin also indicates in which argument the error
+An error like this in a multi-join also indicates in which argument the error
 was detected:
 
     >>> join(is_enrolled_on, is_called,
@@ -724,6 +724,11 @@ Join is associative:
     ...         )
     >>> (is_enrolled_on & is_called) & last_year == (
     ...     is_enrolled_on & (is_called & last_year))
+    True
+
+We also define a monadic join to simply return the argument:
+
+    >>> join(last_year) == last_year
     True
 
 
