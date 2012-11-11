@@ -2,28 +2,15 @@ from collections import Mapping
 from operator import attrgetter
 
 
-class Scaler:
+class RichCompareMixin:
 
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return "{}({!r})".format(self.__class__.__name__, self.value)
-
-    # XXX: I'm sure there's a better way to do this, but this works (thanks,
-    # Regbro).
-
-    def _cmpkey(self):
-        return self.value
+    # Flexible rich compare adapted from recipe by Lenart Regbro.
 
     def _compare(self, other, method):
-        if type(self) != type(other):
-            return NotImplemented
         try:
             return method(self._cmpkey(), other._cmpkey())
-        except (AttributeError, TypeError):
-            # _cmpkey not implemented, or return different type,
-            # so I can't compare with "other".
+        except TypeError:
+            # _cmpkey returned an incommensurate type.
             return NotImplemented
 
     def __lt__(self, other):
@@ -45,10 +32,30 @@ class Scaler:
         return self._compare(other, lambda s,o: s != o) 
 
     def __hash__(self):
-        return hash(self.value)
+        return hash(self._cmpkey())
 
 
-class Row(Mapping):
+class Scaler(RichCompareMixin):
+
+    def _cmpkey(self):
+        return self.value
+
+    def _compare(self, other, method):
+        if type(self) != type(other):
+            return NotImplemented
+        return super()._compare(other, method)
+
+    def __str__(self):
+        return str(self.value)
+
+    def __repr__(self):
+        return "{}({!r})".format(self.__class__.__name__, self.value)
+
+
+class Row(RichCompareMixin, Mapping):
+
+    # This could just be a dict subclass except that we want to take
+    # advantage of the PEP 412 key sharing instance dictionaries.
 
     def __init__(self, attrdict):
         if len(attrdict) != self._degree_:
@@ -70,8 +77,13 @@ class Row(Mapping):
     def __iter__(self):
         return iter(self.__dict__)
 
-    def __hash__(self):
-        return hash(tuple(self.__dict__.values()))
+    def _cmpkey(self):
+        return tuple(sorted(self.__dict__.items()))
+
+    def _compare(self, other, method):
+        if not isinstance(other, Row):
+            return False
+        return super()._compare(other, method)
 
     def __repr__(self):
         return "{}._row_({{{}}})".format(self._relation_name_,
@@ -98,7 +110,7 @@ class RelationMeta(type):
         return type.__new__(cls, name, bases, dct)
     
 
-class Relation(metaclass=RelationMeta):
+class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __init__(self, *args):
         if len(args) == 0:
@@ -127,13 +139,19 @@ class Relation(metaclass=RelationMeta):
                 raise TypeError(str(e) + " in row {}".format(i))
         self._rows_ = rows
 
-    def __eq__(self, other):
-        if type(self) != type(other):
+    def __iter__(self):
+        return iter(self._rows_)
+
+    def __len__(self):
+        return len(self._rows_)
+
+    def _cmpkey(self):
+        return self._rows_
+
+    def _compare(self, other, method):
+        if not isinstance(other, Relation):
             return False
-        getter = attrgetter(*self._attr_names_)
-        return all(x == y for x, y in zip(
-                            (getter(x) for x in self._rows_),
-                            (getter(x) for x in other._rows_)))
+        return super()._compare(other, method)
 
     def __repr__(self):
         r = "{}((".format(self.__class__.__name__)
