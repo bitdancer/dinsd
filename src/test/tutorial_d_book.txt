@@ -689,3 +689,38 @@ was detected:
 In this error message you also get a peak at the names that are used for the
 automatically generated ``Relation`` types used for the ``join`` result: a
 concatenation of ``join`` and the attribute names, separated by '_'s.
+
+If we join with an empty relation, we get an empty relation:
+
+    >>> no_student_names = IsCalled()
+    >>> print(no_student_names & is_enrolled_on)
+    +-----------+------+------------+
+    | course_id | name | student_id |
+    +-----------+------+------------+
+    +-----------+------+------------+
+
+Join is idempotent: if we join a relation to itself, or if we join a relation
+to the result of a previous join involving that relation, we get back the
+original join:
+
+    >>> j = is_enrolled_on & is_called
+    >>> j == j & j
+    True
+    >>> j == j & is_called
+    True
+
+Join is commutative:
+
+    >>> is_enrolled_on & is_called == is_called & is_enrolled_on
+    True
+
+Join is associative:
+
+    >>> last_year = IsEnrolledOn(
+    ...         ('student_id', 'course_id'),
+    ...         ('S1',         'C3'),
+    ...         ('S5',         'C3'),
+    ...         )
+    >>> (is_enrolled_on & is_called) & last_year == (
+    ...     is_enrolled_on & (is_called & last_year))
+    True
