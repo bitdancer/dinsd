@@ -103,11 +103,22 @@ class Relation(metaclass=RelationMeta):
             return
         attrlist = args[0]
         if len(attrlist) != self._degree_:
-            raise TypeError("Expected {} attributes, got {}".format(
-                                self._degree_, len(attrlist)))
+            raise TypeError(
+                "Expected {} attributes, got {} in header row".format(
+                    self._degree_, len(attrlist)))
+        for attr in attrlist:
+            # Make sure this error happens on header row if it happens.
+            getattr(self, attr)
         rows = []
-        for row in args[1:]:
-            rows.append(self._row_({k: v for k, v in zip(attrlist, row)}))
+        for i, row in enumerate(args[1:], start=1):
+            if len(row) != self._degree_:
+                raise TypeError(
+                    "Expected {} attributes, got {} in row {}".format(
+                        self._degree_, len(row), i))
+            try:
+                rows.append(self._row_({k: v for k, v in zip(attrlist, row)}))
+            except TypeError as e:
+                raise TypeError(str(e) + " in row {}".format(i)) from None
         self.rows = rows
 
     #@classmethod

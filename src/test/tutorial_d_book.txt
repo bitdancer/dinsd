@@ -401,3 +401,37 @@ You will note that as with the ``repr``  and ``str`` of a ``Relation``, the
 ``repr`` and ``str`` of a ``row`` is sorted by the attribute names.  The
 ``str`` representation of a ``row`` is not nearly as useful as that of
 a ``Relation``, but is provided for completeness.
+
+The same type checking happens when instantiating a Relation using the
+shorthand:
+
+    >>> IsEnrolledOn(('course_id', 'name'),
+    ...               ('S1', 'Anne'))
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2 in header row
+    >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
+    ...               ('C1', 'Anne'))
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2 in row 1
+    >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
+    ...               ('C1', 'Anne', 'S1'),
+    ...               ('C2', 'Anne', 'S1', 'foo'),
+    ...               )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 4 in row 2
+    >>> IsEnrolledOn(('course_id', 'name', 'foo'),
+    ...               ('C1', 'Anne', 'S1'),
+    ...               )
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'IsEnrolledOn' object has no attribute 'foo'
+    >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
+    ...               ('C1', 'Anne', 'S1'),
+    ...               ('C2', 'Anne', 'C1'),
+    ...               )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'S' followed by one to three digits; 'C1' is invalid in row 2
