@@ -1221,6 +1221,62 @@ Example 4.7 on page 105 looks like this:
 It would be nice if there were some shorter shorthand than ``lambda`` for
 providing the expression, but in Python there isn't.
 
+Here is example 4.8 written in dinsd:
+
+    >>> print(where(is_called, lambda row: row.name.startswith('B')))
+    +-------+------------+
+    | name  | student_id |
+    +-------+------------+
+    | Boris | S2         |
+    | Boris | S5         |
+    +-------+------------+
+
+With Python, it is easy to make this a bit more interesting:
+
+    >>> print(where(is_called, lambda row: row.name.startswith(('B', 'A'))))
+    +-------+------------+
+    | name  | student_id |
+    +-------+------------+
+    | Anne  | S1         |
+    | Boris | S2         |
+    | Boris | S5         |
+    +-------+------------+
+
+Here are the edge cases from the bottom of page 106:
+
+    >>> where(is_called, lambda row: True) == is_called
+    True
+    >>> where(is_called, lambda row: False) == type(is_called)()
+    True
+
+And now we can further improve the problem of finding just those student_ids
+that designate students with the same name (figure 4.8 on page 107):
+
+    >>> x = join(rename(is_called, student_id='sid1'),
+    ...          rename(is_called, student_id='sid2')) >> {'sid1', 'sid2'}
+    >>> print(where(x, lambda row: row.sid1 != row.sid2))
+    +------+------+
+    | sid1 | sid2 |
+    +------+------+
+    | S2   | S5   |
+    | S5   | S2   |
+    +------+------+
+
+And of course the final version has the obvious analog in dinsd:
+
+    >>> print(where(x, lambda row: row.sid1 < row.sid2))
+    +------+------+
+    | sid1 | sid2 |
+    +------+------+
+    | S2   | S5   |
+    +------+------+
+
+I will observe here that I didn't just use the ``x`` intermediate variable to
+provide for less repetition in the examples, but also because I prefer that
+"coding" style.  Rather than a single grand expression, it seems clearer to me
+to break a computation up into pieces, somewhat in the way a mathematical
+paper will often say, "let x = <something>, then <expression involving x>".
+
 
 
 About the Name
