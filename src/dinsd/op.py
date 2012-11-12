@@ -46,19 +46,16 @@ def _binary_join(first, second):
     else:
         getter = lambda row: None
         matches = lambda key: second._rows_
-    # Build the new relation type.
-    new_Rel_name = 'join_' + '_'.join(sorted(combined_attrs.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), combined_attrs)
     # Create an initially empty new relation of the new type, and then extend
     # it with the joined data.  Because the body is a set we don't have to
     # worry about duplicates.
-    new_rel = new_Rel()
+    new_rel = _Rel('join', combined_attrs)()
     for row in first._rows_:
         key = getter(row)
         for row2 in matches(key):
             attrs = row._as_dict_()
             attrs.update(row2._as_dict_())
-            new_rel._rows_.add(new_Rel._row_(attrs))
+            new_rel._rows_.add(new_rel._row_(attrs))
     return new_rel
 
 # Make '&' the same as binary join for Relations.
@@ -95,16 +92,14 @@ def rename(relation, **renames):
     for old, new in renames.items():
         holder[new] = new_attrs.pop(old)
     new_attrs.update(holder)
-    new_Rel_name = 'renamed_' + '_'.join(sorted(new_attrs.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), new_attrs)
-    new_rel = new_Rel()
+    new_rel = _Rel('renamed', new_attrs)()
     for row in relation._rows_:
         row_data = row._as_dict_()
         holder = {}
         for old, new in renames.items():
             holder[new] = row_data.pop(old)
         row_data.update(holder)
-        new_rel._rows_.add(new_Rel._row_(row_data))
+        new_rel._rows_.add(new_rel._row_(row_data))
     return new_rel
 
 
@@ -125,13 +120,11 @@ def project(relation, only=None, all_but=None):
     else:
         reduced_attrs = relation._header_.copy()
     reduced_attr_names = reduced_attrs.keys()
-    new_Rel_name = 'project_' + '_'.join(sorted(reduced_attrs.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), reduced_attrs)
-    new_rel = new_Rel()
+    new_rel = _Rel('project', reduced_attrs)()
     for row in relation._rows_:
         new_row_data = {n: v for n, v in row._as_dict_().items()
                              if n in reduced_attr_names}
-        new_rel._rows_.add(new_Rel._row_(new_row_data))
+        new_rel._rows_.add(new_rel._row_(new_row_data))
     return new_rel
 
 # Make >> the project operator, and << the "all_but" operator.
@@ -140,6 +133,9 @@ Relation.__lshift__ = lambda self, other: project(self, all_but=other)
 
 
 def Rel(**kw):
-    new_Rel_name = 'rel_' + '_'.join(sorted(kw.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), kw)
+    return _Rel('rel', kw)
+
+def _Rel(prefix, attr_dict):
+    new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
+    new_Rel = type(new_Rel_name, (Relation,), attr_dict)
     return new_Rel
