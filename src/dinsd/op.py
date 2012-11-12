@@ -218,3 +218,9 @@ def notmatching(first, second):
 
 # Make - the notmatching operator.
 Relation.__sub__ = lambda self, other: notmatching(self, other)
+
+
+def minus(first, second):
+    if not first._header_ == second._header_:
+        raise TypeError("Relation types must match for minus operation")
+    return notmatching(first, second)

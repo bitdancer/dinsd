@@ -1441,6 +1441,29 @@ It is an error for match columns with the same name to have different types.
          match relation (relation type names are <class '__main__.IsCalled'>
          and <class 'dinsd.dbdef.rel_student_id'>)
 
+minus
+~~~~~
+
+The ``minus`` operator is a subset of ``notmatching``, where the two
+relations must have exactly the same columns, meaning that only exact
+matches are removed.
+
+    >>> from dinsd.op import minus
+    >>> anne = Rel(student_id=SID, name=str)(dict(student_id='S1', name='Anne'))
+    >>> print(minus(is_called, anne))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+    >>> minus(is_called, Rel(student_id=SID)())
+    Traceback (most recent call last):
+        ...
+    TypeError: Relation types must match for minus operation
+
 
 
 About the Name
