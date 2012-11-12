@@ -64,6 +64,9 @@ class Row(RichCompareMixin, Mapping):
         for attr, value in attrdict.items():
             try:
                 setattr(self, attr, self._header_[attr](value))
+            except (TypeError, ValueError) as e:
+                raise type(e)(str(e) + ", {} invalid for attribute {}".format(
+                                repr(value), attr))
             except KeyError:
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None

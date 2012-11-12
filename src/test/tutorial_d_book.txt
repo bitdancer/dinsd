@@ -130,9 +130,8 @@ chapter 2 of AIRDT:
     ...                 id[1:].isdigit()):
     ...             self.value = id
     ...         else:
-    ...             raise TypeError(
-    ...                 "Expected '{}' followed by one to three digits; {!r} "
-    ...                 "is invalid".format(self.firstchar, id))
+    ...             raise TypeError("Expected '{}' followed by one to "
+    ...                             "three digits".format(self.firstchar))
     ...
     >>> class SID(ID):
     ...     firstchar = 'S'
@@ -167,7 +166,7 @@ To prove that this (straightforward Python) implementation is correct:
     >>> SID('1')
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'S' followed by one to three digits; '1' is invalid
+    TypeError: Expected 'S' followed by one to three digits
     >>> CID(1)
     Traceback (most recent call last):
         ...
@@ -175,11 +174,11 @@ To prove that this (straightforward Python) implementation is correct:
     >>> SID('C1')
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'S' followed by one to three digits; 'C1' is invalid
+    TypeError: Expected 'S' followed by one to three digits
     >>> CID('C0003')
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'C' followed by one to three digits; 'C0003' is invalid
+    TypeError: Expected 'C' followed by one to three digits
     >>> SID(CID('C1'))
     Traceback (most recent call last):
         ...
@@ -422,14 +421,17 @@ And the attribute names must match those defined in the relation:
 
 The values must be valid:
 
-    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo', 'course_id': 1})
+    >>> IsEnrolledOn._row_({'student_id': 'S1', # doctest: +NORMALIZE_WHITESPACE
+    ...                      'name': 'foo', 'course_id': 1})
     Traceback (most recent call last):
         ...
-    TypeError: Expected str but passed <class 'int'>
-    >>> IsEnrolledOn._row_({'student_id': 'S1', 'name': 'foo', 'course_id': 'S1'})
+    TypeError: Expected str but passed <class 'int'>, 1 invalid for attribute course_id
+    >>> IsEnrolledOn._row_({'student_id': 'S1', # doctest: +NORMALIZE_WHITESPACE
+    ...                     'name': 'foo', 'course_id': 'S1'})
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'C' followed by one to three digits; 'S1' is invalid
+    TypeError: Expected 'C' followed by one to three digits, 'S1' invalid
+         for attribute course_id
 
 But it is OK to use the selector form ('C1') rather than the full scaler
 value form (CID('C1')):
@@ -476,13 +478,15 @@ shorthand, and additionally reports which row is in error:
     Traceback (most recent call last):
         ...
     AttributeError: 'IsEnrolledOn' object has no attribute 'foo'
-    >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
+    >>> IsEnrolledOn(                   # doctest: +NORMALIZE_WHITESPACE
+    ...               ('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne', 'S1'),
     ...               ('C2', 'Anne', 'C1'),
     ...               )
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'S' followed by one to three digits; 'C1' is invalid in row 2
+    TypeError: Expected 'S' followed by one to three digits, 'C1' invalid for
+        attribute student_id in row 2
 
 
 
@@ -1463,6 +1467,77 @@ matches are removed.
     Traceback (most recent call last):
         ...
     TypeError: Relation types must match for minus operation
+
+
+Exercises
+~~~~~~~~~
+
+Just for fun (well, and to improve our test coverage), we'll do some of the
+exercises from the end of chapter 4 in AITDT.  There won't be much if any
+explanation here, just code.
+
+Note that we still aren't dealing with keys or other constraints yet.
+
+Exercise 2:
+
+    >>> from datetime import date
+    >>> class date_type(date):
+    ...     def __new__(cls, value):
+    ...         if isinstance(value, date):
+    ...             return value
+    ...         return super().__new__(cls, *value)
+    >>> class Cust(dbdef.Relation):
+    ...     c_no = str
+    ...     discount = float
+    >>> class Orders(dbdef.Relation):
+    ...     o_no = str
+    ...     c_no = str
+    ...     date = date_type
+    >>> class OrderItem(dbdef.Relation):
+    ...     o_no = str
+    ...     p_no = str
+    ...     qty = int
+    >>> class Product(dbdef.Relation):
+    ...     p_no = str
+    ...     unit_price = float
+    >>> cust = Cust(
+    ...         ('c_no', 'discount'),
+    ...         ('0012', 10.0),
+    ...         ('1001', 5.0),
+    ...         ('5', 20.0),
+    ...         )
+    >>> orders = Orders(
+    ...         ('o_no', 'c_no', 'date'),
+    ...         ('0001', '0012', date(2012, 11, 4)),
+    ...         ('0002', '0012', (2012, 11, 5)),
+    ...         ('0003', '5', date(2012, 11, 3)),
+    ...         )
+    >>> order_items = OrderItem(
+    ...         ('o_no', 'p_no', 'qty'),
+    ...         ('0001', '20001', 2),
+    ...         ('0001', '20002', 3),
+    ...         ('0002', '20001', 7),
+    ...         ('0003', '2201', 20),
+    ...         )
+    >>> products = Product(
+    ...         ('p_no', 'unit_price'),
+    ...         ('20001', 120.50),
+    ...         ('20002', 12.75),
+    ...         ('2201', 1000.00),
+    ...         )
+    >>> x = order_items & products & orders & cust
+    >>> x = extend(x, price=lambda row: (
+    ...         round(row.qty*row.unit_price*(1-row.discount/100), 2)))
+    >>> x = x >> {'o_no', 'p_no', 'price'}
+    >>> print(display(x, 'o_no', 'p_no', 'price'))
+    +------+-------+---------+
+    | o_no | p_no  | price   |
+    +------+-------+---------+
+    | 0001 | 20001 | 216.9   |
+    | 0001 | 20002 | 34.43   |
+    | 0002 | 20001 | 759.15  |
+    | 0003 | 2201  | 16000.0 |
+    +------+-------+---------+
 
 
 
