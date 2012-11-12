@@ -1360,14 +1360,15 @@ Union is commutative and associative:
     >>> (x | y) | z == x | (y | z) == union(x, y, z)
     True
 
-Union of a single relation, or a relation with itself is that relation.
+Union of a single relation, or a relation with itself, is that relation.
 
     >>> union(is_called) == union(is_called, is_called) == is_called
     True
 
-*Tutorial D* has the ability to specify an empty union if you specify
+*Tutorial D* has the ability to return an empty union if you specify
 a heading.  The equivalent in dinsd is the following, which, like
-the *Tutorial D* version, is of questionable practical value:
+the *Tutorial D* version, is of questionable practical value but
+provided just in case:
 
     >>> union() == Dum
     True
@@ -1376,6 +1377,9 @@ the *Tutorial D* version, is of questionable practical value:
     | name | student_id |
     +------+------------+
     +------+------------+
+
+Of course, the union of an empty relation returns an equivalent empty
+relation, and that is probably more useful.
 
 Be warned that passing a type in any other context to a relational operator
 will result in oddball errors in dinsd, rather than straightforward TypeErrors
