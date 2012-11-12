@@ -137,3 +137,9 @@ def project(relation, only=None, all_but=None):
 # Make >> the project operator, and << the "all_but" operator.
 Relation.__rshift__ = lambda self, other: project(self, other)
 Relation.__lshift__ = lambda self, other: project(self, all_but=other)
+
+
+def Rel(**kw):
+    new_Rel_name = 'rel_' + '_'.join(sorted(kw.keys()))
+    new_Rel = type(new_Rel_name, (Relation,), kw)
+    return new_Rel

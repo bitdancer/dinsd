@@ -1152,6 +1152,45 @@ relation, not an identity at the object level:
     False
 
 
+Rel
+~~~
+
+In contemplating the "use the tools introduced so far" solution to the
+question posed at the start of section 4.7 of AITDT, I realized that there
+is a need for being able to easily create a temporary relation.  *Tutorial D*
+has syntax for doing this, but up to this point dinsd hasn't, though we
+could have used it in a few examples up above.
+
+So, the dinsd way of dynamically creating a relation definition and a single
+instance of that definition at the same time is ``Rel``:
+
+    >>> from dinsd.op import Rel
+    >>> print(Rel(name=str, sid=SID)(('name', 'sid'), ('Boris', 'S1')))
+    +-------+-----+
+    | name  | sid |
+    +-------+-----+
+    | Boris | S1  |
+    +-------+-----+
+
+``Rel`` is essentially the ``lambda`` of relations:
+
+    >>> namelist = Rel(name=str)
+    >>> print(namelist(('name',), ('Boris',), ('Anne',)))
+    +-------+
+    | name  |
+    +-------+
+    | Anne  |
+    | Boris |
+    +-------+
+    >>> print(namelist(('name',), ('Anne',), ('George',)))
+    +--------+
+    | name   |
+    +--------+
+    | Anne   |
+    | George |
+    +--------+
+
+
 
 About the Name
 --------------
