@@ -148,3 +148,18 @@ def where(relation, selector):
         if selector(row):
             new_rel._rows_.add(row)
     return new_rel
+
+
+def extend(relation, **new_attrs):
+    if len(relation) == 0:
+        # XXX: this violates TTM, but probably doesn't matter much in practice.
+        raise TypeError("Cannot extend empty relation")
+    attrs = relation._header_.copy()
+    row1 = next(iter(relation))
+    attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
+    new_rel = _Rel('extend', attrs)()
+    for row in relation:
+        new_values = row._as_dict_()
+        new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
+        new_rel._rows_.add(new_rel._row_(new_values))
+    return new_rel

@@ -1278,6 +1278,45 @@ to break a computation up into pieces, somewhat in the way a mathematical
 paper will often say, "let x = <something>, then <expression involving x>".
 
 
+extend
+------
+
+This operator allows us to create a new relation that extends an existing
+relation by performing a computation on the attributes of the initial
+relation.
+
+    >>> from dinsd.op import extend
+
+Here is the expression that results in the example in figure 4.10 on pages
+109 and 109:
+
+    >>> x = extend(is_called, initial=lambda row: row.name[0])
+    >>> print(display(x, 'student_id', 'name', 'initial'))
+    +------------+----------+---------+
+    | student_id | name     | initial |
+    +------------+----------+---------+
+    | S1         | Anne     | A       |
+    | S2         | Boris    | B       |
+    | S3         | Cindy    | C       |
+    | S4         | Devinder | D       |
+    | S5         | Boris    | B       |
+    +------------+----------+---------+
+
+A null extension is an identity operation:
+
+    >>> extend(is_called) == is_called
+    True
+
+Unlike *Tutorial D*, we do not have a left to right evaluation order for
+extension expressions, so extension expressions in dinsd may only refer to
+attributes from the base relation, not any newly created attributes.  This is
+a minor restriction, since it is simple enough (and often clearer) to write
+multiple extension expressions in order in such a case.  It would also be
+possible to relax this restriction by using (name, func) tuples or some
+inspect trickery and doing the extension one attribute at a time, but this
+hardly seems worth the effort for what is probably an infrequent use case.
+
+
 
 About the Name
 --------------
