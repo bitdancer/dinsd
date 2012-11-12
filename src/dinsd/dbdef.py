@@ -175,7 +175,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def _display_(self, *columns, sort=[]):
         toprint = [columns]
-        getter = attrgetter(*columns)
+        getter = attrgetter(*columns) if columns else lambda x: x
         # Working around a little Python wart here.
         if len(columns) == 1:
             rows = [(str(getter(row)),) for row in self._rows_]
@@ -187,17 +187,27 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         indexes = []
         for c in tosort:
             indexes.append(columns.index(c))
-        sortgetter = itemgetter(*indexes)
+        sortgetter = itemgetter(*indexes) if indexes else None
         toprint.extend(sorted(rows, key=sortgetter))
         widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
         sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
         tline = lambda row: ('| ' +
                              ' | '.join(v.ljust(w)
                                         for v, w in zip(row, widths)) + ' |')
-        r = [sep, tline(columns), sep]
-        r.extend(tline(row) for row in toprint[1:])
+        r = [sep, tline(columns) if columns else '||', sep]
+        if not columns and len(toprint)==2:
+            r.append("||")
+        else:
+            r.extend(tline(row) for row in toprint[1:])
         r.append(sep)
         return '\n'.join(r)
 
     def __str__(self):
         return self._display_(*self._attr_names_)
+
+
+class DumDee(Relation):
+    pass
+
+Dum = DumDee()
+Dee = DumDee({})

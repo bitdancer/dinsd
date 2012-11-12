@@ -1008,6 +1008,18 @@ For completeness:
     >>> same_name == project(shared_name, all_but={'name'})
     True
 
+Observe that an ``all_but`` projection of the empty set produces an identical
+relation:
+
+    >>> same_name << {} == same_name
+    True
+
+In dinsd this is explicitly *not* the same object that was passed in to
+the operation:
+
+    >>> same_name << {} is same_name
+    False
+
 And of course there are the error cases:
 
     >>> shared_name << {'foo'}
@@ -1068,3 +1080,64 @@ include any entry for the student who was to enrolled in any courses:
     False
     >>> len(is_called_split) == len(is_called) - 1
     True
+
+
+Dum and Dee
+~~~~~~~~~~~
+
+Two relations have special meaning and are given names in *Tutorial D*:
+``TABLE_DUM`` and ``TABLE_DEE``.  Because these names are a bit awkward (and
+why are these called ``tables`` when everything else is a relation?), standard
+practice has quickly become to refer to them as ``Dum`` (or ``DUM``) and
+``Dee`` (``DEE``).  We prefer the dual case versions, in analogy to the Python
+capitalization for the analogous logical constants``True`` and ``False``.
+
+We define these constants, which are instances of an otherwise not too useful
+``Relation`` named ``DumDee``, in the ``dbdef`` module:
+
+    >>> from dinsd.dbdef import Dum, Dee
+
+``Dum`` is a relation with no attributes and no values:
+
+    >>> print(Dum)
+    ++
+    ||
+    ++
+    ++
+
+``Dee`` is a relation with no attributes and exactly one value, that
+being a row of degree zero:
+
+    >>> print(Dee)
+    ++
+    ||
+    ++
+    ||
+    ++
+
+The boolean value of ``Dum`` is ``False``, while that of ``Dee`` is ``True``:
+
+    >>> bool(Dum)
+    False
+    >>> bool(Dee)
+    True
+
+This follows both from the relational logic and from Python's own conventions:
+``Dum`` has no rows (it is empty, and like an empty list it is ``False``),
+while ``Dee`` has one row, and being non-empty is ``True``.
+
+Given ``Dee`` and ``Dum``, we can now understand the results we get from
+the edge cases of various relational operators.
+
+    >>> is_called >> {} == Dee
+    True
+    >>> join() == intersect() == times() == Dum
+    True
+
+Note that unlike Python's ``True`` and ``False``, which are singletons, there
+may be other relation instances equivalent to ``Dum`` and ``Dee`` besides the
+two defined in ``dbdef``.  Conceptually they are the "same" relation, but in
+Python object terms they may be different objects:
+
+    >>> is_called >> {} is Dee
+    False

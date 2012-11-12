@@ -1,13 +1,15 @@
 from operator import attrgetter
 from collections import defaultdict
-from dinsd.dbdef import Relation
+from dinsd.dbdef import Relation, Dum
 
 def display(relvar, *columns, **kw):
     relvar._validate_attr_list(columns)
     return relvar._display_(*columns, **kw)
 
-def join(first, *relvars):
-    joined = first
+def join(*relvars):
+    if not relvars:
+        return Dum
+    joined, *relvars = relvars
     for i, rel in enumerate(relvars, start=1):
         try:
             joined = _binary_join(joined, rel)
@@ -63,7 +65,10 @@ def _binary_join(first, second):
 Relation.__and__ = lambda self, other: _binary_join(self, other)
 
 
-def intersect(first, *relvars):
+def intersect(*relvars):
+    if not relvars:
+        return Dum
+    first, *relvars = relvars
     for rel in relvars:
         if first._header_ != rel._header_:
             raise TypeError("Cannot take intersection of unlike relations")
@@ -74,7 +79,10 @@ def intersect(first, *relvars):
     return new_rel
 
 
-def times(first, *relvars):
+def times(*relvars):
+    if not relvars:
+        return Dum
+    first, *relvars = relvars
     for rel in relvars:
         if first._header_.keys() & rel._header_.keys():
             raise TypeError("Cannot multiply relations that share attributes")
@@ -100,7 +108,7 @@ def rename(relation, **renames):
     return new_rel
 
 
-def project(relation, only=[], all_but=[]):
+def project(relation, only=None, all_but=None):
     if only and all_but:
         raise TypeError("Only one of only and all_but allowed")
     if only:
@@ -108,10 +116,14 @@ def project(relation, only=[], all_but=[]):
                               if n in only}
         if not len(reduced_attrs) == len(only):
             raise TypeError("Attribute list included invalid attributes")
-    else:
+    elif all_but:
         reduced_attrs = relation._header_.copy()
         for name in all_but:
             del reduced_attrs[name]
+    elif only is not None:
+        reduced_attrs = {}
+    else:
+        reduced_attrs = relation._header_.copy()
     reduced_attr_names = reduced_attrs.keys()
     new_Rel_name = 'project_' + '_'.join(sorted(reduced_attrs.keys()))
     new_Rel = type(new_Rel_name, (Relation,), reduced_attrs)
