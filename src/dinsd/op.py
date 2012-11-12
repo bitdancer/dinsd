@@ -1,6 +1,6 @@
 from operator import attrgetter
 from collections import defaultdict
-from dinsd.dbdef import Relation, Dum
+from dinsd.dbdef import Relation, Dee
 
 def display(relvar, *columns, **kw):
     relvar._validate_attr_list(columns)
@@ -8,7 +8,7 @@ def display(relvar, *columns, **kw):
 
 def join(*relvars):
     if not relvars:
-        return Dum
+        return Dee
     joined, *relvars = relvars
     for i, rel in enumerate(relvars, start=1):
         try:
@@ -67,7 +67,7 @@ Relation.__and__ = lambda self, other: _binary_join(self, other)
 
 def intersect(*relvars):
     if not relvars:
-        return Dum
+        return Dee
     first, *relvars = relvars
     for rel in relvars:
         if first._header_ != rel._header_:
@@ -81,7 +81,7 @@ def intersect(*relvars):
 
 def times(*relvars):
     if not relvars:
-        return Dum
+        return Dee
     first, *relvars = relvars
     for rel in relvars:
         if first._header_.keys() & rel._header_.keys():

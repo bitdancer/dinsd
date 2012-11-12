@@ -1131,7 +1131,7 @@ the edge cases of various relational operators.
 
     >>> is_called >> {} == Dee
     True
-    >>> join() == intersect() == times() == Dum
+    >>> join() == intersect() == times() == Dee
     True
 
 Note that unlike Python's ``True`` and ``False``, which are singletons, there
@@ -1140,6 +1140,15 @@ two defined in ``dbdef``.  Conceptually they are the "same" relation, but in
 Python object terms they may be different objects:
 
     >>> is_called >> {} is Dee
+    False
+
+As per the discussion on page 104, ``Dee`` is an identity value for the
+``join`` operator.  And, again, in dinsd what is produced is an equivalent
+relation, not an identity at the object level:
+
+    >>> is_called & Dee == is_called
+    True
+    >>> is_called & Dee is is_called
     False
 
 
