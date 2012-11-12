@@ -1636,6 +1636,93 @@ Oh, and for completeness: ``rename`` can be written in terms of
     True
 
 
+mtching
+~~~~~~~
+
+Following along in Chapter 5, for completeness.  We already defined the
+exam_marks relation instance in one of the problems above.  Now we'll
+add courses.
+
+    >>> class Course(dbdef.Relation):
+    ...     course_id = CID
+    ...     title = str
+    >>> courses = Course(
+    ...             ('course_id',   'title'),
+    ...             ('C1',          'Database'),
+    ...             ('C2',          'HCI'),
+    ...             ('C3',          'Op systems'),
+    ...             ('C4',          'Programming'),
+    ...             )
+    >>> print(courses)
+    +-----------+-------------+
+    | course_id | title       |
+    +-----------+-------------+
+    | C1        | Database    |
+    | C2        | HCI         |
+    | C3        | Op systems  |
+    | C4        | Programming |
+    +-----------+-------------+
+    >>> print(display(exam_marks, 'student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
+
+*Tutorial D*'s expression:
+
+   ``( COURSE JOIN EXAM_MARK ) { ALL BUT StudentId, Mark }``
+
+becomes the dinsd expression:
+
+    >>> print((courses & exam_marks) << {'student_id', 'mark'})
+    +-----------+------------+
+    | course_id | title      |
+    +-----------+------------+
+    | C1        | Database   |
+    | C2        | HCI        |
+    | C3        | Op systems |
+    +-----------+------------+
+
+The ``matching`` relational operator encapsulates this (union plus
+projecting away any columns obtained from the second relation):
+
+    >>> from dinsd.op import matching
+    >>> print(matching(courses, exam_marks))
+    +-----------+------------+
+    | course_id | title      |
+    +-----------+------------+
+    | C1        | Database   |
+    | C2        | HCI        |
+    | C3        | Op systems |
+    +-----------+------------+
+
+Although this is the opposite of ``notmatching`` in a relational sense,
+it is not an intuitive match for ``+`` the way ``notmatching`` is for
+``-``.  Hence we do not overload any Python operators for this relational
+operator.
+
+A match against an empty relation is empty:
+
+    >>> matching(type(courses)(), courses)
+    Course(('course_id', 'title'))
+
+In the reverse of the case for ``notmatching``, if there are no common
+attributes matching against an empty relation produces an empty relation,
+while matching against a non-empty relation produces the original
+relation:
+
+    >>> matching(courses, Dum)
+    Course(('course_id', 'title'))
+    >>> matching(courses, Dee) == courses
+    True
+
+
 
 About the Name
 --------------

@@ -183,7 +183,7 @@ def union(*relvars):
 Relation.__or__ = lambda self, other: union(self, other)
 
 
-def notmatching(first, second):
+def _matcher(first, second, match):
     common_attrs = []
     for attr in second._attr_names_:
         if attr in first._attr_names_:
@@ -201,19 +201,21 @@ def notmatching(first, second):
             common_attrs.append(attr)
     new_rel = type(first)()
     if not common_attrs:
-        if second:
-            return new_rel
-        else:
+        if bool(second) == match:   # exclusive or
             new_rel._rows_.update(first._rows_)
-            return new_rel
+        return new_rel
     getter = attrgetter(*common_attrs)
     index = set()
     for row in second:
         index.add(getter(row))
     for row in first._rows_:
-        if getter(row) not in index:
+        if (getter(row) in index) == match:
             new_rel._rows_.add(row)
     return new_rel
+
+
+def notmatching(first, second):
+    return _matcher(first, second, match=False)
 
 # Make - the notmatching operator.
 Relation.__sub__ = lambda self, other: notmatching(self, other)
@@ -223,3 +225,7 @@ def minus(first, second):
     if not first._header_ == second._header_:
         raise TypeError("Relation types must match for minus operation")
     return notmatching(first, second)
+
+
+def matching(first, second):
+    return _matcher(first, second, match=True)
