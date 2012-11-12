@@ -18,6 +18,7 @@ def join(*relvars):
                             "argument {})".format(i))
     return joined
 
+
 def _binary_join(first, second):
     combined_attrs = first._header_.copy()
     common_attrs = []
@@ -25,8 +26,8 @@ def _binary_join(first, second):
         if attr in combined_attrs:
             if getattr(second, attr) != combined_attrs[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
-                    "with different type (first: {}, second: {} "
-                    "found in joined relvars of type {} and {}".format(
+                    "with different type (first: {}, second: {} found "
+                    "in joined relvars with type names {} and {}".format(
                         attr,
                         combined_attrs[attr],
                         getattr(second, attr),
@@ -181,3 +182,39 @@ def union(*relvars):
 
 # Make | the union operator.
 Relation.__or__ = lambda self, other: union(self, other)
+
+
+def notmatching(first, second):
+    common_attrs = []
+    for attr in second._attr_names_:
+        if attr in first._attr_names_:
+            if getattr(first, attr) != getattr(second, attr):
+                raise TypeError("Duplicate attribute name ({!r}) "
+                    "with different type (first: {}, second: {} "
+                    "found in match relation (relation type names "
+                    "are {} and {})".format(
+                        attr,
+                        getattr(first, attr),
+                        getattr(second, attr),
+                        type(first),
+                        type(second),
+                        ))
+            common_attrs.append(attr)
+    new_rel = type(first)()
+    if not common_attrs:
+        if second:
+            return new_rel
+        else:
+            new_rel._rows_.update(first._rows_)
+            return new_rel
+    getter = attrgetter(*common_attrs)
+    index = set()
+    for row in second:
+        index.add(getter(row))
+    for row in first._rows_:
+        if getter(row) not in index:
+            new_rel._rows_.add(row)
+    return new_rel
+
+# Make - the notmatching operator.
+Relation.__sub__ = lambda self, other: notmatching(self, other)

@@ -670,7 +670,7 @@ we cannot join them:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class 'str'>, second: <class '__main__.SID'> found in joined
-        relvars of type <class '__main__.PermissiveIds'> and <class
+        relvars with type names <class '__main__.PermissiveIds'> and <class
         '__main__.IsEnrolledOn'>
 
 An error like this in a multi-join also indicates in which argument the error
@@ -682,7 +682,7 @@ was detected:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in joined
-        relvars of type <class 'dinsd.dbdef.join_course_id_name_student_id'>
+        relvars with type names <class 'dinsd.dbdef.join_course_id_name_student_id'>
         and <class '__main__.PermissiveIds'> (error detected while processing
         argument 2)
 
@@ -1384,6 +1384,62 @@ relation, and that is probably more useful.
 Be warned that passing a type in any other context to a relational operator
 will result in oddball errors in dinsd, rather than straightforward TypeErrors
 with useful messages.  This may be improved at some point, or it may not.
+
+
+notmatching
+~~~~~~~~~~~
+
+Although the name is a bit more awkward in dinsd than it is in *Tutorial D*,
+we approximately follow the *Tutorial D* naming for this function.  Since
+it is the more general of the two difference functions (``minus`` and
+``notmatching``), we also provide it as the operator ``-``.
+
+    >>> from dinsd.op import notmatching
+
+Here is example 4.11 from page 115:
+
+    >>> not_enrolled = notmatching(is_called, is_enrolled_on)
+    >>> not_enrolled == is_called - is_enrolled_on
+    True
+    >>> print(not_enrolled)
+    +-------+------------+
+    | name  | student_id |
+    +-------+------------+
+    | Boris | S5         |
+    +-------+------------+
+
+Since we are using the '-' operator and the operation is also referred to as a
+"semidiffernce", we will use the imprecise but convenient terminology
+"subtract" for this operation.
+
+If we subtract from an empty relation we get an empty relation.  On the other
+hand, if we subtract an empty relation we get the original relation (we
+subtract nothing).
+
+    >>> type(is_called)() - is_enrolled_on == type(is_called)()
+    True
+    >>> is_called - type(is_enrolled_on)() == is_called
+    True
+
+If we subtract a relation that has no common attributes, then if that
+relation is empty (no matching rows) we get back the original relation.
+If, however, it is not empty, then by the relational rules *all* the
+rows match, and we get back the empty relation.
+
+    >>> is_called - Rel(foo=str)() == is_called
+    True
+    >>> is_called - Rel(foo=str)(dict(foo='bar')) == type(is_called)()
+    True
+
+It is an error for match columns with the same name to have different types.
+
+    >>> is_called - Rel(student_id=str)()  # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    TypeError: Duplicate attribute name ('student_id') with different type
+        (first: <class '__main__.SID'>, second: <class 'str'> found in
+         match relation (relation type names are <class '__main__.IsCalled'>
+         and <class 'dinsd.dbdef.rel_student_id'>)
 
 
 
