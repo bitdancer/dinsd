@@ -1029,10 +1029,7 @@ And of course there are the error cases:
     >>> shared_name >> {'foo'}
     Traceback (most recent call last):
         ...
-    TypeError: Attribute list included invalid attributes
-
-(XXX: I'm getting a bit lazy on the error messages here, probably ought to
-come back and clean it up later.)
+    TypeError: Attribute list included invalid attributes: {'foo'}
 
 The little exercise on page 102, splitting the joined enrollment table back
 into is_enrolled_on and is_called, looks like this in dinsd:
@@ -1189,6 +1186,23 @@ instance of that definition at the same time is ``Rel``:
     | Anne   |
     | George |
     +--------+
+
+Now we can complete the "existing operators" version of the restriction
+query at the start of 4.7:
+
+    >>> print((is_called & Rel(name=str)(dict(name='Boris')))
+    ...              >> {'student_id'})
+    +------------+
+    | student_id |
+    +------------+
+    | S2         |
+    | S5         |
+    +------------+
+
+
+where
+-----
+
 
 
 

@@ -110,7 +110,8 @@ def project(relation, only=None, all_but=None):
         reduced_attrs = {n: t for n, t in relation._header_.items()
                               if n in only}
         if not len(reduced_attrs) == len(only):
-            raise TypeError("Attribute list included invalid attributes")
+            raise TypeError("Attribute list included invalid attributes: "
+                            "{}".format(only - reduced_attrs.keys()))
     elif all_but:
         reduced_attrs = relation._header_.copy()
         for name in all_but:
