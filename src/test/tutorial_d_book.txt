@@ -388,7 +388,7 @@ First of all, we can create an empty Relation:
 
     >>> is_enrolled_on = IsEnrolledOn()
     >>> is_enrolled_on
-    IsEnrolledOn(('course_id', 'name', 'student_id')
+    IsEnrolledOn(('course_id', 'name', 'student_id'))
     >>> print(is_enrolled_on)
     +-----------+------+------------+
     | course_id | name | student_id |
@@ -1469,8 +1469,8 @@ matches are removed.
     TypeError: Relation types must match for minus operation
 
 
-Exercises
-~~~~~~~~~
+Chapter 4 Exercises
+~~~~~~~~~~~~~~~~~~~
 
 Just for fun (well, and to improve our test coverage), we'll do some of the
 exercises from the end of chapter 4 in AITDT.  There won't be much if any
@@ -1541,11 +1541,11 @@ Exercise 2:
 
 Exercise 3:
 
-    >>> class ExamMarks(dbdef.Relation):
+    >>> class ExamMark(dbdef.Relation):
     ...     student_id = SID
     ...     course_id = CID
     ...     mark = int
-    >>> exam_marks = ExamMarks(
+    >>> exam_marks = ExamMark(
     ...     ('student_id', 'course_id', 'mark'),
     ...     ('S1',         'C1',        85),
     ...     ('S1',         'C2',        49),
@@ -1610,6 +1610,31 @@ to an invalid version of Dee:
 For now at least we are just going to live with that artifact, because
 display is not a relational operator, since it does not return a
 relation.
+
+Exercise 4:
+
+    >>> is_called - Dee
+    IsCalled(('name', 'student_id'))
+    >>> is_called - Dum == is_called
+    True
+    >>> is_called - is_called
+    IsCalled(('name', 'student_id'))
+    >>> (is_called - is_called) - is_called
+    IsCalled(('name', 'student_id'))
+    >>> is_called - (is_called - is_called) == is_called
+    True
+
+``notmatching`` is neither commutative nor associative, which makes
+using the ``-`` operator for it a bit dicey...but so very convenient.
+
+Oh, and for completeness: ``rename`` can be written in terms of
+``extend``:
+
+    >>> x = rename(is_called, student_id='sid')
+    >>> y = extend(is_called, sid=lambda r: r.student_id) << {'student_id'}
+    >>> x == y
+    True
+
 
 
 About the Name

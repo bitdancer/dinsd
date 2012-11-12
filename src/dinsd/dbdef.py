@@ -167,7 +167,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         r = "{}((".format(self.__class__.__name__)
         r += ', '.join([repr(x) for x in self._attr_names_])
         if not self._rows_:
-            return r + ')'
+            return r + '))'
         r += '), '
         rows = []
         for row in sorted(self._rows_, key=attrgetter(*self._attr_names_)):
