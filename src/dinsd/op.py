@@ -17,7 +17,7 @@ def join(first, *relvars):
     return joined
 
 def _binary_join(first, second):
-    combined_attrs = {n: getattr(first, n) for n in first._attr_names_}
+    combined_attrs = first._header_.copy()
     common_attrs = []
     for attr in second._attr_names_:
         if attr in combined_attrs:
@@ -98,3 +98,30 @@ def rename(relation, **renames):
         row_data.update(holder)
         new_rel._rows_.add(new_Rel._row_(row_data))
     return new_rel
+
+
+def project(relation, only=[], all_but=[]):
+    if only and all_but:
+        raise TypeError("Only one of only and all_but allowed")
+    if only:
+        reduced_attrs = {n: t for n, t in relation._header_.items()
+                              if n in only}
+        if not len(reduced_attrs) == len(only):
+            raise TypeError("Attribute list included invalid attributes")
+    else:
+        reduced_attrs = relation._header_.copy()
+        for name in all_but:
+            del reduced_attrs[name]
+    reduced_attr_names = reduced_attrs.keys()
+    new_Rel_name = 'project_' + '_'.join(sorted(reduced_attrs.keys()))
+    new_Rel = type(new_Rel_name, (Relation,), reduced_attrs)
+    new_rel = new_Rel()
+    for row in relation._rows_:
+        new_row_data = {n: v for n, v in row._as_dict_().items()
+                             if n in reduced_attr_names}
+        new_rel._rows_.add(new_Rel._row_(new_row_data))
+    return new_rel
+
+# Make >> the project operator, and << the "all_but" operator.
+Relation.__rshift__ = lambda self, other: project(self, other)
+Relation.__lshift__ = lambda self, other: project(self, all_but=other)

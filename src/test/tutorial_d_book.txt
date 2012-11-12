@@ -613,8 +613,8 @@ join
 
 Here is the straightforward ``join`` of the two tables above:
 
-    >>> j = join(is_enrolled_on, is_called)
-    >>> print(display(j, 'student_id', 'name', 'course_id'))
+    >>> enrollment = join(is_enrolled_on, is_called)
+    >>> print(display(enrollment, 'student_id', 'name', 'course_id'))
     +------------+----------+-----------+
     | student_id | name     | course_id |
     +------------+----------+-----------+
@@ -647,7 +647,7 @@ What we can do, however, is override the arithmetic ``&`` operator:
     | S3         | Cindy    | C3        |
     | S4         | Devinder | C1        |
     +------------+----------+-----------+
-    >>> j == j2
+    >>> enrollment == j2
     True
 
 The above join discussion takes us up to figure 4.2 on page 89 of AITDM, for
@@ -945,3 +945,126 @@ the 'sort' keyword of ``display``:
     | S3   | Cindy    | S3   |
     | S4   | Devinder | S4   |
     +------+----------+------+
+
+
+project
+~~~~~~~
+
+This is not an explicit named operator in *Tutorial D*, but an implicit one
+arising from a particular syntax.  Just because we can, we do a similar thing
+in dinsd by overriding the ``>>`` operator.  But we also provide the named
+operator, because we have to have a name for our implementation so we might as
+well expose it and thus be consistent.  (I thought about using just the named
+operator with the attribute names as regular arguments, but I like the idea
+that the syntax we actually use makes it clear that the attribute names are a
+set, not an ordered list...unlike the case for, say, the ``display``
+function.  On the other hand, the shift syntax is candy and not really needed).
+
+    >>> from dinsd.op import project
+
+``project`` takes as its argument a set of attribute names, and returns a
+relation containing just those attributes (and the corresponding values):
+
+    >>> sids = project(is_enrolled_on, {'student_id'})
+    >>> sids == is_enrolled_on >> {'student_id'}
+    True
+    >>> print(sids)
+    +------------+
+    | student_id |
+    +------------+
+    | S1         |
+    | S2         |
+    | S3         |
+    | S4         |
+    +------------+
+
+We can't use *Tutorial D*'s "ALL BUT" syntax...our version of that is the
+``<<`` operator, implemented by the 'all_but' keyword of the ``project``
+function.  Following AITDT, we can write the student_id matching matching
+expression on page 101 as follows, to get our equivalent of figure 4.7 from
+page 101:
+
+    >>> same_name = join(rename(is_called, student_id='sid1'),
+    ...                  rename(is_called, student_id='sid2')) << {'name'}
+    >>> print(same_name)
+    +------+------+
+    | sid1 | sid2 |
+    +------+------+
+    | S1   | S1   |
+    | S2   | S2   |
+    | S2   | S5   |
+    | S3   | S3   |
+    | S4   | S4   |
+    | S5   | S2   |
+    | S5   | S5   |
+    +------+------+
+
+(There is no way to get that table to exactly match the one from the book,
+since the order from the book appears to be some artifact of the *Tutorial D*
+implementation.)
+
+For completeness:
+
+    >>> same_name == project(shared_name, all_but={'name'})
+    True
+
+And of course there are the error cases:
+
+    >>> shared_name << {'foo'}
+    Traceback (most recent call last):
+        ...
+    KeyError: 'foo'
+    >>> shared_name >> {'foo'}
+    Traceback (most recent call last):
+        ...
+    TypeError: Attribute list included invalid attributes
+
+(XXX: I'm getting a bit lazy on the error messages here, probably ought to
+come back and clean it up later.)
+
+The little exercise on page 102, splitting the joined enrollment table back
+into is_enrolled_on and is_called, looks like this in dinsd:
+
+    >>> is_enrolled_on_split = enrollment >> {'student_id', 'course_id'}
+    >>> is_called_split = enrollment >> {'student_id', 'name'}
+    >>> del enrollment
+
+That is, whereas in *Tutorial D* you must go through the process of declaring
+the variables and initializing them, in dinsd you just do the projection and
+keep a pointer to it in the name of your choice.  This comparison isn't fair,
+though because I'm ignoring the issue of persisting the database here, which
+will add a few characters and one additional statement when we get to it.  I
+think *Tutorial D* does the persistence automatically.  But more, we haven't
+dealt with constraints at all yet, and establishing those for a table is a bit
+more complicated than the above.
+
+    >>> print(display(is_enrolled_on_split, 'student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S3         | C3        |
+    | S4         | C1        |
+    +------------+-----------+
+    >>> print(display(is_called_split, 'student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    +------------+----------+
+
+``is_enrolled_on_split`` is identical to the original ``is_enrolled_on``
+relation, but ``is_called`` is not, since the ``enrollment`` relation did not
+include any entry for the student who was to enrolled in any courses:
+
+    >>> is_enrolled_on_split == is_enrolled_on
+    True
+    >>> is_called_split == is_called
+    False
+    >>> len(is_called_split) == len(is_called) - 1
+    True

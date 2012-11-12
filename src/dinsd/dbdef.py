@@ -176,6 +176,11 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
     def _display_(self, *columns, sort=[]):
         toprint = [columns]
         getter = attrgetter(*columns)
+        # Working around a little Python wart here.
+        if len(columns) == 1:
+            rows = [(str(getter(row)),) for row in self._rows_]
+        else:
+            rows = [[str(x) for x in getter(row)] for row in self._rows_]
         tosort = [sort] if isinstance(sort, str) else sort
         if not tosort:
             tosort = columns
@@ -183,9 +188,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         for c in tosort:
             indexes.append(columns.index(c))
         sortgetter = itemgetter(*indexes)
-        toprint.extend(sorted([[str(x)
-                        for x in getter(row)] for row in self._rows_],
-                        key=sortgetter))
+        toprint.extend(sorted(rows, key=sortgetter))
         widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
         sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
         tline = lambda row: ('| ' +
