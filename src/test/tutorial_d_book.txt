@@ -1203,6 +1203,23 @@ query at the start of 4.7:
 where
 -----
 
+I'm not convinced that ``where`` is actually a part of the relational
+algebra, but there is no denying its usefulness.
+
+    >>> from dinsd.op import where
+
+Example 4.7 on page 105 looks like this:
+
+    >>> print(where(is_called, lambda row: row.name == 'Boris'))
+    +-------+------------+
+    | name  | student_id |
+    +-------+------------+
+    | Boris | S2         |
+    | Boris | S5         |
+    +-------+------------+
+
+It would be nice if there were some shorter shorthand than ``lambda`` for
+providing the expression, but in Python there isn't.
 
 
 

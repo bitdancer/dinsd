@@ -140,3 +140,11 @@ def _Rel(prefix, attr_dict):
     new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
     new_Rel = type(new_Rel_name, (Relation,), attr_dict)
     return new_Rel
+
+
+def where(relation, selector):
+    new_rel = type(relation)()
+    for row in relation._rows_:
+        if selector(row):
+            new_rel._rows_.add(row)
+    return new_rel
