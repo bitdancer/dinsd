@@ -1,6 +1,6 @@
 from operator import attrgetter
 from collections import defaultdict
-from dinsd.dbdef import Relation, Dee
+from dinsd.dbdef import Relation, Dum, Dee
 
 def display(relvar, *columns, **kw):
     relvar._validate_attr_list(columns)
@@ -163,3 +163,21 @@ def extend(relation, **new_attrs):
         new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
         new_rel._rows_.add(new_rel._row_(new_values))
     return new_rel
+
+
+def union(*relvars):
+    if len(relvars) == 0:
+        return Dum
+    first, *relvars = relvars
+    if not all(first._header_ == r._header_ for r in relvars):
+        raise TypeError("Union operands must of equal types")
+    if isinstance(first, type) and not relvars:
+        return first()
+    new_rel = type(first)()
+    new_rel._rows_.update(first._rows_.copy())
+    for rel in relvars:
+        new_rel._rows_.update(rel._rows_.copy())
+    return new_rel
+
+# Make | the union operator.
+Relation.__or__ = lambda self, other: union(self, other)

@@ -1317,6 +1317,71 @@ inspect trickery and doing the extension one attribute at a time, but this
 hardly seems worth the effort for what is probably an infrequent use case.
 
 
+union
+~~~~~
+
+In the relational algebra, ``union`` corresponds to the ``or`` logical
+operator, but is restricted to being an operator on relations whose
+types are equal.  dinsd, like *Tutorial D*, provides ``union`` both
+as a function and as an operator.  In dinsd the operator is ``|``.
+
+    >>> from dinsd.op import union
+
+We compute example 4.9 on page 111 thusly:
+
+    >>> x = where(is_called, lambda row: row.name == 'Devinder')
+    >>> y = where(is_enrolled_on, lambda row: row.course_id == CID('C1'))
+    >>> ex49 = x >> {'student_id'} | y >> {'student_id'}
+    >>> ex49 == union(x >> {'student_id'}, y >> {'student_id'})
+    True
+    >>> print(ex49)
+    +------------+
+    | student_id |
+    +------------+
+    | S1         |
+    | S2         |
+    | S4         |
+    +------------+
+
+It is an error to try to form the union of relations of disparate types:
+
+    >>> is_called | is_enrolled_on
+    Traceback (most recent call last):
+        ...
+    TypeError: Union operands must of equal types
+
+Union is commutative and associative:
+
+    >>> x = x >> {'student_id'}
+    >>> y = y >> {'student_id'}
+    >>> x | y == y | x
+    True
+    >>> z = Rel(student_id=SID)({'student_id': 'S5'})
+    >>> (x | y) | z == x | (y | z) == union(x, y, z)
+    True
+
+Union of a single relation, or a relation with itself is that relation.
+
+    >>> union(is_called) == union(is_called, is_called) == is_called
+    True
+
+*Tutorial D* has the ability to specify an empty union if you specify
+a heading.  The equivalent in dinsd is the following, which, like
+the *Tutorial D* version, is of questionable practical value:
+
+    >>> union() == Dum
+    True
+    >>> print(union(Rel(name=str, student_id=SID)))
+    +------+------------+
+    | name | student_id |
+    +------+------------+
+    +------+------------+
+
+Be warned that passing a type in any other context to a relational operator
+will result in oddball errors in dinsd, rather than straightforward TypeErrors
+with useful messages.  This may be improved at some point, or it may not.
+
+
 
 About the Name
 --------------
