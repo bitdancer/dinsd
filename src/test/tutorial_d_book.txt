@@ -1141,3 +1141,34 @@ Python object terms they may be different objects:
 
     >>> is_called >> {} is Dee
     False
+
+
+
+About the Name
+--------------
+
+When I started dinsd, I knew there was no way I could fully implement
+TTM's *D* in Python.  But I wanted something very like *D*.  Given that I was
+implementing *D* in Python, I figured I should use the name of some character
+that had something to do with the letter D, and Dinsdale immediately came to
+mind.  However, since my program was not going to be a full D, I decided I'd
+shorten the name to indicate it was only a partial thing.  This also served to
+make it a more uniquely searchable term.  I contemplated both 'dins' and
+'dinsd', settling on the latter because it had two Ds in it.
+
+After a bit I realized that I was developing something closer to the true
+spirit of *D* than I had initially thought I'd be able to manage, but still
+something that did not conform to TTM.  It occurred to me that 'dinsd' could
+almost, but not quite, be interpreted as "D Is Not D", and I briefly
+considered changing the name to disnd.  That's a lot harder to pronounce,
+though.
+
+And then it occured to me that the big difference between my (non-conformant)
+implementation of *D* and a real *D* is that Python does not have compile
+time, static typing.  And thus the real acronym behind the name dinsd was
+revealed:
+
+    D Is Not Static D
+
+It isn't really quite *D* in a few other details as well, but that's the big
+one.
