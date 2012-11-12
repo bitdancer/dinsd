@@ -1539,6 +1539,77 @@ Exercise 2:
     | 0003 | 2201  | 16000.0 |
     +------+-------+---------+
 
+Exercise 3:
+
+    >>> class ExamMarks(dbdef.Relation):
+    ...     student_id = SID
+    ...     course_id = CID
+    ...     mark = int
+    >>> exam_marks = ExamMarks(
+    ...     ('student_id', 'course_id', 'mark'),
+    ...     ('S1',         'C1',        85),
+    ...     ('S1',         'C2',        49),
+    ...     ('S1',         'C3',        85),
+    ...     ('S2',         'C1',        49),
+    ...     ('S3',         'C3',        66),
+    ...     ('S4',         'C1',        93),
+    ...     )
+    >>> x = rename(exam_marks, student_id='sid1', mark='mark1')
+    >>> y = rename(exam_marks, student_id='sid2', mark='mark2')
+    >>> pairs = where(x & y, lambda r: r.sid1 < r.sid2)
+    >>> diff = extend(pairs, gap=lambda r: abs(r.mark1 - r.mark2))
+    >>> diff_only = diff << {'mark1', 'mark2'}
+    >>> print(display(diff_only, 'course_id', 'sid1', 'sid2', 'gap'))
+    +-----------+------+------+-----+
+    | course_id | sid1 | sid2 | gap |
+    +-----------+------+------+-----+
+    | C1        | S1   | S2   | 36  |
+    | C1        | S1   | S4   | 8   |
+    | C1        | S2   | S4   | 44  |
+    | C3        | S1   | S3   | 19  |
+    +-----------+------+------+-----+
+
+Because it is obviously going to be convenient, I've decided to allow
+``display`` to do an implicit projection if the number of columns
+specified is less than the number of columns in the relation being
+displayed:
+
+    >>> print(display(diff, 'course_id', 'sid1', 'sid2', 'gap'))
+    +-----------+------+------+-----+
+    | course_id | sid1 | sid2 | gap |
+    +-----------+------+------+-----+
+    | C1        | S1   | S2   | 36  |
+    | C1        | S1   | S4   | 8   |
+    | C1        | S2   | S4   | 44  |
+    | C3        | S1   | S3   | 19  |
+    +-----------+------+------+-----+
+
+This means we now get a different error when we specify an invalid
+attribute name:
+
+    >>> display(diff, 'fred')
+    Traceback (most recent call last):
+        ...
+    AttributeError: '_rowclass_' object has no attribute 'fred'
+
+That is clear enough that there's no reason to specialize it.
+
+This also implies that display without a column list is equivalent
+to an invalid version of Dee:
+
+    >>> print(display(diff))
+    ++
+    ||
+    ++
+    |  |
+    |  |
+    |  |
+    |  |
+    ++
+
+For now at least we are just going to live with that artifact, because
+display is not a relational operator, since it does not return a
+relation.
 
 
 About the Name

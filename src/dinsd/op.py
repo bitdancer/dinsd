@@ -3,7 +3,6 @@ from collections import defaultdict
 from dinsd.dbdef import Relation, Dum, Dee
 
 def display(relvar, *columns, **kw):
-    relvar._validate_attr_list(columns)
     return relvar._display_(*columns, **kw)
 
 def join(*relvars):
