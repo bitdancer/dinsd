@@ -183,8 +183,9 @@ def union(*relvars):
 Relation.__or__ = lambda self, other: union(self, other)
 
 
-def _matcher(first, second, match):
-    common_attrs = []
+# XXX: this should probably be a public API of some sort.
+def _common_attrs(first, second):
+    common_attrs = set()
     for attr in second._attr_names_:
         if attr in first._attr_names_:
             if getattr(first, attr) != getattr(second, attr):
@@ -198,7 +199,11 @@ def _matcher(first, second, match):
                         type(first),
                         type(second),
                         ))
-            common_attrs.append(attr)
+            common_attrs.add(attr)
+    return common_attrs
+
+def _matcher(first, second, match):
+    common_attrs = _common_attrs(first, second)
     new_rel = type(first)()
     if not common_attrs:
         if bool(second) == match:   # exclusive or
@@ -229,3 +234,8 @@ def minus(first, second):
 
 def matching(first, second):
     return _matcher(first, second, match=True)
+
+
+def compose(first, second):
+    common_attrs = _common_attrs(first, second)
+    return project(join(first, second), all_but=common_attrs)
