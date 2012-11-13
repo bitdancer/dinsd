@@ -1880,10 +1880,10 @@ Examples
 Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
 AITDT, the number of students that have sat for an exam in each course:
 
-    >>> x = extend(courses, n=lambda r:
+    >>> x = extend(courses >> {'course_id'}, n=lambda r:
     ...         len(where(exam_marks,
     ...             lambda x: x.course_id==r.course_id) >> {'student_id'}))
-    >>> print(x >> {'course_id', 'n'})
+    >>> print(x)
     +-----------+---+
     | course_id | n |
     +-----------+---+
@@ -1947,9 +1947,12 @@ in the AITDT example 5.6:
     ...                  exam_marks))
     True
 
-Hmm.  Having successfully written first expression above, and successfully
-translated example 5.6, I have to admit that have no clue what AITDT's
-example 5.7 is doing, and it sure looks more complicated than mine.
+Having successfully written first expression above, and successfully
+translated example 5.6, I have to admit that I had no clue what AITDT's
+example 5.7 was doing.  After reading the explanation and thinking about it I
+believe he uses that more complicated expression because *Tutorial D* version
+one did not have a general expression facility for aggregate operators.
+
 
 
 About the Name
