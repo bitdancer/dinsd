@@ -126,9 +126,11 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             return
         if (len(args)==1 and isinstance(args[0], Relation) and
                 args[0]._header_ == self._header_):
-            # We were called as a type validation function.  XXX: add a __new__
-            # function that avoids the extra object creation.
-            self._rows_ = args[0]._rows_
+            # We were called as a type validation function.  Return an
+            # immutable copy, because the only time this happens is when a
+            # relation is the value of an attribute, and when a relation is a
+            # value of an attribute it must be immutable.
+            self._rows_ = frozenset(args[0]._rows_)
             return
         if hasattr(args[0], 'items'):
             self._rows_ = {self._row_(x) for x in args}
@@ -164,13 +166,6 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def _cmpkey(self):
         return self._rows_
-
-    def __hash__(self):
-        # XXX: We can be hashed, but only if we become read-only.  This is a
-        # hack that solves 90% of the problem; we'll delay fixing it 100% until
-        # a later refactoring.
-        self._rows_ = frozenset(self._rows_)
-        return super().__hash__()
 
     def _compare(self, other, method):
         if not isinstance(other, Relation):
