@@ -1,5 +1,6 @@
 from operator import attrgetter
 from collections import defaultdict
+from itertools import accumulate, repeat
 from dinsd.dbdef import Relation, Dum, Dee
 
 #
@@ -258,3 +259,17 @@ def compute(relvar, func):
 
 def column(relvar, *colnames):
     return compute(relvar, attrgetter(*colnames))
+
+def avg(iterator):
+    """Calculate the average of an iterator.
+
+    This is a functional, iterative implementation, which means the iterator
+    does not have to support len, and we accumulate the result as we go along
+    rather than first exhausting the iterator and then performing the
+    summation.
+    """
+    c = 0
+    for s, c in accumulate(zip(iterator, repeat(1)),
+                           lambda x, y: (x[0]+y[0], x[1]+y[1])):
+        pass
+    return 0 if c==0 else s/c

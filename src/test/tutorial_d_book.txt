@@ -1908,20 +1908,24 @@ relational max and min:
     ValueError: min() arg is an empty sequence
 
 
-other aggregate operators
+Other Aggregate Operators
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-dinsd doesn't bother to define the *Tutorial D* ``AVG`` function, since it
-is (a) so simple and (b) depends on two inputs, unlike the other aggregate
-functions which simply iterate over the relation.
+Python doesn't have a function that corresponds directly to the *Tutorial D*
+``AVG`` function, and it is a bit tricky to define it as a function that takes
+a single iterator (that does not support ``len``, which compute does not) as
+its argument, so dinsd provides the ``avg`` function in the ``op`` module.
 
-It is easy to define one, though:
+    >>> from dinsd.op import avg
+    >>> round(avg(column(exam_marks, 'mark')), 2)
+    71.17
+    >>> avg(column(Rel(foo=int)({'foo': 3}), 'foo'))
+    3.0
+    >>> avg(column(Rel(foo=int)(), 'foo'))
+    0
 
-    >>> def avg(relvar, func):
-    ...     return sum(compute(relvar, func))/len(relvar)
-
-The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators
-are named ``all`` and ``any``, respectively.
+The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
+named ``all`` and ``any``, respectively.
 
 
 About the Name
