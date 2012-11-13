@@ -1763,6 +1763,32 @@ Compose is commutative, but not associative:
     False
 
 
+Aggregate Operators
+-------------------
+
+Aggregate operators map from relations to scalers.
+
+
+len (count)
+~~~~~~~~~~~
+
+*Tutorial D* calls this operator ``COUNT``, but Python already has a
+perfectly good function for returning the number of rows in a
+relation: ``len``:
+
+    >>> len(is_called)
+    5
+    >>> len(exam_marks)
+    6
+
+That was example 5.1 on page 127.  Example 5.2, counting the number of
+students with marks above 50:
+
+    >>> len(where(exam_marks, lambda r: r.mark > 50) >> {'student_id'})
+    3
+
+
+
 About the Name
 --------------
 
