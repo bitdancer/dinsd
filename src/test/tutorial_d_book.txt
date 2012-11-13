@@ -1928,6 +1928,84 @@ The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
 named ``all`` and ``any``, respectively.
 
 
+Examples
+~~~~~~~~
+
+Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
+AITDT, the number of students that have sat for an exam in each course:
+
+    >>> x = extend(courses, n=lambda r:
+    ...         len(where(exam_marks,
+    ...             lambda x: x.course_id==r.course_id) >> {'student_id'}))
+    >>> print(x >> {'course_id', 'n'})
+    +-----------+---+
+    | course_id | n |
+    +-----------+---+
+    | C1        | 3 |
+    | C2        | 1 |
+    | C3        | 2 |
+    | C4        | 0 |
+    +-----------+---+
+
+But that is getting ahead of the text.  Here is the dinsd expression I naively
+came up with to compute the table in figure 5.5:
+
+    >>> x = extend(courses, exam_result=lambda r:
+    ...         project(
+    ...             where(exam_marks,
+    ...                 lambda x: x.course_id==r.course_id),
+    ...              {'student_id', 'mark'})) << {'title'}
+    >>> print(x)
+    +-----------+-----------------------+
+    | course_id | exam_result           |
+    +-----------+-----------------------+
+    | C1        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 49   | S2         | |
+    |           | | 85   | S1         | |
+    |           | | 93   | S4         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C2        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 49   | S1         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C3        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 66   | S3         | |
+    |           | | 85   | S1         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C4        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | +------+------------+ |
+    |           |                       |
+    +-----------+-----------------------+
+
+You will note that we have no way to control the print order of the subtables,
+so they come out in the default sorted order.  It would be possible to extend
+display to support column and sort specifications for attributes of the main
+table, but the complexity is not warranted by the minimal use that such a
+facility would be likely to get.
+
+Here is the simpler, direct equivalent of the expression used for this table
+in the AITDT example 5.6:
+
+    >>> x == extend(courses >> {'course_id'}, exam_result=lambda r:
+    ...          compose(Rel(course_id=CID)({'course_id': r.course_id}),
+    ...                  exam_marks))
+    True
+
+Hmm.  Having successfully written first expression above, and successfully
+translated example 5.6, I have to admit that have no clue what AITDT's
+example 5.7 is doing, and it sure looks more complicated than mine.
+
+
 About the Name
 --------------
 

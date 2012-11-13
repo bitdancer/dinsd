@@ -1,5 +1,6 @@
 from collections import Mapping
 from operator import attrgetter, itemgetter
+from itertools import zip_longest
 
 
 class RichCompareMixin:
@@ -29,7 +30,7 @@ class RichCompareMixin:
         return self._compare(other, lambda s,o: s > o)
 
     def __ne__(self, other):
-        return self._compare(other, lambda s,o: s != o) 
+        return self._compare(other, lambda s,o: s != o)
 
     def __hash__(self):
         return hash(self._cmpkey())
@@ -115,13 +116,19 @@ class RelationMeta(type):
             _relation_name_ = name
         dct['_row_'] = _rowclass_
         return type.__new__(cls, name, bases, dct)
-    
+
 
 class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __init__(self, *args):
         if len(args) == 0:
             self._rows_ = set()
+            return
+        if (len(args)==1 and isinstance(args[0], Relation) and
+                args[0]._header_ == self._header_):
+            # We were called as a type validation function.  XXX: add a __new__
+            # function that avoids the extra object creation.
+            self._rows_ = args[0]._rows_
             return
         if hasattr(args[0], 'items'):
             self._rows_ = {self._row_(x) for x in args}
@@ -158,6 +165,13 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
     def _cmpkey(self):
         return self._rows_
 
+    def __hash__(self):
+        # XXX: We can be hashed, but only if we become read-only.  This is a
+        # hack that solves 90% of the problem; we'll delay fixing it 100% until
+        # a later refactoring.
+        self._rows_ = frozenset(self._rows_)
+        return super().__hash__()
+
     def _compare(self, other, method):
         if not isinstance(other, Relation):
             return False
@@ -171,19 +185,19 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         r += '), '
         rows = []
         for row in sorted(self._rows_, key=attrgetter(*self._attr_names_)):
-            rows.append('(' + ', '.join([repr(row[x]) 
+            rows.append('(' + ', '.join([repr(row[x])
                                          for x in self._attr_names_]) + ')')
         r += ', '.join(rows) + ')'
         return r
 
     def _display_(self, *columns, sort=[]):
-        toprint = [columns]
+        toprint = [list(map(printable, columns))]
         getter = attrgetter(*columns) if columns else lambda x: x
         # Working around a little Python wart here.
         if len(columns) == 1:
-            rows = [(str(getter(row)),) for row in self._rows_]
+            rows = [(printable(getter(row)),) for row in self._rows_]
         else:
-            rows = [[str(x) for x in getter(row)] for row in self._rows_]
+            rows = [list(map(printable, getter(row))) for row in self._rows_]
         tosort = [sort] if isinstance(sort, str) else sort
         if not tosort:
             tosort = columns
@@ -192,22 +206,50 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             indexes.append(columns.index(c))
         sortgetter = itemgetter(*indexes) if indexes else None
         toprint.extend(sorted(rows, key=sortgetter))
-        widths = [max([len(x) for x in vals]) for vals in zip(*toprint)]
+        widths = [max([x.width for x in vals]) for vals in zip(*toprint)]
         sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
-        tline = lambda row: ('| ' +
-                             ' | '.join(v.ljust(w)
-                                        for v, w in zip(row, widths)) + ' |')
-        r = [sep, tline(columns) if columns else '||', sep]
+        r = [sep]
+        r.extend((_tline(parts, widths) for parts in zip(*toprint[0]))
+                 if columns else ['||'])
+        r.append(sep)
         if not columns and len(toprint)==2:
             r.append("||")
         else:
-            r.extend(tline(row) for row in toprint[1:])
+            for row in toprint[1:]:
+                r.extend(_tline(parts, widths) for parts in zip_longest(*row))
         r.append(sep)
         return '\n'.join(r)
 
     def __str__(self):
         return self._display_(*self._attr_names_)
 
+
+class printable(RichCompareMixin):
+
+    def __init__(self, content):
+        self.source = content
+        content = str(content)
+        if '\n' in content:
+            self.content = content.splitlines() + ['']
+            self.width = max(map(len, self.content))
+        else:
+            self.width = len(content)
+            self.content = [content]
+
+    def _cmpkey(self):
+        return self.content
+
+    def __iter__(self):
+        for line in self.content:
+            yield line
+
+    def __repr__(self):
+        return "printable({!r})".format(self.source)
+
+
+def _tline(parts, widths):
+    return ('| ' + ' | '.join(('' if v is None else v).ljust(w)
+                                  for v, w in zip(parts, widths)) + ' |')
 
 class DumDee(Relation):
     pass
