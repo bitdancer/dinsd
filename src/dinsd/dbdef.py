@@ -90,7 +90,7 @@ class Row(RichCompareMixin, Mapping):
         return super()._compare(other, method)
 
     def __repr__(self):
-        return "{}._row_({{{}}})".format(self._relation_name_,
+        return "{}.row({{{}}})".format(self._relation_name_,
             ', '.join("{!r}: {!r}".format(k, v)
                         for k, v in sorted(self.__dict__.items())))
 
@@ -107,14 +107,14 @@ class RelationMeta(type):
 
     def __new__(cls, name, bases, dct):
         attrs = [x for x in dct if not x.startswith('_')]
-        dct['_degree_'] = len(attrs)
-        dct['_attr_names_'] = sorted(attrs)
-        dct['_header_'] = {n: dct[n] for n in attrs}
-        class _rowclass_(Row):
-            _header_ = dct['_header_']
+        header = {name: dct.pop(name) for name in attrs}
+        dct['header'] = header
+        dct['degree'] = len(attrs)
+        class RowClass(Row):
+            _header_ = header
             _degree_ = len(attrs)
             _relation_name_ = name
-        dct['_row_'] = _rowclass_
+        dct['row'] = RowClass
         return type.__new__(cls, name, bases, dct)
 
 
@@ -125,7 +125,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._rows_ = set()
             return
         if (len(args)==1 and isinstance(args[0], Relation) and
-                args[0]._header_ == self._header_):
+                args[0].header == self.header):
             # We were called as a type validation function.  Return an
             # immutable copy, because the only time this happens is when a
             # relation is the value of an attribute, and when a relation is a
@@ -133,30 +133,31 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._rows_ = frozenset(args[0]._rows_)
             return
         if hasattr(args[0], 'items'):
-            self._rows_ = {self._row_(x) for x in args}
+            self._rows_ = {self.row(x) for x in args}
             return
         attrlist = args[0]
         self._validate_attr_list(attrlist)
         rows = set()
         for i, row in enumerate(args[1:], start=1):
-            if len(row) != self._degree_:
+            if len(row) != self.degree:
                 raise TypeError(
                     "Expected {} attributes, got {} in row {}".format(
-                        self._degree_, len(row), i))
+                        self.degree, len(row), i))
             try:
-                rows.add(self._row_({k: v for k, v in zip(attrlist, row)}))
+                rows.add(self.row({k: v for k, v in zip(attrlist, row)}))
             except TypeError as e:
                 raise TypeError(str(e) + " in row {}".format(i))
         self._rows_ = rows
 
     def _validate_attr_list(self, attrlist):
-        if len(attrlist) != self._degree_:
+        if len(attrlist) != self.degree:
             raise TypeError(
                 "Expected {} attributes, got {} in header row".format(
-                    self._degree_, len(attrlist)))
-        # Make sure the names name our attributes (AttributeError otherwise)
+                    self.degree, len(attrlist)))
         for attr in attrlist:
-            getattr(self, attr)
+            if attr not in self.header:
+                raise AttributeError("{!r} relation has no attribute {!r}".format(
+                                     self.__class__.__name__, attr))
 
     def __iter__(self):
         return iter(self._rows_)
@@ -174,14 +175,15 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __repr__(self):
         r = "{}((".format(self.__class__.__name__)
-        r += ', '.join([repr(x) for x in self._attr_names_])
+        names = sorted(self.header)
+        r += ', '.join([repr(x) for x in names])
         if not self._rows_:
             return r + '))'
         r += '), '
         rows = []
-        for row in sorted(self._rows_, key=attrgetter(*self._attr_names_)):
+        for row in sorted(self._rows_, key=attrgetter(*names)):
             rows.append('(' + ', '.join([repr(row[x])
-                                         for x in self._attr_names_]) + ')')
+                                         for x in names]) + ')')
         r += ', '.join(rows) + ')'
         return r
 
@@ -216,7 +218,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return '\n'.join(r)
 
     def __str__(self):
-        return self._display_(*self._attr_names_)
+        return self._display_(*sorted(self.header))
 
 
 class printable(RichCompareMixin):

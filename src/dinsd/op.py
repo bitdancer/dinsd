@@ -3,6 +3,10 @@ from collections import defaultdict
 from itertools import accumulate, repeat
 from dinsd.dbdef import Relation, Dum, Dee
 
+# For debugging only.
+import sys
+dbg = lambda *args: print(*args, file=sys.stderr)
+
 #
 # Relational Operators
 #
@@ -21,23 +25,23 @@ def join(*relvars):
 
 
 def _binary_join(first, second):
-    combined_attrs = first._header_.copy()
+    combined_attrs = first.header.copy()
     common_attrs = []
-    for attr in second._attr_names_:
+    for attr, typ in second.header.items():
         if attr in combined_attrs:
-            if getattr(second, attr) != combined_attrs[attr]:
+            if typ != combined_attrs[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
                     "with different type (first: {}, second: {} found "
                     "in joined relvars with type names {} and {}".format(
                         attr,
                         combined_attrs[attr],
-                        getattr(second, attr),
+                        typ,
                         type(first),
                         type(second),
                         ))
             common_attrs.append(attr)
         else:
-            combined_attrs[attr] = getattr(second, attr)
+            combined_attrs[attr] = typ
     if common_attrs:
         # Build index for the match columns.
         getter = attrgetter(*common_attrs)
@@ -57,7 +61,7 @@ def _binary_join(first, second):
         for row2 in matches(key):
             attrs = row._as_dict_()
             attrs.update(row2._as_dict_())
-            new_rel._rows_.add(new_rel._row_(attrs))
+            new_rel._rows_.add(new_rel.row(attrs))
     return new_rel
 
 # Make '&' the same as binary join for Relations.
@@ -69,7 +73,7 @@ def intersect(*relvars):
         return Dee
     first, *relvars = relvars
     for rel in relvars:
-        if first._header_ != rel._header_:
+        if first.header != rel.header:
             raise TypeError("Cannot take intersection of unlike relations")
     new_rel = type(first)()
     new_rel._rows_ = first._rows_
@@ -83,13 +87,13 @@ def times(*relvars):
         return Dee
     first, *relvars = relvars
     for rel in relvars:
-        if first._header_.keys() & rel._header_.keys():
+        if first.header.keys() & rel.header.keys():
             raise TypeError("Cannot multiply relations that share attributes")
     return join(first, *relvars)
 
 
 def rename(relation, **renames):
-    new_attrs = relation._header_.copy()
+    new_attrs = relation.header.copy()
     holder = {}
     for old, new in renames.items():
         holder[new] = new_attrs.pop(old)
@@ -101,7 +105,7 @@ def rename(relation, **renames):
         for old, new in renames.items():
             holder[new] = row_data.pop(old)
         row_data.update(holder)
-        new_rel._rows_.add(new_rel._row_(row_data))
+        new_rel._rows_.add(new_rel.row(row_data))
     return new_rel
 
 
@@ -109,25 +113,25 @@ def project(relation, only=None, all_but=None):
     if only and all_but:
         raise TypeError("Only one of only and all_but allowed")
     if only:
-        reduced_attrs = {n: t for n, t in relation._header_.items()
+        reduced_attrs = {n: t for n, t in relation.header.items()
                               if n in only}
         if not len(reduced_attrs) == len(only):
             raise TypeError("Attribute list included invalid attributes: "
                             "{}".format(only - reduced_attrs.keys()))
     elif all_but:
-        reduced_attrs = relation._header_.copy()
+        reduced_attrs = relation.header.copy()
         for name in all_but:
             del reduced_attrs[name]
     elif only is not None:
         reduced_attrs = {}
     else:
-        reduced_attrs = relation._header_.copy()
+        reduced_attrs = relation.header.copy()
     reduced_attr_names = reduced_attrs.keys()
     new_rel = _Rel('project', reduced_attrs)()
     for row in relation._rows_:
         new_row_data = {n: v for n, v in row._as_dict_().items()
                              if n in reduced_attr_names}
-        new_rel._rows_.add(new_rel._row_(new_row_data))
+        new_rel._rows_.add(new_rel.row(new_row_data))
     return new_rel
 
 # Make >> the project operator, and << the "all_but" operator.
@@ -140,7 +144,7 @@ def Rel(**kw):
 
 def _Rel(prefix, attr_dict):
     new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), attr_dict)
+    new_Rel = type(new_Rel_name, (Relation,), attr_dict.copy())
     return new_Rel
 
 
@@ -156,14 +160,14 @@ def extend(relation, **new_attrs):
     if len(relation) == 0:
         # XXX: this violates TTM, but probably doesn't matter much in practice.
         raise TypeError("Cannot extend empty relation")
-    attrs = relation._header_.copy()
+    attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
     new_rel = _Rel('extend', attrs)()
     for row in relation:
         new_values = row._as_dict_()
         new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
-        new_rel._rows_.add(new_rel._row_(new_values))
+        new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
 
 
@@ -171,7 +175,7 @@ def union(*relvars):
     if len(relvars) == 0:
         return Dum
     first, *relvars = relvars
-    if not all(first._header_ == r._header_ for r in relvars):
+    if not all(first.header == r.header for r in relvars):
         raise TypeError("Union operands must of equal types")
     if isinstance(first, type) and not relvars:
         return first()
@@ -188,16 +192,16 @@ Relation.__or__ = lambda self, other: union(self, other)
 # XXX: this should probably be a public API of some sort.
 def _common_attrs(first, second):
     common_attrs = set()
-    for attr in second._attr_names_:
-        if attr in first._attr_names_:
-            if getattr(first, attr) != getattr(second, attr):
+    for attr, typ in second.header.items():
+        if attr in first.header:
+            if typ != first.header[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
                     "with different type (first: {}, second: {} "
                     "found in match relation (relation type names "
                     "are {} and {})".format(
                         attr,
-                        getattr(first, attr),
-                        getattr(second, attr),
+                        first.header[attr],
+                        typ,
                         type(first),
                         type(second),
                         ))
@@ -230,7 +234,7 @@ Relation.__sub__ = lambda self, other: notmatching(self, other)
 
 
 def minus(first, second):
-    if not first._header_ == second._header_:
+    if not first.header == second.header:
         raise TypeError("Relation types must match for minus operation")
     return notmatching(first, second)
 
@@ -250,6 +254,7 @@ def compose(first, second):
 
 
 def display(relvar, *columns, **kw):
+    relvar._validate_attr_list(columns)
     return relvar._display_(*columns, **kw)
 
 
