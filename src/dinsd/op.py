@@ -2,8 +2,9 @@ from operator import attrgetter
 from collections import defaultdict
 from dinsd.dbdef import Relation, Dum, Dee
 
-def display(relvar, *columns, **kw):
-    return relvar._display_(*columns, **kw)
+#
+# Relational Operators
+#
 
 def join(*relvars):
     if not relvars:
@@ -202,6 +203,7 @@ def _common_attrs(first, second):
             common_attrs.add(attr)
     return common_attrs
 
+
 def _matcher(first, second, match):
     common_attrs = _common_attrs(first, second)
     new_rel = type(first)()
@@ -239,3 +241,20 @@ def matching(first, second):
 def compose(first, second):
     common_attrs = _common_attrs(first, second)
     return project(join(first, second), all_but=common_attrs)
+
+
+#
+# Aggregate Operators
+#
+
+
+def display(relvar, *columns, **kw):
+    return relvar._display_(*columns, **kw)
+
+
+def compute(relvar, func):
+    for row in relvar:
+        yield func(row)
+
+def column(relvar, *colnames):
+    return compute(relvar, attrgetter(*colnames))

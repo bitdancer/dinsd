@@ -1726,6 +1726,10 @@ compose
 ~~~~~~~
 
     >>> from dinsd.op import compose
+
+``compose`` joins its operands and then projects away the attributes
+that the two relations have in common.
+
     >>> course_marks = compose(courses, exam_marks)
     >>> course_marks == (courses & exam_marks) << {'course_id'}
     True
@@ -1766,27 +1770,158 @@ Compose is commutative, but not associative:
 Aggregate Operators
 -------------------
 
-Aggregate operators map from relations to scalers.
+Aggregate operators map from relations to scalers.  The results of aggregate
+operators are well defined (and thus the operator is a true relational
+aggregate operator) only if the diadic form of the operation (the "base
+operation") is commutative and associative.  That is, the order of evaluation
+must not matter, since the order in which the rows are accessed is arbitrary
+and may change.
+
+As an aside, although discussed earlier, ``display`` is technically an
+aggregate operator:  its input is a relation and its result is a scaler (a
+string).
 
 
 len (count)
 ~~~~~~~~~~~
 
-*Tutorial D* calls this operator ``COUNT``, but Python already has a
-perfectly good function for returning the number of rows in a
-relation: ``len``:
+*Tutorial D* calls this operator ``COUNT``, but Python already has a function
+for returning the number of rows in a relation: ``len``:
 
     >>> len(is_called)
     5
     >>> len(exam_marks)
     6
 
-That was example 5.1 on page 127.  Example 5.2, counting the number of
+That last was example 5.1 on page 127.  Example 5.2, counting the number of
 students with marks above 50:
 
     >>> len(where(exam_marks, lambda r: r.mark > 50) >> {'student_id'})
     3
 
+
+compute
+~~~~~~~
+
+    >>> from dinsd.op import compute
+
+``compute`` has no analog in *Tutorial D*.  All of the aggregate functions
+in *Tutorial D* version 2 have the ability to use an arbitrary expression
+to compute a value over each row of the relation being aggregated.
+``compute`` is the dinsd function that performs this computation operation.
+It is an iterator (specifically a generator) the produces the computed
+values one by one, which the individual aggregate operators then consume.
+Since the corresponding Python functions can consume iterators, this means
+that most of dinsd's aggregation operators are vanilla Python functions
+applied to a ``compute`` value.
+
+``compute`` takes a relation and a function of one argument.  The function
+is passed each row of the relation in turn, and the result of the function
+applied to that row is yielded as the next value of the iterator.
+
+For example, we can extract the scores from the ``mark`` column of the
+``exam_marks`` table like this:
+
+    >>> sorted(compute(exam_marks, lambda r: r.mark))
+    [49, 49, 66, 85, 85, 93]
+
+The call to ``sorted`` here does two things:  it consumes all of the values
+from the compute generator, and it gives the returned values a predictable
+order so that the result can be used as part of the doctest.
+
+
+column
+~~~~~~
+
+``compute`` provides completely general expressions for dinsd.  But it is
+wordy and awkward when dealing with common cases, so dinsd also provides some
+shorthand functions.  The single most common case is obtaining the values of
+one or more columns.  This feature is provided by the ``column`` function:
+
+    >>> from dinsd.op import column
+
+We use the term column rather than the relationally correct term attribute
+because in this case we are conceptually operating on entire columns for the
+purpose of extracting them from the relation and aggregating them; so, they
+are no longer relation attributes, they are extracted columns of data.
+
+``column`` takes a relation and one or more attribute names as arguments.  If
+one attribute name is given, the resulting iterator yields the values of that
+attribute.  If more than one is given, the iterator yields a tuple of the
+attributes, each tuple having the values in the same order as the order in
+which the names are specified in the ``column`` argument list:
+
+    >>> sorted(column(exam_marks, 'mark'))
+    [49, 49, 66, 85, 85, 93]
+    >>> sorted(column(exam_marks, 'student_id', 'mark'))  # doctest: +NORMALIZE_WHITESPACE
+    [(SID('S1'), 49), (SID('S1'), 85), (SID('S1'), 85), (SID('S2'), 49),
+     (SID('S3'), 66), (SID('S4'), 93)]
+
+
+sum
+~~~
+
+The Python ``sum`` function can be used to "sum" any values that support
+addition.  The result will be a valid relational aggregation if and only if
+the addition operation is both associative and commutative.
+
+Arithmetic addition satisfies this criteria.  Here is AITDT's example 5.3 in
+dinsd:
+
+    >>> sum(column(where(exam_marks, lambda r: r.student_id == SID('S1')),
+    ...            'mark'))
+    219
+
+String concatenation does not, so while the expression:
+
+    sum(column(exam_marks, 'title'))
+
+will produce a result, it will be neither a useful result nor a valid
+relational aggregation result.
+
+Python's ``sum`` operator returns the correct result when passed a column
+from an empty relation:
+
+    >>> sum(column(Rel(foo=int)(), 'foo'))
+    0
+
+
+max and min
+~~~~~~~~~~~
+
+Like ``sum``, the Python ``max`` and ``min`` functions accept interators
+as in put, so we can use them directly to compute the corresponding
+relational max and min:
+
+    >>> max(column(where(exam_marks, lambda r: r.student_id == SID('S1')),
+    ...            'mark'))
+    85
+    >>> min(column(where(exam_marks, lambda r: r.student_id == SID('S1')),
+    ...            'mark'))
+    49
+
+``min`` and ``max`` do not have defined results on an empty relation:
+
+    >>> min(column(Rel(foo=int)(), 'foo'))
+    Traceback (most recent call last):
+        ...
+    ValueError: min() arg is an empty sequence
+
+
+other aggregate operators
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+dinsd doesn't bother to define the *Tutorial D* ``AVG`` function, since it
+is (a) so simple and (b) depends on two inputs, unlike the other aggregate
+functions which simply iterate over the relation.
+
+It is easy to define one, though:
+
+    >>> def avg(relvar, func):
+    ...     return sum(compute(relvar, func))/len(relvar)
+
+The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators
+are named ``all`` and ``any``, respectively.
 
 
 About the Name
