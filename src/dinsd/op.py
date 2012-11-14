@@ -115,6 +115,11 @@ class all_but:
         self.names = attr_names
 
     def all_but(self, relation):
+        if type(self.names) == type(self):
+            # negation of a negation is a positive...give back original names.
+            # We only handle one level of recursion...perhaps this whole
+            # interface implementation should be rethought.
+            return self.names.names
         all_names = relation.header.keys()
         if self.names and all_names & self.names != self.names:
             raise TypeError("Attribute list included invalid attributes: "
@@ -300,3 +305,12 @@ def summarize(relvar, compvar, _debug=False, **new_attrs):
         print(x)
     new_attrs = {n: lambda r, v=v: v(r.t_e_m_p) for n, v in new_attrs.items()}
     return extend(x, **new_attrs) << {'t_e_m_p'}
+
+
+def group(relation, **kw):
+    if len(kw) > 1:
+        raise TypeError("Only one new column may be specified for grouping")
+    name, attr_names = next(iter(kw.items()))
+    grouped = relation << attr_names
+    grouping_func = lambda r: compose(relation, type(grouped)(r))
+    return extend(grouped, **{name: grouping_func})

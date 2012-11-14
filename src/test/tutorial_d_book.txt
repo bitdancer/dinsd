@@ -2132,6 +2132,62 @@ Summarize can take any number of new column computations functions:
     +-----------+-----------+----------+
 
 
+group
+-----
+
+    >>> from dinsd.op import group
+
+``group`` encapsulates the ``extend``/``compose`` sub-operation of summarize:
+
+    >>> x = group(exam_marks, exam_results={'student_id', 'mark'})
+    >>> print(x)
+    +-----------+-----------------------+
+    | course_id | exam_results          |
+    +-----------+-----------------------+
+    | C1        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 49   | S2         | |
+    |           | | 85   | S1         | |
+    |           | | 93   | S4         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C2        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 49   | S1         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C3        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 66   | S3         | |
+    |           | | 85   | S1         | |
+    |           | +------+------------+ |
+    |           |                       |
+    +-----------+-----------------------+
+
+Since the grouping specification is a attribute name set, we can also use
+the ``all_but`` wrapper with it:
+
+    >>> x == group(exam_marks, exam_results=all_but({'course_id'}))
+    True
+
+The grouping refers implicitly to both the set of columns being grouped and
+the set of columns not being grouped.  This leads to an ambiguity as to which
+columns are involved if there are multiple grouping specifications.  Rather
+than trying to sort this out and greatly complicating the implementation for
+little practical benefit, the group function only accepts one new column name:
+
+    >>> group(exam_marks, res1={'marks'}, res2={'student_id'})
+    Traceback (most recent call last):
+        ...
+    TypeError: Only one new column may be specified for grouping
+
+In this we follow *Tutorial D*, which dropped support for multiple grouping
+columns in Version 2.
+
+
 
 About the Name
 --------------
