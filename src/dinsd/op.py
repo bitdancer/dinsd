@@ -109,23 +109,27 @@ def rename(relation, **renames):
     return new_rel
 
 
-def project(relation, only=None, all_but=None):
-    if only and all_but:
-        raise TypeError("Only one of only and all_but allowed")
-    if only:
-        reduced_attrs = {n: t for n, t in relation.header.items()
-                              if n in only}
-        if not len(reduced_attrs) == len(only):
+class all_but:
+
+    def __init__(self, attr_names):
+        self.names = attr_names
+
+    def all_but(self, relation):
+        all_names = relation.header.keys()
+        if self.names and all_names & self.names != self.names:
             raise TypeError("Attribute list included invalid attributes: "
-                            "{}".format(only - reduced_attrs.keys()))
-    elif all_but:
-        reduced_attrs = relation.header.copy()
-        for name in all_but:
-            del reduced_attrs[name]
-    elif only is not None:
-        reduced_attrs = {}
-    else:
-        reduced_attrs = relation.header.copy()
+                            "{}".format(self.names - all_names))
+        return all_names - self.names
+
+
+def project(relation, attr_names):
+    if hasattr(attr_names, 'all_but'):
+        attr_names = attr_names.all_but(relation)
+    reduced_attrs = {n: t for n, t in relation.header.items()
+                          if n in attr_names}
+    if not len(reduced_attrs) == len(attr_names):
+        raise TypeError("Attribute list included invalid attributes: "
+                        "{}".format(attr_names - reduced_attrs.keys()))
     reduced_attr_names = reduced_attrs.keys()
     new_rel = _Rel('project', reduced_attrs)()
     for row in relation._rows_:
@@ -136,7 +140,7 @@ def project(relation, only=None, all_but=None):
 
 # Make >> the project operator, and << the "all_but" operator.
 Relation.__rshift__ = lambda self, other: project(self, other)
-Relation.__lshift__ = lambda self, other: project(self, all_but=other)
+Relation.__lshift__ = lambda self, other: project(self, all_but(other))
 
 
 def Rel(**kw):
@@ -246,7 +250,7 @@ def matching(first, second):
 
 def compose(first, second):
     common_attrs = _common_attrs(first, second)
-    return project(join(first, second), all_but=common_attrs)
+    return project(join(first, second), all_but(common_attrs))
 
 
 #

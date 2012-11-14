@@ -943,14 +943,11 @@ project
 ~~~~~~~
 
 This is not an explicit named operator in *Tutorial D*, but an implicit one
-arising from a particular syntax.  Just because we can, we do a similar thing
-in dinsd by overriding the ``>>`` operator.  But we also provide the named
-operator, because we have to have a name for our implementation so we might as
-well expose it and thus be consistent.  (I thought about using just the named
-operator with the attribute names as regular arguments, but I like the idea
-that the syntax we actually use makes it clear that the attribute names are a
-set, not an ordered list...unlike the case for, say, the ``display``
-function.  On the other hand, the shift syntax is candy and not really needed).
+arising from a particular syntax.  We do a similar thing in dinsd by
+overriding the ``>>`` operator.  But we also provide the named operator,
+because we have to have a name for our implementation so we might as well
+expose it and thus allow it to be used in functional as well as operator
+style.
 
     >>> from dinsd.op import project
 
@@ -970,11 +967,12 @@ relation containing just those attributes (and the corresponding values):
     | S4         |
     +------------+
 
-We can't use *Tutorial D*'s "ALL BUT" syntax...our version of that is the
-``<<`` operator, implemented by the 'all_but' keyword of the ``project``
-function.  Following AITDT, we can write the student_id matching matching
-expression on page 101 as follows, to get our equivalent of figure 4.7 from
-page 101:
+dinsd's version of *Tutorial D*'s "ALL BUT" syntax is to mark the set of
+names as an inversion.  We do this with the ``all_but`` wrapper, and the
+``<<`` operator does this automatically.
+
+Following AITDT, we can write the student_id matching matching expression on
+page 101 as follows, to get our equivalent of figure 4.7 from page 101:
 
     >>> same_name = join(rename(is_called, student_id='sid1'),
     ...                  rename(is_called, student_id='sid2')) << {'name'}
@@ -995,9 +993,10 @@ page 101:
 since the order from the book appears to be some artifact of the *Tutorial D*
 implementation.)
 
-For completeness:
+Here is the same thing using the functional notation:
 
-    >>> same_name == project(shared_name, all_but={'name'})
+    >>> from dinsd.op import all_but
+    >>> same_name == project(shared_name, all_but({'name'}))
     True
 
 Observe that an ``all_but`` projection of the empty set produces an identical
@@ -1012,12 +1011,19 @@ the operation:
     >>> same_name << {} is same_name
     False
 
+Aside: we are being a bit loose with our Python data types here in order to
+make this notation consistent.  This may or may not be a bad idea, but it
+does seem natural.  Technically, ``{}`` is an empty *dictionary* not an
+empty set.  Python's literal notation for an empty set is ``set()``.  But
+we can easily interpret an empty dictionary as an empty set *in this
+context*, and so we do.
+
 And of course there are the error cases:
 
     >>> shared_name << {'foo'}
     Traceback (most recent call last):
         ...
-    KeyError: 'foo'
+    TypeError: Attribute list included invalid attributes: {'foo'}
     >>> shared_name >> {'foo'}
     Traceback (most recent call last):
         ...
