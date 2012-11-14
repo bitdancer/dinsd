@@ -181,17 +181,18 @@ def extend(relation, **new_attrs):
     return new_rel
 
 
-def union(*relvars):
-    if len(relvars) == 0:
+def union(*relations):
+    if len(relations) == 0:
         return Dum
-    first, *relvars = relvars
-    if not all(first.header == r.header for r in relvars):
-        raise TypeError("Union operands must of equal types")
-    if isinstance(first, type) and not relvars:
-        return first()
+    if len(relations)==1 and not isinstance(relations[0], Relation):
+        # Assume it is an iterator.
+        relations = relations[0]
+    first, *relations = relations
     new_rel = type(first)()
     new_rel._rows_.update(first._rows_.copy())
-    for rel in relvars:
+    for rel in relations:
+        if not first.header == rel.header:
+            raise TypeError("Union operands must of equal types")
         new_rel._rows_.update(rel._rows_.copy())
     return new_rel
 
@@ -314,3 +315,20 @@ def group(relation, **kw):
     grouped = relation << attr_names
     grouping_func = lambda r: compose(relation, type(grouped)(r))
     return extend(grouped, **{name: grouping_func})
+
+def ungroup(relation, column):
+    if not(relation):
+        raise ValueError("Cannot ungroup an empty relation")
+    attrs = relation.header.copy()
+    row1 = next(iter(relation))
+    del attrs[column]
+    attrs.update(getattr(row1, column).header)
+    new_rel = _Rel('ungroup', attrs)()
+    for row in relation:
+        new_values = row._as_dict_()
+        subrel = new_values.pop(column)
+        for subrow in subrel:
+            new_values.update(subrow._as_dict_())
+            new_rel._rows_.add(new_rel.row(new_values))
+    return new_rel
+    

@@ -1378,25 +1378,22 @@ Union of a single relation, or a relation with itself, is that relation.
     >>> union(is_called) == union(is_called, is_called) == is_called
     True
 
-*Tutorial D* has the ability to return an empty union if you specify
-a heading.  The equivalent in dinsd is the following, which, like
-the *Tutorial D* version, is of questionable practical value but
-provided just in case:
+The union of no relations is ``Dum``:
 
     >>> union() == Dum
     True
-    >>> print(union(Rel(name=str, student_id=SID)))
+
+*Tutorial D* has the ability to return an empty union if you specify a
+heading.  The closest equivalent in dinsd is to pass an empty relation defined
+via ``Rel``:
+
+    >>> print(union(Rel(name=str, student_id=SID)()))
     +------+------------+
     | name | student_id |
     +------+------------+
     +------+------------+
 
-Of course, the union of an empty relation returns an equivalent empty
-relation, and that is probably more useful.
-
-Be warned that passing a type in any other context to a relational operator
-will result in oddball errors in dinsd, rather than straightforward TypeErrors
-with useful messages.  This may be improved at some point, or it may not.
+This is just the union of a single empty union.
 
 
 notmatching
@@ -2139,8 +2136,8 @@ group
 
 ``group`` encapsulates the ``extend``/``compose`` sub-operation of summarize:
 
-    >>> x = group(exam_marks, exam_results={'student_id', 'mark'})
-    >>> print(x)
+    >>> results = group(exam_marks, exam_results={'student_id', 'mark'})
+    >>> print(results)
     +-----------+-----------------------+
     | course_id | exam_results          |
     +-----------+-----------------------+
@@ -2170,7 +2167,7 @@ group
 Since the grouping specification is a attribute name set, we can also use
 the ``all_but`` wrapper with it:
 
-    >>> x == group(exam_marks, exam_results=all_but({'course_id'}))
+    >>> results == group(exam_marks, exam_results=all_but({'course_id'}))
     True
 
 The grouping refers implicitly to both the set of columns being grouped and
@@ -2187,6 +2184,115 @@ little practical benefit, the group function only accepts one new column name:
 In this we follow *Tutorial D*, which dropped support for multiple grouping
 columns in Version 2.
 
+It is an error to try to group on a non-existent column:
+
+    >>> group(exam_marks, foo={'bar'})
+    Traceback (most recent call last):
+        ...
+    TypeError: Attribute list included invalid attributes: {'bar'}
+
+Grouping on no attributes produces a column consisting of instances of
+``Dee``:
+
+    >>> print(group(exam_marks, foo={}))
+    +-----------+-----+------+------------+
+    | course_id | foo | mark | student_id |
+    +-----------+-----+------+------------+
+    | C1        | ++  | 49   | S2         |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           |     |      |            |
+    | C1        | ++  | 85   | S1         |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           |     |      |            |
+    | C1        | ++  | 93   | S4         |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           |     |      |            |
+    | C2        | ++  | 49   | S1         |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           |     |      |            |
+    | C3        | ++  | 66   | S3         |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           |     |      |            |
+    | C3        | ++  | 85   | S1         |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           | ||  |      |            |
+    |           | ++  |      |            |
+    |           |     |      |            |
+    +-----------+-----+------+------------+
+
+Grouping on *all* of the attributes, on the other hand, produces a relation
+with a single attribute, whose single value is the original relation:
+
+    >>> print(group(exam_marks, foo=all_but({})))
+    +-----------------------------------+
+    | foo                               |
+    +-----------------------------------+
+    | +-----------+------+------------+ |
+    | | course_id | mark | student_id | |
+    | +-----------+------+------------+ |
+    | | C1        | 49   | S2         | |
+    | | C1        | 85   | S1         | |
+    | | C1        | 93   | S4         | |
+    | | C2        | 49   | S1         | |
+    | | C3        | 66   | S3         | |
+    | | C3        | 85   | S1         | |
+    | +-----------+------+------------+ |
+    |                                   |
+    +-----------------------------------+
+
+
+ungroup
+-------
+
+    >>> from dinsd.op import ungroup
+
+``ungroup`` effectively undoes what ``group`` does:
+
+    >>> ungroup(results, 'exam_results') == exam_marks
+    True
+
+dinsd also supports doing ``ungroup`` via its formal definition (see
+page 141 of AITDT):
+
+    >>> t_func = lambda r: times(r.exam_results,
+    ...                          type(results)(r) << {'exam_results'})
+    >>> exam_marks == union(column(extend(results, t=t_func), 't'))
+    True
+
+This works because if ``union`` is passed a single argument consisting of a
+non-``Relation`` iterator, it does the union of all the relations returned by
+that iterator.  That is, it acts as an aggregation function.  The built-in
+``ungroup`` is more efficient, though.
+
+It is an error to pass ``ungroup`` a column not in the relation:
+
+    >>> ungroup(results, 'foo')
+    Traceback (most recent call last):
+        ...
+    KeyError: 'foo'
+
+The column specified must of course be a relation valued attribute:
+
+    >>> ungroup(results, 'course_id')
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'CID' object has no attribute 'header'
 
 
 About the Name
