@@ -1299,14 +1299,29 @@ A null extension is an identity operation:
     >>> extend(is_called) == is_called
     True
 
+More than one attribute may be computed in a single extend call:
+
+    >>> x = extend(is_called, caps=lambda row: row.name.upper(),
+    ...                       hello=lambda row: "hello")
+    >>> print(display(x, 'student_id', 'name', 'caps', 'hello'))
+    +------------+----------+----------+-------+
+    | student_id | name     | caps     | hello |
+    +------------+----------+----------+-------+
+    | S1         | Anne     | ANNE     | hello |
+    | S2         | Boris    | BORIS    | hello |
+    | S3         | Cindy    | CINDY    | hello |
+    | S4         | Devinder | DEVINDER | hello |
+    | S5         | Boris    | BORIS    | hello |
+    +------------+----------+----------+-------+
+
 Unlike *Tutorial D*, we do not have a left to right evaluation order for
 extension expressions, so extension expressions in dinsd may only refer to
 attributes from the base relation, not any newly created attributes.  This is
 a minor restriction, since it is simple enough (and often clearer) to write
-multiple extension expressions in order in such a case.  It would also be
-possible to relax this restriction by using (name, func) tuples or some
-inspect trickery and doing the extension one attribute at a time, but this
-hardly seems worth the effort for what is probably an infrequent use case.
+multiple extension expressions in such a case.  It would also be possible to
+relax this restriction by using (name, func) tuples or some inspect trickery
+and doing the extension one attribute at a time, but this hardly seems worth
+the effort for what is probably an infrequent use case.
 
 
 union
@@ -1874,8 +1889,11 @@ The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
 named ``all`` and ``any``, respectively.
 
 
-Examples
-~~~~~~~~
+summarize
+~~~~~~~~~
+
+It will take us a bit to get to the ``summarize`` operator, since we are following
+along with the examples in AITDT.
 
 Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
 AITDT, the number of students that have sat for an exam in each course:
@@ -2025,6 +2043,87 @@ need to resort to Hungarian Notation for the relation and lambda variables.
 It seems like there is an irreducible minimum of complexity in relational
 algebra expressions.
 
+Now we finally get to ``summarize`` itself, which is designed to make the
+above complex expressions simpler and easier to understand.  The basic idea is
+that the pattern of composing with a row containing data from one table to
+obtain a list of matching data from another table (which could be the same
+table) and then aggregating over that extracted data is very common.  So we
+have an operator that expresses that more compactly:
+
+    >>> from dinsd.op import summarize
+    >>> print(summarize(exam_marks, courses >> {'course_id'},
+    ...               n=lambda r: len(r)))
+    +-----------+---+
+    | course_id | n |
+    +-----------+---+
+    | C1        | 3 |
+    | C2        | 1 |
+    | C3        | 2 |
+    | C4        | 0 |
+    +-----------+---+
+
+Keep in mind that the summarize lambda is being passed the *relation* that the
+summarize computes, not a row.
+
+The above formulation corresponds to the *Tutorial D* ``SUMMARIZE PER``
+construct.  The dinsd equivalent of *Tutorial D*'s ``SUMMARIZE BY`` looks
+almost exactly the same, except that the second argument is a set of attribute
+names, instead of a relation.  Those names are used to project the main
+relation for composition with itself.  We used that pattern in the average
+computation:
+
+    >>> av == summarize(exam_marks, {'course_id'},
+    ...                avg_mark=lambda r: round(avg(column(r, 'mark')), 2))
+    True
+
+Definitely a worthwhile simplification.
+
+Because debugging a summarization can be tricky without being able to see the
+data computed by the compose, ``summarize`` supports a special boolean keyword
+argument ``_deubg``.  If set to ``True``, the intermediate table extended with
+the composed data is printed to stdout:
+
+    >>> x =summarize(exam_marks, {'course_id'}, _debug=True,
+    ...              avg_mark=lambda r: round(avg(column(r, 'mark')), 2))
+    +-----------+-----------------------+
+    | course_id | t_e_m_p               |
+    +-----------+-----------------------+
+    | C1        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 49   | S2         | |
+    |           | | 85   | S1         | |
+    |           | | 93   | S4         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C2        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 49   | S1         | |
+    |           | +------+------------+ |
+    |           |                       |
+    | C3        | +------+------------+ |
+    |           | | mark | student_id | |
+    |           | +------+------------+ |
+    |           | | 66   | S3         | |
+    |           | | 85   | S1         | |
+    |           | +------+------------+ |
+    |           |                       |
+    +-----------+-----------------------+
+
+Summarize can take any number of new column computations functions:
+
+    >>> x = summarize(exam_marks, {'course_id'},
+    ...               attendees=lambda r: len(r),
+    ...               avg_mark=lambda r: round(avg(column(r, 'mark')), 2))
+    >>> print(display(x, 'course_id', 'attendees', 'avg_mark'))
+    +-----------+-----------+----------+
+    | course_id | attendees | avg_mark |
+    +-----------+-----------+----------+
+    | C1        | 3         | 75.67    |
+    | C2        | 1         | 49.0     |
+    | C3        | 2         | 75.5     |
+    +-----------+-----------+----------+
 
 
 

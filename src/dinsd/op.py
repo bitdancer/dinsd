@@ -158,7 +158,8 @@ def where(relation, selector):
 
 def extend(relation, **new_attrs):
     if len(relation) == 0:
-        # XXX: this violates TTM, but probably doesn't matter much in practice.
+        # Tutorial D can do this, but the fact that we can't probably doesn't
+        # matter much in practice.
         raise TypeError("Cannot extend empty relation")
     attrs = relation.header.copy()
     row1 = next(iter(relation))
@@ -262,8 +263,10 @@ def compute(relvar, func):
     for row in relvar:
         yield func(row)
 
+
 def column(relvar, *colnames):
     return compute(relvar, attrgetter(*colnames))
+
 
 def avg(iterator):
     """Calculate the average of an iterator.
@@ -278,3 +281,18 @@ def avg(iterator):
                            lambda x, y: (x[0]+y[0], x[1]+y[1])):
         pass
     return 0 if c==0 else s/c
+
+
+#
+# Extended Operators
+#
+
+def summarize(relvar, compvar, _debug=False, **new_attrs):
+    if not isinstance(compvar, Relation):
+        # Assume it is an attribute name list
+        compvar = relvar >> compvar
+    x = extend(compvar, t_e_m_p=lambda r: compose(relvar, type(compvar)(r)))
+    if _debug:
+        print(x)
+    new_attrs = {n: lambda r, v=v: v(r.t_e_m_p) for n, v in new_attrs.items()}
+    return extend(x, **new_attrs) << {'t_e_m_p'}
