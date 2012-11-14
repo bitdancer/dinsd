@@ -115,6 +115,7 @@ class RelationMeta(type):
             _degree_ = len(attrs)
             _relation_name_ = name
         dct['row'] = RowClass
+        RowClass.__name__ = '.'.join((name, 'RowClass'))
         return type.__new__(cls, name, bases, dct)
 
 

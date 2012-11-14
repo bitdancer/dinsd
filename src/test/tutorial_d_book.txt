@@ -1880,9 +1880,10 @@ Examples
 Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
 AITDT, the number of students that have sat for an exam in each course:
 
-    >>> x = extend(courses >> {'course_id'}, n=lambda r:
-    ...         len(where(exam_marks,
-    ...             lambda x: x.course_id==r.course_id) >> {'student_id'}))
+    >>> x = extend(courses >> {'course_id'},
+    ...            n=lambda r: len(where(exam_marks,
+    ...                                  lambda x: x.course_id==r.course_id
+    ...                                 ) >> {'student_id'}))
     >>> print(x)
     +-----------+---+
     | course_id | n |
@@ -1899,7 +1900,7 @@ came up with to compute the table in figure 5.5:
     >>> x = extend(courses, exam_result=lambda r:
     ...         project(
     ...             where(exam_marks,
-    ...                 lambda x: x.course_id==r.course_id),
+    ...                   lambda x: x.course_id==r.course_id),
     ...              {'student_id', 'mark'})) << {'title'}
     >>> print(x)
     +-----------+-----------------------+
@@ -1952,6 +1953,78 @@ translated example 5.6, I have to admit that I had no clue what AITDT's
 example 5.7 was doing.  After reading the explanation and thinking about it I
 believe he uses that more complicated expression because *Tutorial D* version
 one did not have a general expression facility for aggregate operators.
+
+We can compute the average exam mark instead, as in example 5.8, as follows:
+
+    >>> av = extend(exam_marks >> {'course_id'}, avg_mark=lambda r:
+    ...         round(avg(column(where(exam_marks,
+    ...             lambda x: x.course_id==r.course_id), 'mark')), 2))
+    >>> print(display(av, 'course_id', 'avg_mark'))
+    +-----------+----------+
+    | course_id | avg_mark |
+    +-----------+----------+
+    | C1        | 75.67    |
+    | C2        | 49.0     |
+    | C3        | 75.5     |
+    +-----------+----------+
+
+The relation being extended changes to exam_marks here so that we only
+have rows for exams that had marks.  AITDT notes that if we had continued
+to use courses we'd end up with a division by zero for the course with
+no marks.  The dinsd average function returns ``0`` for an empty list,
+so the dinsd version of this expression would not blow up:
+
+    >>> x = extend(courses >> {'course_id'},
+    ...            avg_mark=lambda r:
+    ...                round(avg(column(where(exam_marks,
+    ...                                   lambda x: x.course_id==r.course_id),
+    ...                          'mark')), 2))
+    >>> print(display(x, 'course_id', 'avg_mark'))
+    +-----------+----------+
+    | course_id | avg_mark |
+    +-----------+----------+
+    | C1        | 75.67    |
+    | C2        | 49.0     |
+    | C3        | 75.5     |
+    | C4        | 0.0      |
+    +-----------+----------+
+
+Also take note that my convention of using intermediate variables to simplify
+complex expressions is exactly reason AITDT uses the *Tutorial D* ``WITH``
+expression in these examples.  In this case I chose to only split it for
+printing, but if we follow the pattern from AITDT more closely we end up
+with this:
+
+    >>> c_er2 = extend(exam_marks >> {'course_id'},
+    ...          exam_result=lambda r:
+    ...             compose(Rel(course_id=CID)({'course_id': r.course_id}),
+    ...                     exam_marks))
+    >>> x = extend(c_er2, avg_mark=lambda r:
+    ...          round(avg(column(r.exam_result, 'mark')), 2))
+    >>> x = x << {'exam_result'}
+    >>> x == av
+    True
+
+At least, I think that's what the AITDT example is doing.  In the examples
+above you can see several different wrapping styles attempting to make the
+expressions readable, but when the lambda expressions get long there is really
+no good way to do it.
+
+But in Python, we can also use temporary variables to hold lambda expressions:
+
+    >>> r_cid = Rel(course_id=CID)
+    >>> c_er = lambda r: compose(r_cid({'course_id': r.course_id}), exam_marks)
+    >>> x = extend(exam_marks >> {'course_id'}, exam_result=c_er)
+    >>> c_avg = lambda r: round(avg(column(r.exam_result, 'mark')), 2)
+    >>> x = extend(x, avg_mark=c_avg) << {'exam_result'}
+    >>> x == av
+    True
+
+That's a bit easier to follow, I think.  It is interesting that I felt the
+need to resort to Hungarian Notation for the relation and lambda variables.
+It seems like there is an irreducible minimum of complexity in relational
+algebra expressions.
+
 
 
 
