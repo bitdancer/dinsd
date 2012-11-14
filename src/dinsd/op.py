@@ -256,7 +256,7 @@ def compose(first, second):
 
 def display(relvar, *columns, **kw):
     relvar._validate_attr_list(columns)
-    return relvar._display_(*columns, **kw)
+    return relvar.__display__(*columns, **kw)
 
 
 def compute(relvar, func):

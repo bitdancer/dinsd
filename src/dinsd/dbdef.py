@@ -188,7 +188,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         r += ', '.join(rows) + ')'
         return r
 
-    def _display_(self, *columns, sort=[]):
+    def __display__(self, *columns, sort=[]):
         toprint = [list(map(printable, columns))]
         getter = attrgetter(*columns) if columns else lambda x: x
         # Working around a little Python wart here.
@@ -219,7 +219,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return '\n'.join(r)
 
     def __str__(self):
-        return self._display_(*sorted(self.header))
+        return self.__display__(*sorted(self.header))
 
 
 class printable(RichCompareMixin):
