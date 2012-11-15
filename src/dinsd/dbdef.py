@@ -102,6 +102,11 @@ class Row(RichCompareMixin, Mapping):
     def _as_dict_(self):
         return self.__dict__.copy()
 
+    def _as_locals_(self):
+        l = self.__dict__.copy()
+        l['row'] = self
+        return l
+
 
 class RelationMeta(type):
 
@@ -182,9 +187,10 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             return r + '))'
         r += '), '
         rows = []
-        for row in sorted(self._rows_, key=attrgetter(*names)):
-            rows.append('(' + ', '.join([repr(row[x])
-                                         for x in names]) + ')')
+        if len(names):
+            for row in sorted(self._rows_, key=attrgetter(*names)):
+                rows.append('(' + ', '.join([repr(row[x])
+                                             for x in names]) + ')')
         r += ', '.join(rows) + ')'
         return r
 

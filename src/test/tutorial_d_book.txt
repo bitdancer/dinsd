@@ -198,6 +198,15 @@ To prove that this (straightforward Python) implementation is correct:
         ...
     TypeError: unorderable types: SID() > CID()
 
+In dinsd there is one more thing we need to do with user defined types: we
+need to register them in the ``expression_namespace``.  This allows them
+to be used in functions expressed using a string value, about which more
+later.
+
+    >>> from dinsd.op import expression_namespace
+    >>> expression_namespace['SID'] = SID
+    >>> expression_namespace['CID'] = CID
+
 
 Defining and Instantiating Relations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1197,12 +1206,21 @@ query at the start of 4.7:
     | S5         |
     +------------+
 
+The ``repr`` of a ``Rel`` is also interesting:
+
+    >>> namelist()
+    rel_name(('name'))
+
+Observe that the name is ``rel_`` followed by the '_' joined names of the
+attributes.  This is a general pattern followed by dinsd when dynamically
+creating relations.
+
 
 where
 -----
 
-I'm not convinced that ``where`` is actually a part of the relational
-algebra, but there is no denying its usefulness.
+I'm don't quite understand how ``where`` is a part of the relational algebra,
+but there is no denying its usefulness.
 
     >>> from dinsd.op import where
 
@@ -1216,12 +1234,29 @@ Example 4.7 on page 105 looks like this:
     | Boris | S5         |
     +-------+------------+
 
-It would be nice if there were some shorter shorthand than ``lambda`` for
-providing the expression, but in Python there isn't.
+There is also a shorthand version for the function argument:
+
+    >>> print(where(is_called, "name == 'Boris'"))
+    +-------+------------+
+    | name  | student_id |
+    +-------+------------+
+    | Boris | S2         |
+    | Boris | S5         |
+    +-------+------------+
+
+In addition to the brevity advantage, string valued lambda expressions (and
+there will be a number of additional instances of them) are more likely to be
+optimized by the back end.  So although it doesn't change the meaning of the
+program, it is better to use string valued expressions where possible.
+
+IMPORTANT CAVEAT: string expressions may be ``eval``ed.  This means that any
+outside input used to programmatically constructed string expression *must* be
+carefully sanitized.  This is a weakness in the system I eventually hope to
+eliminate.
 
 Here is example 4.8 written in dinsd:
 
-    >>> print(where(is_called, lambda row: row.name.startswith('B')))
+    >>> print(where(is_called, "name.startswith('B')"))
     +-------+------------+
     | name  | student_id |
     +-------+------------+
@@ -1231,7 +1266,7 @@ Here is example 4.8 written in dinsd:
 
 With Python, it is easy to make this a bit more interesting:
 
-    >>> print(where(is_called, lambda row: row.name.startswith(('B', 'A'))))
+    >>> print(where(is_called, "name.startswith(('B', 'A'))"))
     +-------+------------+
     | name  | student_id |
     +-------+------------+
@@ -1242,9 +1277,9 @@ With Python, it is easy to make this a bit more interesting:
 
 Here are the edge cases from the bottom of page 106:
 
-    >>> where(is_called, lambda row: True) == is_called
+    >>> where(is_called, "True") == is_called
     True
-    >>> where(is_called, lambda row: False) == type(is_called)()
+    >>> where(is_called, "False") == type(is_called)()
     True
 
 And now we can further improve the problem of finding just those student_ids
@@ -1252,7 +1287,7 @@ that designate students with the same name (figure 4.8 on page 107):
 
     >>> x = join(rename(is_called, student_id='sid1'),
     ...          rename(is_called, student_id='sid2')) >> {'sid1', 'sid2'}
-    >>> print(where(x, lambda row: row.sid1 != row.sid2))
+    >>> print(where(x, "sid1 != sid2"))
     +------+------+
     | sid1 | sid2 |
     +------+------+
@@ -1262,7 +1297,7 @@ that designate students with the same name (figure 4.8 on page 107):
 
 And of course the final version has the obvious analog in dinsd:
 
-    >>> print(where(x, lambda row: row.sid1 < row.sid2))
+    >>> print(where(x, "sid1 < sid2"))
     +------+------+
     | sid1 | sid2 |
     +------+------+
@@ -1288,7 +1323,7 @@ relation.
 Here is the expression that results in the example in figure 4.10 on pages
 109 and 109:
 
-    >>> x = extend(is_called, initial=lambda row: row.name[0])
+    >>> x = extend(is_called, initial="name[0]")
     >>> print(display(x, 'student_id', 'name', 'initial'))
     +------------+----------+---------+
     | student_id | name     | initial |
@@ -1305,9 +1340,10 @@ A null extension is an identity operation:
     >>> extend(is_called) == is_called
     True
 
-More than one attribute may be computed in a single extend call:
+More than one attribute may be computed in a single extend call (we'll also
+demonstrate mixing real functions and string expressions):
 
-    >>> x = extend(is_called, caps=lambda row: row.name.upper(),
+    >>> x = extend(is_called, caps="name.upper()",
     ...                       hello=lambda row: "hello")
     >>> print(display(x, 'student_id', 'name', 'caps', 'hello'))
     +------------+----------+----------+-------+
@@ -1342,8 +1378,8 @@ as a function and as an operator.  In dinsd the operator is ``|``.
 
 We compute example 4.9 on page 111 thusly:
 
-    >>> x = where(is_called, lambda row: row.name == 'Devinder')
-    >>> y = where(is_enrolled_on, lambda row: row.course_id == CID('C1'))
+    >>> x = where(is_called, "name == 'Devinder'")
+    >>> y = where(is_enrolled_on, "course_id == CID('C1')")
     >>> ex49 = x >> {'student_id'} | y >> {'student_id'}
     >>> ex49 == union(x >> {'student_id'}, y >> {'student_id'})
     True
@@ -1532,8 +1568,7 @@ Exercise 2:
     ...         ('2201', 1000.00),
     ...         )
     >>> x = order_items & products & orders & cust
-    >>> x = extend(x, price=lambda row: (
-    ...         round(row.qty*row.unit_price*(1-row.discount/100), 2)))
+    >>> x = extend(x, price="round(qty*unit_price*(1-discount/100), 2)")
     >>> x = x >> {'o_no', 'p_no', 'price'}
     >>> print(display(x, 'o_no', 'p_no', 'price'))
     +------+-------+---------+
@@ -1562,8 +1597,8 @@ Exercise 3:
     ...     )
     >>> x = rename(exam_marks, student_id='sid1', mark='mark1')
     >>> y = rename(exam_marks, student_id='sid2', mark='mark2')
-    >>> pairs = where(x & y, lambda r: r.sid1 < r.sid2)
-    >>> diff = extend(pairs, gap=lambda r: abs(r.mark1 - r.mark2))
+    >>> pairs = where(x & y, "sid1 < sid2")
+    >>> diff = extend(pairs, gap="abs(mark1 - mark2)")
     >>> diff_only = diff << {'mark1', 'mark2'}
     >>> print(display(diff_only, 'course_id', 'sid1', 'sid2', 'gap'))
     +-----------+------+------+-----+
@@ -1595,7 +1630,7 @@ Oh, and for completeness: ``rename`` can be written in terms of
 ``extend``:
 
     >>> x = rename(is_called, student_id='sid')
-    >>> y = extend(is_called, sid=lambda r: r.student_id) << {'student_id'}
+    >>> y = extend(is_called, sid="student_id") << {'student_id'}
     >>> x == y
     True
 
@@ -1760,7 +1795,7 @@ for returning the number of rows in a relation: ``len``:
 That last was example 5.1 on page 127.  Example 5.2, counting the number of
 students with marks above 50:
 
-    >>> len(where(exam_marks, lambda r: r.mark > 50) >> {'student_id'})
+    >>> len(where(exam_marks, "mark > 50") >> {'student_id'})
     3
 
 
@@ -1786,40 +1821,18 @@ applied to that row is yielded as the next value of the iterator.
 For example, we can extract the scores from the ``mark`` column of the
 ``exam_marks`` table like this:
 
-    >>> sorted(compute(exam_marks, lambda r: r.mark))
+    >>> sorted(compute(exam_marks, "mark"))
     [49, 49, 66, 85, 85, 93]
 
 The call to ``sorted`` here does two things:  it consumes all of the values
 from the compute generator, and it gives the returned values a predictable
 order so that the result can be used as part of the doctest.
 
+As usual, we can also specify a full ``lambda`` function instead of a
+string:
 
-column
-~~~~~~
-
-``compute`` provides completely general expressions for dinsd.  But it is
-wordy and awkward when dealing with common cases, so dinsd also provides some
-shorthand functions.  The single most common case is obtaining the values of
-one or more columns.  This feature is provided by the ``column`` function:
-
-    >>> from dinsd.op import column
-
-We use the term column rather than the relationally correct term attribute
-because in this case we are conceptually operating on entire columns for the
-purpose of extracting them from the relation and aggregating them; so, they
-are no longer relation attributes, they are extracted columns of data.
-
-``column`` takes a relation and one or more attribute names as arguments.  If
-one attribute name is given, the resulting iterator yields the values of that
-attribute.  If more than one is given, the iterator yields a tuple of the
-attributes, each tuple having the values in the same order as the order in
-which the names are specified in the ``column`` argument list:
-
-    >>> sorted(column(exam_marks, 'mark'))
-    [49, 49, 66, 85, 85, 93]
-    >>> sorted(column(exam_marks, 'student_id', 'mark'))  # doctest: +NORMALIZE_WHITESPACE
-    [(SID('S1'), 49), (SID('S1'), 85), (SID('S1'), 85), (SID('S2'), 49),
-     (SID('S3'), 66), (SID('S4'), 93)]
+    >>> sorted(compute(exam_marks, lambda r: "{}%".format(r.mark)))
+    ['49%', '49%', '66%', '85%', '85%', '93%']
 
 
 sum
@@ -1832,8 +1845,7 @@ the addition operation is both associative and commutative.
 Arithmetic addition satisfies this criteria.  Here is AITDT's example 5.3 in
 dinsd:
 
-    >>> sum(column(where(exam_marks, lambda r: r.student_id == SID('S1')),
-    ...            'mark'))
+    >>> sum(compute(where(exam_marks, "student_id == SID('S1')"), "mark"))
     219
 
 String concatenation does not, so while the expression:
@@ -1846,7 +1858,7 @@ relational aggregation result.
 Python's ``sum`` operator returns the correct result when passed a column
 from an empty relation:
 
-    >>> sum(column(Rel(foo=int)(), 'foo'))
+    >>> sum(compute(Rel(foo=int)(), 'foo'))
     0
 
 
@@ -1857,16 +1869,14 @@ Like ``sum``, the Python ``max`` and ``min`` functions accept interators
 as in put, so we can use them directly to compute the corresponding
 relational max and min:
 
-    >>> max(column(where(exam_marks, lambda r: r.student_id == SID('S1')),
-    ...            'mark'))
+    >>> max(compute(where(exam_marks, "student_id == SID('S1')"), 'mark'))
     85
-    >>> min(column(where(exam_marks, lambda r: r.student_id == SID('S1')),
-    ...            'mark'))
+    >>> min(compute(where(exam_marks, "student_id == SID('S1')"), 'mark'))
     49
 
 ``min`` and ``max`` do not have defined results on an empty relation:
 
-    >>> min(column(Rel(foo=int)(), 'foo'))
+    >>> min(compute(Rel(foo=int)(), 'foo'))
     Traceback (most recent call last):
         ...
     ValueError: min() arg is an empty sequence
@@ -1881,11 +1891,11 @@ a single iterator (that does not support ``len``, which compute does not) as
 its argument, so dinsd provides the ``avg`` function in the ``op`` module.
 
     >>> from dinsd.op import avg
-    >>> round(avg(column(exam_marks, 'mark')), 2)
+    >>> round(avg(compute(exam_marks, 'mark')), 2)
     71.17
-    >>> avg(column(Rel(foo=int)({'foo': 3}), 'foo'))
+    >>> avg(compute(Rel(foo=int)({'foo': 3}), 'foo'))
     3.0
-    >>> avg(column(Rel(foo=int)(), 'foo'))
+    >>> avg(compute(Rel(foo=int)(), 'foo'))
     0
 
 The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
@@ -1915,8 +1925,11 @@ AITDT, the number of students that have sat for an exam in each course:
     | C4        | 0 |
     +-----------+---+
 
-But that is getting ahead of the text.  Here is the dinsd expression I naively
-came up with to compute the table in figure 5.5:
+Because there are two row namespaces involved here, we have to use lambda
+expressions instead of string expressions.  So this is clearly not optimal.
+
+In any case, that is getting ahead of the text.  Here is the dinsd expression
+I naively came up with to compute the table in figure 5.5:
 
     >>> x = extend(courses, exam_result=lambda r:
     ...         project(
@@ -1964,9 +1977,24 @@ facility would be likely to get.
 Here is the simpler, direct equivalent of the expression used for this table
 in the AITDT example 5.6:
 
-    >>> x == extend(courses >> {'course_id'}, exam_result=lambda r:
-    ...          compose(Rel(course_id=CID)({'course_id': r.course_id}),
-    ...                  exam_marks))
+    >>> expression_namespace['exam_marks'] = exam_marks
+    >>> x == extend(courses >> {'course_id'},
+    ...          exam_result="compose(Rel(course_id=CID)("
+    ...                                     "{'course_id': course_id}),"
+    ...                               "exam_marks)")
+    True
+
+(XXX: having to add exam_marks to the namespace will get dealt with in the
+next refactor.)
+
+This is a bit ugly...it looks better if we break it up a bit.  And we can
+define the ``Rel`` outside the expression rather than creating a new
+relation for each row:
+
+    >>> expression_namespace['CID_rel'] = Rel(course_id=CID)
+    >>> exam_result_exp = ("compose(CID_rel({'course_id': course_id}),"
+    ...                           "exam_marks)")
+    >>> x == extend(courses >> {'course_id'}, exam_result=exam_result_exp)
     True
 
 Having successfully written first expression above, and successfully
@@ -1978,7 +2006,7 @@ one did not have a general expression facility for aggregate operators.
 We can compute the average exam mark instead, as in example 5.8, as follows:
 
     >>> av = extend(exam_marks >> {'course_id'}, avg_mark=lambda r:
-    ...         round(avg(column(where(exam_marks,
+    ...         round(avg(compute(where(exam_marks,
     ...             lambda x: x.course_id==r.course_id), 'mark')), 2))
     >>> print(display(av, 'course_id', 'avg_mark'))
     +-----------+----------+
@@ -1997,7 +2025,7 @@ so the dinsd version of this expression would not blow up:
 
     >>> x = extend(courses >> {'course_id'},
     ...            avg_mark=lambda r:
-    ...                round(avg(column(where(exam_marks,
+    ...                round(avg(compute(where(exam_marks,
     ...                                   lambda x: x.course_id==r.course_id),
     ...                          'mark')), 2))
     >>> print(display(x, 'course_id', 'avg_mark'))
@@ -2017,34 +2045,35 @@ printing, but if we follow the pattern from AITDT more closely we end up
 with this:
 
     >>> c_er2 = extend(exam_marks >> {'course_id'},
-    ...          exam_result=lambda r:
-    ...             compose(Rel(course_id=CID)({'course_id': r.course_id}),
-    ...                     exam_marks))
-    >>> x = extend(c_er2, avg_mark=lambda r:
-    ...          round(avg(column(r.exam_result, 'mark')), 2))
+    ...          exam_result=(
+    ...             "compose(Rel(course_id=CID)({'course_id': course_id}),"
+    ...                     "exam_marks)"))
+    >>> x = extend(c_er2,
+    ...          avg_mark="round(avg(compute(exam_result, 'mark')), 2)")
     >>> x = x << {'exam_result'}
     >>> x == av
     True
 
-At least, I think that's what the AITDT example is doing.  In the examples
-above you can see several different wrapping styles attempting to make the
-expressions readable, but when the lambda expressions get long there is really
-no good way to do it.
+At least, I think that's what the AITDT example is doing.  One benefit of
+computing an intermediate relation is that we are able to switch back
+to string expressions.
 
-But in Python, we can also use temporary variables to hold lambda expressions:
+In the examples above you can see several different wrapping styles attempting
+to make the expressions readable, but when the expressions get long there is
+oftne no good way to do it.  We can improve this one, though:
 
-    >>> r_cid = Rel(course_id=CID)
-    >>> c_er = lambda r: compose(r_cid({'course_id': r.course_id}), exam_marks)
+    >>> expression_namespace['r_cid'] = Rel(course_id=CID)
+    >>> c_er = "compose(r_cid({'course_id': course_id}), exam_marks)"
     >>> x = extend(exam_marks >> {'course_id'}, exam_result=c_er)
-    >>> c_avg = lambda r: round(avg(column(r.exam_result, 'mark')), 2)
+    >>> c_avg = "round(avg(compute(exam_result, 'mark')), 2)"
     >>> x = extend(x, avg_mark=c_avg) << {'exam_result'}
     >>> x == av
     True
 
-That's a bit easier to follow, I think.  It is interesting that I felt the
-need to resort to Hungarian Notation for the relation and lambda variables.
-It seems like there is an irreducible minimum of complexity in relational
-algebra expressions.
+It's a tossup which is easier to follow, I think.  It is interesting that I
+felt the need to resort to Hungarian Notation for the relation and expression
+variables.  It seems like there is an irreducible minimum of complexity in
+relational algebra expressions.
 
 Now we finally get to ``summarize`` itself, which is designed to make the
 above complex expressions simpler and easier to understand.  The basic idea is
@@ -2054,8 +2083,9 @@ table) and then aggregating over that extracted data is very common.  So we
 have an operator that expresses that more compactly:
 
     >>> from dinsd.op import summarize
-    >>> print(summarize(exam_marks, courses >> {'course_id'},
-    ...               n=lambda r: len(r)))
+    >>> x = summarize(exam_marks, courses >> {'course_id'},
+    ...               n=lambda r: len(r))
+    >>> print(x)
     +-----------+---+
     | course_id | n |
     +-----------+---+
@@ -2065,8 +2095,15 @@ have an operator that expresses that more compactly:
     | C4        | 0 |
     +-----------+---+
 
-Keep in mind that the summarize lambda is being passed the *relation* that the
-summarize computes, not a row.
+The summarize lambda is being passed the *relation* that the summarize
+computes, not a row.  When we use string notation for the expression,
+we refer to the relation by the special variable ``rel`` (``rel`` is
+defined *only* for ``summarize`` expressions):
+
+    >>> from dinsd.op import summarize
+    >>> x == summarize(exam_marks, courses >> {'course_id'},
+    ...               n="len(rel)")
+    True
 
 The above formulation corresponds to the *Tutorial D* ``SUMMARIZE PER``
 construct.  The dinsd equivalent of *Tutorial D*'s ``SUMMARIZE BY`` looks
@@ -2076,7 +2113,7 @@ relation for composition with itself.  We used that pattern in the average
 computation:
 
     >>> av == summarize(exam_marks, {'course_id'},
-    ...                avg_mark=lambda r: round(avg(column(r, 'mark')), 2))
+    ...                 avg_mark="round(avg(compute(rel, 'mark')), 2)")
     True
 
 Definitely a worthwhile simplification.
@@ -2087,7 +2124,7 @@ argument ``_deubg``.  If set to ``True``, the intermediate table extended with
 the composed data is printed to stdout:
 
     >>> x =summarize(exam_marks, {'course_id'}, _debug=True,
-    ...              avg_mark=lambda r: round(avg(column(r, 'mark')), 2))
+    ...              avg_mark="round(avg(compute(rel, 'mark')), 2)")
     +-----------+-----------------------+
     | course_id | t_e_m_p               |
     +-----------+-----------------------+
@@ -2114,11 +2151,12 @@ the composed data is printed to stdout:
     |           |                       |
     +-----------+-----------------------+
 
-Summarize can take any number of new column computations functions:
+Summarize can take any number of new column computations functions, and
+they may be a mix of strings and lambda expressions:
 
     >>> x = summarize(exam_marks, {'course_id'},
     ...               attendees=lambda r: len(r),
-    ...               avg_mark=lambda r: round(avg(column(r, 'mark')), 2))
+    ...               avg_mark="round(avg(compute(rel, 'mark')), 2)")
     >>> print(display(x, 'course_id', 'attendees', 'avg_mark'))
     +-----------+-----------+----------+
     | course_id | attendees | avg_mark |
@@ -2272,13 +2310,21 @@ page 141 of AITDT):
 
     >>> t_func = lambda r: times(r.exam_results,
     ...                          type(results)(r) << {'exam_results'})
-    >>> exam_marks == union(column(extend(results, t=t_func), 't'))
+    >>> exam_marks == union(compute(extend(results, t=t_func), 't'))
     True
 
 This works because if ``union`` is passed a single argument consisting of a
 non-``Relation`` iterator, it does the union of all the relations returned by
 that iterator.  That is, it acts as an aggregation function.  The built-in
 ``ungroup`` is more efficient, though.
+
+We can also do this using a string valued expression, by using the
+special variable ``row`` to access the entire row:
+
+    >>> expression_namespace['r_type'] = type(results)
+    >>> t_func = "times(exam_results, r_type(row) << {'exam_results'})"
+    >>> exam_marks == union(compute(extend(results, t=t_func), 't'))
+    True
 
 It is an error to pass ``ungroup`` a column not in the relation:
 
@@ -2307,9 +2353,9 @@ write the dinsd equivalent of 5.14 as follows:
     ...                     ('name',  'house', 'street',  'city',   'zip'),
     ...                     ('Anne',  '120',   'Peach',   'London', '00111'),
     ...                     ('Boris', '5',     'Rose',    'Kiev',   '00112'))
-    >>> sub_rel = type(contact_info << {'name'})
-    >>> row_func = lambda r: sub_rel.row(dict(house=r.house, street=r.street,
-    ...                                       city=r.city, zip=r.zip))
+    >>> expression_namespace['sub_rel'] = type(contact_info << {'name'})
+    >>> row_func = ("sub_rel.row(dict(house=house, street=street,"
+    ...                              "city=city, zip=zip))")
     >>> addrs = extend(contact_info, address=row_func) << {'house', 'street',
     ...                                                    'city', 'zip'}
     >>> print(display(addrs, 'name', 'address'))
@@ -2360,13 +2406,13 @@ requires a new expression (``FROM``).  Because dinsd is embedded in a general
 purpose programming language, we don't need to add new any facilities:
 
     >>> contact_info == extend(addrs,
-    ...                        house=lambda r: r.address.house,
-    ...                        street=lambda r: r.address.street,
-    ...                        city=lambda r: r.address.city,
-    ...                        zip=lambda r: r.address.zip) << {'address'}
+    ...                        house="address.house",
+    ...                        street="address.street",
+    ...                        city="address.city",
+    ...                        zip="address.zip") << {'address'}
     True
 
-``unrwap`` is of course much simpler to write:
+``unrwap`` is of course much simpler to use:
 
     >>> from dinsd.op import unwrap
     >>> contact_info == unwrap(addrs, 'address')

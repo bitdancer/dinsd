@@ -8,6 +8,18 @@ import sys
 dbg = lambda *args: print(*args, file=sys.stderr)
 
 #
+# Dynamic relation creation.
+#
+
+def Rel(**kw):
+    return _Rel('rel', kw)
+
+def _Rel(prefix, attr_dict):
+    new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
+    new_Rel = type(new_Rel_name, (Relation,), attr_dict.copy())
+    return new_Rel
+
+#
 # Relational Operators
 #
 
@@ -156,16 +168,9 @@ Relation.__rshift__ = lambda self, other: project(self, other)
 Relation.__lshift__ = lambda self, other: project(self, all_but(other))
 
 
-def Rel(**kw):
-    return _Rel('rel', kw)
-
-def _Rel(prefix, attr_dict):
-    new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), attr_dict.copy())
-    return new_Rel
-
-
 def where(relation, selector):
+    if isinstance(selector, str):
+        selector = lambda r, s=selector: eval(s, r._as_locals_(), _expn)
     new_rel = type(relation)()
     for row in relation._rows_:
         if selector(row):
@@ -178,6 +183,9 @@ def extend(relation, **new_attrs):
         # Tutorial D can do this, but the fact that we can't probably doesn't
         # matter much in practice.
         raise TypeError("Cannot extend empty relation")
+    for n, f in new_attrs.items():
+        if isinstance(f, str):
+            new_attrs[n] = lambda r, s=f: eval(s, r._as_locals_(), _expn)
     attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
@@ -278,12 +286,10 @@ def display(relvar, *columns, **kw):
 
 
 def compute(relvar, func):
+    if isinstance(func, str):
+        func = lambda r, s=func: eval(s, r._as_locals_(), _expn)
     for row in relvar:
         yield func(row)
-
-
-def column(relvar, *colnames):
-    return compute(relvar, attrgetter(*colnames))
 
 
 def avg(iterator):
@@ -312,7 +318,11 @@ def summarize(relvar, compvar, _debug=False, **new_attrs):
     x = extend(compvar, t_e_m_p=lambda r: compose(relvar, type(compvar)(r)))
     if _debug:
         print(x)
-    new_attrs = {n: lambda r, v=v: v(r.t_e_m_p) for n, v in new_attrs.items()}
+    for n, f in new_attrs.items():
+        if isinstance(f, str):
+            new_attrs[n] = lambda r, s=f: eval(s, {'rel': r.t_e_m_p}, _expn)
+        else:
+            new_attrs[n] = lambda r, f=f: f(r.t_e_m_p)
     return extend(x, **new_attrs) << {'t_e_m_p'}
 
 
@@ -366,3 +376,10 @@ def unwrap(relation, attrname):
         new_values.update(subrow._as_dict_())
         new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
+
+#
+# XXX: Temporary expression global namespace.
+#
+expression_namespace = {n: v for n, v in globals().items()
+                             if not n.startswith('_')}
+_expn = expression_namespace
