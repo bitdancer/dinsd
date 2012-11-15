@@ -2179,7 +2179,7 @@ little practical benefit, the group function only accepts one new column name:
     >>> group(exam_marks, res1={'marks'}, res2={'student_id'})
     Traceback (most recent call last):
         ...
-    TypeError: Only one new column may be specified for grouping
+    TypeError: Only one new attribute may be specified for group
 
 In this we follow *Tutorial D*, which dropped support for multiple grouping
 columns in Version 2.
@@ -2296,7 +2296,7 @@ The column specified must of course be a relation valued attribute:
 
 
 wrap
-----
+~~~~
 
 Example 5.14 shows how to turn attribute data into tuples as an attribute
 value.  dinsd's row objects aren't exposed as standalone classes, but they are
@@ -2310,15 +2310,86 @@ write the dinsd equivalent of 5.14 as follows:
     >>> sub_rel = type(contact_info << {'name'})
     >>> row_func = lambda r: sub_rel.row(dict(house=r.house, street=r.street,
     ...                                       city=r.city, zip=r.zip))
-    >>> x = extend(contact_info, address=row_func) << {'house', 'street',
-    ...                                                'city', 'zip'}
-    >>> print(display(x, 'name', 'address'))
+    >>> addrs = extend(contact_info, address=row_func) << {'house', 'street',
+    ...                                                    'city', 'zip'}
+    >>> print(display(addrs, 'name', 'address'))
     +-------+---------------------------------------------------+
     | name  | address                                           |
     +-------+---------------------------------------------------+
     | Anne  | (city=London, house=120, street=Peach, zip=00111) |
     | Boris | (city=Kiev, house=5, street=Rose, zip=00112)      |
     +-------+---------------------------------------------------+
+
+The shorthand operator ``wrap`` does the same thing more compactly:
+
+    >>> from dinsd.op import wrap
+    >>> addrs == wrap(contact_info, address={'house', 'street', 'city', 'zip'})
+    True
+
+Here are the edge cases and errors:
+
+    >>> print(wrap(contact_info, all=all_but({})))
+    +--------------------------------------------------------------+
+    | all                                                          |
+    +--------------------------------------------------------------+
+    | (city=Kiev, house=5, name=Boris, street=Rose, zip=00112)     |
+    | (city=London, house=120, name=Anne, street=Peach, zip=00111) |
+    +--------------------------------------------------------------+
+    >>> print(wrap(contact_info, none={}))
+    +--------+-------+-------+------+--------+-------+
+    | city   | house | name  | none | street | zip   |
+    +--------+-------+-------+------+--------+-------+
+    | Kiev   | 5     | Boris | ()   | Rose   | 00112 |
+    | London | 120   | Anne  | ()   | Peach  | 00111 |
+    +--------+-------+-------+------+--------+-------+
+    >>> wrap(contact_info, bad={'foo'})
+    Traceback (most recent call last):
+        ...
+    TypeError: Attribute list included invalid attributes: {'foo'}
+    >>> wrap(contact_info, one={'home'}, two={'zip'})
+    Traceback (most recent call last):
+        ...
+    TypeError: Only one new attribute may be specified for wrap
+
+
+unwrap
+~~~~~~
+
+``unwrap`` is the opposite of ``wrap``.  Expressing this in *Tutorial D*
+requires a new expression (``FROM``).  Because dinsd is embedded in a general
+purpose programming language, we don't need to add new any facilities:
+
+    >>> contact_info == extend(addrs,
+    ...                        house=lambda r: r.address.house,
+    ...                        street=lambda r: r.address.street,
+    ...                        city=lambda r: r.address.city,
+    ...                        zip=lambda r: r.address.zip) << {'address'}
+    True
+
+``unrwap`` is of course much simpler to write:
+
+    >>> from dinsd.op import unwrap
+    >>> contact_info == unwrap(addrs, 'address')
+    True
+
+And here are the errors and edge cases:
+
+    >>> unwrap(addrs, 'bad')
+    Traceback (most recent call last):
+        ...
+    KeyError: 'bad'
+    >>> unwrap(addrs, 'name')
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'str' object has no attribute '_header_'
+    >>> unwrap(Dum, 'name')
+    Traceback (most recent call last):
+        ...
+    ValueError: Cannot unwrap an empty relation
+    >>> unwrap(wrap(contact_info, none={}), 'none') == contact_info
+    True
+    >>> unwrap(wrap(contact_info, all=all_but({})), 'all') == contact_info
+    True
 
 
 
@@ -2341,12 +2412,11 @@ almost, but not quite, be interpreted as "D Is Not D", and I briefly
 considered changing the name to disnd.  That's a lot harder to pronounce,
 though.
 
-And then it occured to me that the big difference between my (non-conformant)
+And then it occurred to me that the big difference between my (non-conformant)
 implementation of *D* and a real *D* is that Python does not have compile
 time, static typing.  And thus the real acronym behind the name dinsd was
 revealed:
 
     D Is Not Static D
 
-It isn't really quite *D* in a few other details as well, but that's the big
-one.
+It is otherwise as close to *D* as I understood how to make it.

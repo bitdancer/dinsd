@@ -310,25 +310,51 @@ def summarize(relvar, compvar, _debug=False, **new_attrs):
 
 def group(relation, **kw):
     if len(kw) > 1:
-        raise TypeError("Only one new column may be specified for grouping")
+        raise TypeError("Only one new attribute may be specified for group")
     name, attr_names = next(iter(kw.items()))
     grouped = relation << attr_names
     grouping_func = lambda r: compose(relation, type(grouped)(r))
     return extend(grouped, **{name: grouping_func})
 
-def ungroup(relation, column):
+def ungroup(relation, attrname):
     if not(relation):
         raise ValueError("Cannot ungroup an empty relation")
     attrs = relation.header.copy()
     row1 = next(iter(relation))
-    del attrs[column]
-    attrs.update(getattr(row1, column).header)
+    del attrs[attrname]
+    attrs.update(getattr(row1, attrname).header)
     new_rel = _Rel('ungroup', attrs)()
     for row in relation:
         new_values = row._as_dict_()
-        subrel = new_values.pop(column)
+        subrel = new_values.pop(attrname)
         for subrow in subrel:
             new_values.update(subrow._as_dict_())
             new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
+
     
+def wrap(relation, **kw):
+    if len(kw) > 1:
+        raise TypeError("Only one new attribute may be specified for wrap")
+    name, attr_names = next(iter(kw.items()))
+    if hasattr(attr_names, 'all_but'):
+        attr_names = attr_names.all_but(relation)
+    sub_rel = type(relation >> attr_names)
+    row_func = lambda r: sub_rel.row({n: getattr(r, n) for n in attr_names})
+    return extend(relation, **{name: row_func}) << attr_names
+
+
+def unwrap(relation, attrname):
+    if not(relation):
+        raise ValueError("Cannot unwrap an empty relation")
+    attrs = relation.header.copy()
+    row1 = next(iter(relation))
+    del attrs[attrname]
+    attrs.update(getattr(row1, attrname)._header_)
+    new_rel = _Rel('unwrap', attrs)()
+    for row in relation:
+        new_values = row._as_dict_()
+        subrow = new_values.pop(attrname)
+        new_values.update(subrow._as_dict_())
+        new_rel._rows_.add(new_rel.row(new_values))
+    return new_rel
