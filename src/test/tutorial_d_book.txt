@@ -662,7 +662,7 @@ we cannot join them:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class 'str'>, second: <class '__main__.SID'> found in joined
-        relvars with type names <class '__main__.PermissiveIds'> and <class
+        relations with type names <class '__main__.PermissiveIds'> and <class
         '__main__.IsEnrolledOn'>
 
 An error like this in a multi-join also indicates in which argument the error
@@ -674,7 +674,7 @@ was detected:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in joined
-        relvars with type names <class 'dinsd.dbdef.join_course_id_name_student_id'>
+        relations with type names <class 'dinsd.dbdef.join_course_id_name_student_id'>
         and <class '__main__.PermissiveIds'> (error detected while processing
         argument 2)
 
@@ -2390,6 +2390,25 @@ And here are the errors and edge cases:
     True
     >>> unwrap(wrap(contact_info, all=all_but({})), 'all') == contact_info
     True
+
+
+join operators as aggregators
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We already saw an example of ``union`` being used as an aggregator (that is,
+taking an iterator as input).  This also works for the join-like operators,
+which we will now prove for testing completeness.
+
+    >>> R = Rel(a=int, b=int)
+    >>> a = R(('a', 'b'), (1, 2), (3, 4))
+    >>> b = R(('a', 'b'), (1, 2), (7, 8))
+    >>> c = Rel(c=int, d=int)(('c', 'd'), (5, 6))
+    >>> join((a, b))
+    join_a_b(('a', 'b'), (1, 2))
+    >>> intersect((a, b))
+    rel_a_b(('a', 'b'), (1, 2))
+    >>> times((a, c))
+    join_a_b_c_d(('a', 'b', 'c', 'd'), (1, 2, 5, 6), (3, 4, 5, 6))
 
 
 

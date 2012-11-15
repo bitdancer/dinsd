@@ -11,11 +11,14 @@ dbg = lambda *args: print(*args, file=sys.stderr)
 # Relational Operators
 #
 
-def join(*relvars):
-    if not relvars:
+def join(*relations):
+    if not relations:
         return Dee
-    joined, *relvars = relvars
-    for i, rel in enumerate(relvars, start=1):
+    if len(relations)==1 and not isinstance(relations[0], Relation):
+        # Assume it is an iterator.
+        relations = relations[0]
+    joined, *relations = relations
+    for i, rel in enumerate(relations, start=1):
         try:
             joined = _binary_join(joined, rel)
         except TypeError as e:
@@ -32,7 +35,7 @@ def _binary_join(first, second):
             if typ != combined_attrs[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
                     "with different type (first: {}, second: {} found "
-                    "in joined relvars with type names {} and {}".format(
+                    "in joined relations with type names {} and {}".format(
                         attr,
                         combined_attrs[attr],
                         typ,
@@ -68,28 +71,33 @@ def _binary_join(first, second):
 Relation.__and__ = lambda self, other: _binary_join(self, other)
 
 
-def intersect(*relvars):
-    if not relvars:
+def intersect(*relations):
+    if not relations:
         return Dee
-    first, *relvars = relvars
-    for rel in relvars:
-        if first.header != rel.header:
-            raise TypeError("Cannot take intersection of unlike relations")
+    if len(relations)==1 and not isinstance(relations[0], Relation):
+        # Assume it is an iterator.
+        relations = relations[0]
+    first, *relations = relations
     new_rel = type(first)()
     new_rel._rows_ = first._rows_
-    for rel in relvars:
+    for rel in relations:
+        if first.header != rel.header:
+            raise TypeError("Cannot take intersection of unlike relations")
         new_rel._rows_ = new_rel._rows_.intersection(rel._rows_)
     return new_rel
 
 
-def times(*relvars):
-    if not relvars:
+def times(*relations):
+    if not relations:
         return Dee
-    first, *relvars = relvars
-    for rel in relvars:
+    if len(relations)==1 and not isinstance(relations[0], Relation):
+        # Assume it is an iterator.
+        relations = relations[0]
+    first, *relations = relations
+    for rel in relations:
         if first.header.keys() & rel.header.keys():
             raise TypeError("Cannot multiply relations that share attributes")
-    return join(first, *relvars)
+    return join(first, *relations)
 
 
 def rename(relation, **renames):
