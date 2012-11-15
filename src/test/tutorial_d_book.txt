@@ -447,19 +447,19 @@ shorthand, and additionally reports which row is in error:
     ...               ('S1', 'Anne'))
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 2 in header row
+    TypeError: Expected 3 attributes, got 2 in header row for IsEnrolledOn
     >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne'))
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 2 in row 1
+    TypeError: Expected 3 attributes, got 2 in row 1 for IsEnrolledOn
     >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne', 'S1'),
     ...               ('C2', 'Anne', 'S1', 'foo'),
     ...               )
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 4 in row 2
+    TypeError: Expected 3 attributes, got 4 in row 2 for IsEnrolledOn
     >>> IsEnrolledOn(('course_id', 'name', 'foo'),
     ...               ('C1', 'Anne', 'S1'),
     ...               )
@@ -2293,6 +2293,33 @@ The column specified must of course be a relation valued attribute:
     Traceback (most recent call last):
         ...
     AttributeError: 'CID' object has no attribute 'header'
+
+
+wrap
+----
+
+Example 5.14 shows how to turn attribute data into tuples as an attribute
+value.  dinsd's row objects aren't exposed as standalone classes, but they are
+readily available using the ``row`` attribute of a relation.  So we can
+write the dinsd equivalent of 5.14 as follows:
+
+    >>> contact_info = Rel(name=str, house=str, street=str, city=str, zip=str)(
+    ...                     ('name',  'house', 'street',  'city',   'zip'),
+    ...                     ('Anne',  '120',   'Peach',   'London', '00111'),
+    ...                     ('Boris', '5',     'Rose',    'Kiev',   '00112'))
+    >>> sub_rel = type(contact_info << {'name'})
+    >>> row_func = lambda r: sub_rel.row(dict(house=r.house, street=r.street,
+    ...                                       city=r.city, zip=r.zip))
+    >>> x = extend(contact_info, address=row_func) << {'house', 'street',
+    ...                                                'city', 'zip'}
+    >>> print(display(x, 'name', 'address'))
+    +-------+---------------------------------------------------+
+    | name  | address                                           |
+    +-------+---------------------------------------------------+
+    | Anne  | (city=London, house=120, street=Peach, zip=00111) |
+    | Boris | (city=Kiev, house=5, street=Rose, zip=00112)      |
+    +-------+---------------------------------------------------+
+
 
 
 About the Name

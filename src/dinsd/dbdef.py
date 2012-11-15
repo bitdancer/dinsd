@@ -142,8 +142,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         for i, row in enumerate(args[1:], start=1):
             if len(row) != self.degree:
                 raise TypeError(
-                    "Expected {} attributes, got {} in row {}".format(
-                        self.degree, len(row), i))
+                    "Expected {} attributes, got {} in row {} for {}".format(
+                        self.degree, len(row), i, self.__class__.__name__))
             try:
                 rows.add(self.row({k: v for k, v in zip(attrlist, row)}))
             except TypeError as e:
@@ -153,8 +153,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
     def _validate_attr_list(self, attrlist):
         if len(attrlist) != self.degree:
             raise TypeError(
-                "Expected {} attributes, got {} in header row".format(
-                    self.degree, len(attrlist)))
+                "Expected {} attributes, got {} in header row for {}".format(
+                    self.degree, len(attrlist), self.__class__.__name__))
         for attr in attrlist:
             if attr not in self.header:
                 raise AttributeError("{!r} relation has no attribute {!r}".format(
