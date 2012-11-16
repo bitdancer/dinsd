@@ -1217,7 +1217,7 @@ creating relations.
 
 
 where
------
+~~~~~
 
 I'm don't quite understand how ``where`` is a part of the relational algebra,
 but there is no denying its usefulness.
@@ -1312,7 +1312,7 @@ paper will often say, "let x = <something>, then <expression involving x>".
 
 
 extend
-------
+~~~~~~
 
 This operator allows us to create a new relation that extends an existing
 relation by performing a computation on the attributes of the initial
@@ -1635,12 +1635,16 @@ Oh, and for completeness: ``rename`` can be written in terms of
     True
 
 
+Extended Relational Operators
+-----------------------------
+
+
 mtching
 ~~~~~~~
 
 Following along in Chapter 5, for completeness.  We already defined the
-exam_marks relation instance in one of the problems above.  Now we'll
-add courses.
+``exam_marks`` relation instance in one of the problems above.  Now we'll add
+courses.
 
     >>> class Course(dbdef.Relation):
     ...     course_id = CID
@@ -1808,15 +1812,15 @@ compute
 in *Tutorial D* version 2 have the ability to use an arbitrary expression
 to compute a value over each row of the relation being aggregated.
 ``compute`` is the dinsd function that performs this computation operation.
-It is an iterator (specifically a generator) the produces the computed
+It is an iterator (specifically a generator) that produces the computed
 values one by one, which the individual aggregate operators then consume.
 Since the corresponding Python functions can consume iterators, this means
 that most of dinsd's aggregation operators are vanilla Python functions
 applied to a ``compute`` value.
 
-``compute`` takes a relation and a function of one argument.  The function
-is passed each row of the relation in turn, and the result of the function
-applied to that row is yielded as the next value of the iterator.
+``compute`` takes a relation and a function.  The function is passed each row
+of the relation in turn, and the result of the function applied to that row is
+yielded as the next value of the iterator.
 
 For example, we can extract the scores from the ``mark`` column of the
 ``exam_marks`` table like this:
@@ -1824,12 +1828,12 @@ For example, we can extract the scores from the ``mark`` column of the
     >>> sorted(compute(exam_marks, "mark"))
     [49, 49, 66, 85, 85, 93]
 
+Here ``mark`` is a very simple expression: the value of a single attribute.
 The call to ``sorted`` here does two things:  it consumes all of the values
 from the compute generator, and it gives the returned values a predictable
 order so that the result can be used as part of the doctest.
 
-As usual, we can also specify a full ``lambda`` function instead of a
-string:
+As usual, we can also specify a full ``lambda`` function instead of a string:
 
     >>> sorted(compute(exam_marks, lambda r: "{}%".format(r.mark)))
     ['49%', '49%', '66%', '85%', '85%', '93%']
@@ -1848,15 +1852,23 @@ dinsd:
     >>> sum(compute(where(exam_marks, "student_id == SID('S1')"), "mark"))
     219
 
-String concatenation does not, so while the expression:
+Tuple concatenation does not, so while the expression:
 
-    sum(column(exam_marks, 'title'))
+    >>> t = sum(compute(course_marks, '(title,)'), ())
+    >>> sorted(list(t)) == sorted(compute(course_marks, 'title'))
+    True
 
-will produce a result, it will be neither a useful result nor a valid
-relational aggregation result.
+produces a result, it is neither a useful result nor a valid relational
+aggregation result.  We can't use the result ``t`` above as a doctest result,
+because the titles will be in a random order every time Python is run.  For
+reference, here are two examples from different runs:
 
-Python's ``sum`` operator returns the correct result when passed a column
-from an empty relation:
+    ('HCI', 'Database', 'Database', 'Database', 'Op systems', 'Op systems')
+    ('Database', 'Database', 'Op systems', 'Op systems', 'HCI', 'Database')
+
+If we understand Python's ``sum`` operator as being by default an arithmetic
+operator, it produces the correct result when passed an attribute from an
+empty relation:
 
     >>> sum(compute(Rel(foo=int)(), 'foo'))
     0
@@ -1865,9 +1877,9 @@ from an empty relation:
 max and min
 ~~~~~~~~~~~
 
-Like ``sum``, the Python ``max`` and ``min`` functions accept interators
-as in put, so we can use them directly to compute the corresponding
-relational max and min:
+Like ``sum``, the Python ``max`` and ``min`` functions accept iterators as
+input, so we can use them directly to compute the corresponding relational max
+and min:
 
     >>> max(compute(where(exam_marks, "student_id == SID('S1')"), 'mark'))
     85
@@ -1881,13 +1893,12 @@ relational max and min:
         ...
     ValueError: min() arg is an empty sequence
 
-
-Other Aggregate Operators
-~~~~~~~~~~~~~~~~~~~~~~~~~
+avg
+~~~
 
 Python doesn't have a function that corresponds directly to the *Tutorial D*
 ``AVG`` function, and it is a bit tricky to define it as a function that takes
-a single iterator (that does not support ``len``, which compute does not) as
+a single iterator that does not support ``len`` (which compute does not) as
 its argument, so dinsd provides the ``avg`` function in the ``op`` module.
 
     >>> from dinsd.op import avg
@@ -1898,15 +1909,38 @@ its argument, so dinsd provides the ``avg`` function in the ``op`` module.
     >>> avg(compute(Rel(foo=int)(), 'foo'))
     0
 
+any and all
+~~~~~~~~~~~
+
 The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
-named ``all`` and ``any``, respectively.
+named ``all`` and ``any``, respectively.  Because Python assigns a truth value
+to almost all data types, these functions can be applied to almost any
+attribute.  Whether that is useful or not depends on what's stored under
+that attribute, of course.
+
+    >>> any(compute(exam_marks, 'mark'))
+    True
+    >>> all(compute(exam_marks, 'mark'))
+    True
+    >>> bools = Rel(foo=bool)(('foo',), (True,), (False,), (True,))
+    >>> any(compute(bools, 'foo'))
+    True
+    >>> all(compute(bools, 'foo'))
+    False
+
+``any`` and ``all`` have the correct logical behavior on empty relations:
+
+    >>> any(compute(type(bools)(), 'foo'))
+    False
+    >>> all(compute(type(bools)(), 'foo'))
+    True
 
 
-summarize
-~~~~~~~~~
+Relations and Rows as Values
+-----------------------------
 
-It will take us a bit to get to the ``summarize`` operator, since we are following
-along with the examples in AITDT.
+motivation
+~~~~~~~~~~
 
 Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
 AITDT, the number of students that have sat for an exam in each course:
@@ -2075,12 +2109,16 @@ felt the need to resort to Hungarian Notation for the relation and expression
 variables.  It seems like there is an irreducible minimum of complexity in
 relational algebra expressions.
 
-Now we finally get to ``summarize`` itself, which is designed to make the
-above complex expressions simpler and easier to understand.  The basic idea is
-that the pattern of composing with a row containing data from one table to
-obtain a list of matching data from another table (which could be the same
-table) and then aggregating over that extracted data is very common.  So we
-have an operator that expresses that more compactly:
+
+summarize
+~~~~~~~~~
+
+Now we finally get to ``summarize``, which is designed to make the above
+complex expressions simpler and easier to understand.  The basic idea is that
+the pattern of composing with a row containing data from one table to obtain a
+list of matching data from another table (which could be the same table) and
+then aggregating over that extracted data is very common.  So we have an
+operator that expresses that more compactly:
 
     >>> from dinsd.op import summarize
     >>> x = summarize(exam_marks, courses >> {'course_id'},
@@ -2168,7 +2206,7 @@ they may be a mix of strings and lambda expressions:
 
 
 group
------
+~~~~~
 
     >>> from dinsd.op import group
 
@@ -2296,7 +2334,7 @@ with a single attribute, whose single value is the original relation:
 
 
 ungroup
--------
+~~~~~~~
 
     >>> from dinsd.op import ungroup
 
@@ -2318,8 +2356,8 @@ non-``Relation`` iterator, it does the union of all the relations returned by
 that iterator.  That is, it acts as an aggregation function.  The built-in
 ``ungroup`` is more efficient, though.
 
-We can also do this using a string valued expression, by using the
-special variable ``row`` to access the entire row:
+We can also do this using a string valued expression, by using the special
+variable ``row`` to access the entire row:
 
     >>> expression_namespace['r_type'] = type(results)
     >>> t_func = "times(exam_results, r_type(row) << {'exam_results'})"
@@ -2438,11 +2476,11 @@ And here are the errors and edge cases:
     True
 
 
-join operators as aggregators
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Aside: join operators as aggregators
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 We already saw an example of ``union`` being used as an aggregator (that is,
-taking an iterator as input).  This also works for the join-like operators,
+taking an iterator as input).  This also works for the join-type operators,
 which we will now prove for testing completeness.
 
     >>> R = Rel(a=int, b=int)
