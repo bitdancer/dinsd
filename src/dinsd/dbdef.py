@@ -154,9 +154,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __init__(self, *args):
         # Several cases: (1) empty relation (2) being called as a type
-        # validation function (single arg is a Relation) (3) list of
-        # dict-likes, (4) list of Row objects, (5) header tuple followed by
-        # value tuples.
+        # validation function (single arg is a Relation) (3) list of dict-likes
+        # and/or Rows, (5) header tuple followed by value tuples.
         if len(args) == 0:
             self._rows_ = set()
             return
@@ -169,29 +168,28 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._rows_ = frozenset(args[0]._rows_)
             return
         rows = set()
-        if hasattr(args[0], 'items'):
-            for i, d in enumerate(args):
-                try:
-                    rows.add(self.row(d))
-                except TypeError as e:
-                    raise TypeError(str(e) + " in row {}".format(i))
-        elif hasattr(args[0], '_header_'):
-            for i, row in enumerate(args):
-                if row._header_ != self.header:
-                    raise TypeError("Row header does not match relation header "
-                                    "in row {} (got {!r})".format(i, row))
-                rows.add(row)
-            self._rows_ = rows
+        if hasattr(args[0], 'items') or hasattr(args[0], '_header_'):
+            for i, o in enumerate(args):
+                if hasattr(o, '_header_'):
+                    if o._header_ != self.header:
+                        raise TypeError("Row header does not match relation header "
+                                        "in row {} (got {!r})".format(i, o))
+                else:
+                    try:
+                        o = self.row(o)
+                    except TypeError as e:
+                        raise TypeError(str(e) + " in row {}".format(i))
+                rows.add(o)
         else:
             attrlist = args[0]
             self._validate_attr_list(attrlist)
-            for i, row in enumerate(args[1:], start=1):
-                if len(row) != self.degree:
+            for i, o in enumerate(args[1:], start=1):
+                if len(o) != self.degree:
                     raise TypeError(
                         "Expected {} attributes, got {} in row {} for {}".format(
-                            self.degree, len(row), i, self.__class__.__name__))
+                            self.degree, len(o), i, self.__class__.__name__))
                 try:
-                    rows.add(self.row({k: v for k, v in zip(attrlist, row)}))
+                    rows.add(self.row({k: v for k, v in zip(attrlist, o)}))
                 except TypeError as e:
                     raise TypeError(str(e) + " in row {}".format(i))
         self._rows_ = rows
