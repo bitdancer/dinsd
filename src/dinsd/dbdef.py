@@ -103,12 +103,25 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return tuple(sorted(self.__dict__.items()))
 
     def _compare(self, other, method):
-        if not isinstance(other, Row):
-            return False
+        if not isinstance(other, Row) or self._header__ != other._header_:
+            return NotImplemented
         return super()._compare(other, method)
 
+    def __eq__(self, other):
+        if not isinstance(other, Row):
+            return False
+        return self._cmpkey() == other._cmpkey()
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash(self._cmpkey())
+
     def __repr__(self):
-        return "{}.row({{{}}})".format(self._relation_name_,
+        name = '' if self._relation_name_ is None else self._relation_name_+'.'
+        return "{}row({{{}}})".format(
+            name,
             ', '.join("{!r}: {!r}".format(k, v)
                         for k, v in sorted(self.__dict__.items())))
 
@@ -124,6 +137,14 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         l = self.__dict__.copy()
         l['row'] = self
         return l
+
+
+def row(attrdict):
+    dct = {'_header_': {n: type(v) for n, v in attrdict.items()},
+           '_degree_': len(attrdict),
+           '_relation_name_': None}
+    cls = type('row_' + '_'.join(sorted(attrdict.keys())), (Row,), dct)
+    return cls(attrdict)
 
 
 class RelationMeta(type):

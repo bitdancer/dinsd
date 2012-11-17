@@ -74,7 +74,9 @@ the authors of TTM would/will be annoyed by this, but it is less confusing
 than trying to reuse the world ``tuple`` in a Python context.
 
 So, a relation consists of a name and a header.  The header consists of a list
-of attributes, with each attribute having a type.
+of attributes, with each attribute having a type.  A row consists of a header
+and a set of attributes, one attribute per attribute in the header, plus a
+specific value, of the type defined by the header, for each attribute.
 
 
 Types, User Defined Types, and Scalars
@@ -229,8 +231,8 @@ definition that is given on page 42 of AIRDT.
 
 Because relations share a common semantic, we don't need to define an explicit
 ``__init__`` function.  All ``Relation`` types automatically have an
-``__init__`` method that allows us to construct a relation (relvar) of that
-type by providing data to extend the relation.
+``__init__`` method that allows us to construct a relation of that type by
+providing data to extend the type.
 
 The most verbose and most general way of creating such a relation instance is
 as follows:
@@ -247,34 +249,54 @@ This corresponds directly to the relation definition in example 2.3 on page
 45.  As I indicated earlier, we are using the term ``row`` instead of the term
 ``tuple`` to avoid confusion with the Python ``tuple`` type.
 
-If you compare the above "relation literal" with the one from example 2.3 in
-AIRDT, you might notice a major difference between disnd and *Tutorial D*, one
-of the ones that makes dinsd not technically compatible with TTM.  In TTM
-(and *Tutorial D*) a type is completely characterized by the names of the
-attributes and the types of the values.  If two definitions or two literals
-refer to the *same* set of names, with the value associated with each name
-having the *same* type, then the two are considered to be *exactly* the same
-type for all purposes.  Python, on the other hand, bases type identity on the
-identity of the *object* that defines the type.  Thus in our version of the
-Relation literal above, we must explicitly name the type that we are
-instantiating, so that Python can follow the pointer to the single type object
-that defines this Relation type.  While this technically violates TTM, in
-practice we allow relvars that have conformant types in the TTM sense to fully
-interoperate.  Thus in practice the difference has a consequence only in the
-way in which Relations and Tuples are created, and not on the way in which
-they are used.
+You will note that a relation has an attribute ``row`` that is a constructor
+for rows of the type defined by the relation's header.  Although this wasn't
+clear to me for quite some time, *Tutorial D* takes advantage of the fact
+that it is possible to infer the correct header for a row (TTM tuple) from
+its attribute names and the types of its values.  dinsd supports this as well,
+through the ``row`` function:
 
-You will also note that dinsd does not provide any direct syntax for defining
-a row independent of any Relation, unlike *Tutorial D*, which provides the
-TUPLE keyword for both type and literal definition.  In disd a row selector
-function is accessible only from the corresponding `Relation` type that uses
-the same header.  This also does not fully conform to TTM, but I haven't
-found a need to define a row without also defining the corresponding Relation,
-so I don't think it is a significant omission.
+    >>> x = dbdef.row({'student_id': SID('S1'), 'course_id': CID('C1'),
+    ...           'name': 'Anne'})
+    >>> x
+    row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
+    >>> y = IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
+    ...           'name': 'Anne'})
+    >>> y                                    # doctest: +NORMALIZE_WHITESPACE
+    IsEnrolledOn.row({'course_id': CID('C1'), 'name': 'Anne',
+         'student_id': SID('S1')})
+    >>> x == y
+    True
+    >>> type(x) == type(y)
+    True
+    >>> type(x) is type(y)
+    False
 
-The instantiation above is *very* wordy.  Given that in dinsd we know which
-type of relation we are instantiating, we can provide usefully simpler
-representations.
+Just like in *Tutorial D*, when you write a generic ``row`` declaration,
+you *must* use the exact type for the attribute values.  Otherwise you
+end up with a row with a different type:
+
+    >>> z = dbdef.row({'course_id': 'C1', 'name': 'Anne', 'student_id': 'S1'})
+    >>> z == y
+    False
+
+We can see exactly why this is by inspecting the ``_header_`` attribute
+of the respective rows (the ``_header_`` is just a ``dict``, so we have
+to sort it as tuples to get something predictable to doctest :
+
+    >>> sorted(z._header_.items())          # doctest: +NORMALIZE_WHITESPACE
+    [('course_id', <class 'str'>), ('name', <class 'str'>),
+         ('student_id', <class 'str'>)]
+    >>> sorted(y._header_.items())          # doctest: +NORMALIZE_WHITESPACE
+     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
+        ('student_id', <class '__main__.SID'>)]
+
+As you can see, if we don't use the specific type for the value, we get
+the actual type of the value in the _header_ (``str`` in this case) which
+means the two rows are not the same type, and are not equal.
+
+When we know the type of the relation we are creating, we can provide
+usefully simpler representations.
 
 First, we know that the body of the relation is a list of rows, so there is no
 need to pass in explicitly constructed rows.  Instead, if the init method is
