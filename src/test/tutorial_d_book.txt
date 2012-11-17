@@ -131,7 +131,8 @@ chapter 2 of AIRDT:
     ...             self.value = id
     ...         else:
     ...             raise TypeError("Expected '{}' followed by one to "
-    ...                             "three digits".format(self.firstchar))
+    ...                             "three digits, got {!r}".format(
+    ...                             self.firstchar, id))
     ...
     >>> class SID(ID):
     ...     firstchar = 'S'
@@ -166,7 +167,7 @@ To prove that this (straightforward Python) implementation is correct:
     >>> SID('1')
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'S' followed by one to three digits
+    TypeError: Expected 'S' followed by one to three digits, got '1'
     >>> CID(1)
     Traceback (most recent call last):
         ...
@@ -174,11 +175,11 @@ To prove that this (straightforward Python) implementation is correct:
     >>> SID('C1')
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'S' followed by one to three digits
+    TypeError: Expected 'S' followed by one to three digits, got 'C1'
     >>> CID('C0003')
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'C' followed by one to three digits
+    TypeError: Expected 'C' followed by one to three digits, got 'C0003'
     >>> SID(CID('C1'))
     Traceback (most recent call last):
         ...
@@ -398,18 +399,22 @@ values:
     >>> IsEnrolledOn.row({})
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 0
+    TypeError: Expected 3 attributes, got 0 ({})
     >>> IsEnrolledOn.row({'student_id': 'S1', 'name': 'foo'})
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 2
+    TypeError: Expected 3 attributes, got 2 ({...})
     >>> IsEnrolledOn.row({'student_id': 'S1', 'name': 'foo',
     ...                         'course_id': 'C1', 'bar': 1})
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 4
+    TypeError: Expected 3 attributes, got 4 ({...})
 
-And the attribute names must match those defined in the relation:
+The contents of the dictionary passed in is shown in the error message, but
+we can't put it into the doctest because the order the repr is printed is
+random.
+
+The attribute names must match those defined in the relation:
 
     >>> IsEnrolledOn.row({'student_id': 'S1', 'name': 'foo', 'bad': 1})
     Traceback (most recent call last):
@@ -422,13 +427,13 @@ The values must be valid:
     ...                      'name': 'foo', 'course_id': 1})
     Traceback (most recent call last):
         ...
-    TypeError: Expected str but passed <class 'int'>, 1 invalid for attribute course_id
+    TypeError: Expected str but passed <class 'int'>; 1 invalid for attribute course_id
     >>> IsEnrolledOn.row({'student_id': 'S1', # doctest: +NORMALIZE_WHITESPACE
     ...                     'name': 'foo', 'course_id': 'S1'})
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'C' followed by one to three digits, 'S1' invalid
-         for attribute course_id
+    TypeError: Expected 'C' followed by one to three digits, got 'S1';
+         'S1' invalid for attribute course_id
 
 But it is OK to use the selector form ('C1') rather than the full scaler
 value form (CID('C1')):
@@ -482,8 +487,37 @@ shorthand, and additionally reports which row is in error:
     ...               )
     Traceback (most recent call last):
         ...
-    TypeError: Expected 'S' followed by one to three digits, 'C1' invalid for
-        attribute student_id in row 2
+    TypeError: Expected 'S' followed by one to three digits, got 'C1';
+         'C1' invalid for attribute student_id in row 2
+
+Here are the errors we get if we pass the wrong number of values in the
+row and dictionary forms:
+
+    # XXX: Do this one after Row refactor.
+    #>>> is_enrolled_on = IsEnrolledOn(
+    #...     IsEnrolledOn.row({'student_id': SID('S1'), 'name': 'Anne'}),
+    #...     )
+
+    >>> is_enrolled_on = IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'name': 'Anne'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2 ({...}) in row 0
+    >>> is_enrolled_on = IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
+    ...     {'student_id': SID('S1'), 'name': 'Anne'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2 ({...}) in row 1
+    >>> is_enrolled_on = IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne', 'foo': 'bar'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 4 ({...}) in row 1
 
 
 
@@ -2493,6 +2527,223 @@ which we will now prove for testing completeness.
     rel_a_b(('a', 'b'), (1, 2))
     >>> times((a, c))
     join_a_b_c_d(('a', 'b', 'c', 'd'), (1, 2, 5, 6), (3, 4, 5, 6))
+
+
+Comparison
+----------
+
+Like ``Rel``, Python uses ``<=`` and ``>=`` for subset and superset,
+respectively.  These operators work with relations of like type:
+
+    >>> R = Rel(foo=int, bar=int)
+    >>> r1 = R(('foo', 'bar'), (1, 2), (3, 4), (5, 6))
+    >>> r2 = R(('foo', 'bar'), (1, 2), (3, 4))
+    >>> r3 = R(('foo', 'bar'), (3, 4))
+    >>> r4 = R(('foo', 'bar'), (3, 4))
+
+Observe that r3 and r4 are different objects:
+
+    >>> r3 is not r4
+    True
+
+So, the expected relationships hold:
+
+    >>> r1 <= r1
+    True
+    >>> r1 >= r1
+    True
+    >>> r1 >= r2
+    True
+    >>> r2 >= r1
+    False
+    >>> r3 <= r4
+    True
+    >>> r3 == r4
+    True
+    >>> r1 == r2
+    False
+    >>> r1 >= r2 >= r3 >= r4
+    True
+
+Python also supports proper subset and proper superset via ``<`` and ``>``:
+
+
+    >>> r1 < r1
+    False
+    >>> r1 > r1
+    False
+    >>> r1 > r2
+    True
+    >>> r2 > r1
+    False
+    >>> r3 < r4
+    False
+    >>> r3 > r4
+    False
+
+I'm not sure why *Tutorial D* defines IS_EMPTY.  dinsd doesn't but you can
+define it for yourself if you want it:
+
+    >>> def is_empty(r):
+    ...     return len(r)==0
+    >>> is_empty(R())
+    True
+    >>> is_empty(r1)
+    False
+
+Even that is more complicated than is needed, though.  If you want to know if
+a dinsd relation is empty, you can just test it's truth value:
+
+    >>> bool(R())
+    False
+    >>> bool(r1)
+    True
+
+This means you can use a relation in an ``if`` statement directly to
+check if it is empty:
+
+    >>> if r1:
+    ...     print("full")
+    full
+    >>> if not R():
+    ...     print("empty")
+    empty
+
+Relations of different types can be tested for equality (if they are different
+types they are by Python definition unequal), but are otherwise not
+comparable:
+
+    >>> r1 == is_enrolled_on
+    False
+    >>> r1 < is_enrolled_on
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: rel_bar_foo() < IsEnrolledOn()
+    >>> r1 <= is_enrolled_on
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: rel_bar_foo() <= IsEnrolledOn()
+    >>> r1 > is_enrolled_on
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: rel_bar_foo() > IsEnrolledOn()
+    >>> r1 >= is_enrolled_on
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: rel_bar_foo() >= IsEnrolledOn()
+
+In preparation for our next example, we'll add a course for a student that
+does not have a corresponding mark in ``exam_marks``:
+
+    >>> is_enrolled_on = union(is_enrolled_on,
+    ...     type(is_enrolled_on)(dict(student_id=SID('S2'),
+    ...                               course_id=CID('C3'))))
+
+And here is my take on example 5.16 from AITDT, computing a relation listing
+the names of all the students that have taken an exam for every course in
+which they are enrolled, without having looked at the "right" answer:
+
+    >>> m = group(join(is_enrolled_on, is_called), courses={'course_id', 'name'})
+    >>> c = group(join(is_enrolled_on, exam_marks), marks={'course_id', 'mark'})
+    >>> j = join(m, c)
+    >>> c_completed = "courses >> {'course_id'} == marks >> {'course_id'}"
+    >>> r = extend(j, completed=c_completed) >> {'student_id', 'completed'}
+    >>> print(display(join(r, is_called), 'name', 'student_id', 'completed'))
+    +----------+------------+-----------+
+    | name     | student_id | completed |
+    +----------+------------+-----------+
+    | Anne     | S1         | True      |
+    | Boris    | S2         | False     |
+    | Cindy    | S3         | True      |
+    | Devinder | S4         | True      |
+    +----------+------------+-----------+
+
+Well, that was much more complicated than AITDT's solution...and I seem to
+have misread the problem statement:
+
+    >>> print(is_called - ((is_enrolled_on & is_called) - exam_marks))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+
+(His book obviously isn't doctested, since both he and we earlier deleted
+the ``enrollment`` variable :)
+
+My misunderstanding is revealed by the presence of ``S5`` in this table: he is
+enrolled on no courses and therefore has trivially sat all his exams.  Mine
+lost him because of the joins, making mine the answer to the different
+question "which students who have sat at least one exam have sat the exams for
+all of the courses on which they are enrolled?".
+
+Something I find even more interesting, though, is that this gives the same
+result:
+
+    >>> print(is_called - (is_enrolled_on - exam_marks))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+
+I wonder why he didn't use that formulation?
+
+And here is the dinsd formulation based on example 5.17:
+
+    >>> expression_namespace['enrollment'] = is_called & is_enrolled_on
+    >>> expression_namespace['r_sid'] = type(is_called >> {'student_id'})
+    >>> print(where(is_called, (
+    ...         "compose(enrollment, r_sid(dict(student_id=student_id))) <= "
+    ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
+    ...             "<< {'mark'}")))
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: project_course_id_name() <= project_course_id()
+
+Hmm.  Composing enrollment gives us ``course_id`` and ``name``.  Composing
+``exam_marks`` gives us ``course_id`` and ``marks``... and we then get
+rid of ``marks``, leaving us with ``course_id`` (as we can see from the
+projection relation names in the error message).  So, no, those two
+aren't comparable.  We can do:
+
+    >>> print(where(is_called, (
+    ...         "compose(enrollment, r_sid(dict(student_id=student_id))) "
+    ...             "<< {'name'}  <= "
+    ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
+    ...             "<< {'mark'}")))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+
+Which gets us the expected result.  So does:
+
+    >>> expression_namespace['is_enrolled_on'] = is_enrolled_on
+    >>> print(where(is_called, (
+    ...         "compose(is_enrolled_on, r_sid(dict(student_id=student_id))) <= "
+    ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
+    ...             "<< {'mark'}")))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+
+So, I think in both of these examples he just had the wrong table name.
 
 
 

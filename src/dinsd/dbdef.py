@@ -2,6 +2,10 @@ from collections import Mapping
 from operator import attrgetter, itemgetter
 from itertools import zip_longest
 
+# For debugging only.
+import sys
+dbg = lambda *args: print(*args, file=sys.stderr)
+
 
 class RichCompareMixin:
 
@@ -53,20 +57,34 @@ class Scaler(RichCompareMixin):
         return "{}({!r})".format(self.__class__.__name__, self.value)
 
 
-class Row(RichCompareMixin, Mapping):
+class RowMeta(type):
 
-    # This could just be a dict subclass except that we want to take
-    # advantage of the PEP 412 key sharing instance dictionaries.
+    def __eq__(self, other):
+        if not isinstance(other, RowMeta):
+            return NotImplemented
+        return self._header_ == other._header_
+
+    def __hash__(self):
+        return super().__hash__()
+
+
+class Row(RichCompareMixin, metaclass=RowMeta):
 
     def __init__(self, attrdict):
+        if isinstance(attrdict, Row):
+            # We are being called as a type function.
+            if self._header_ != attrdict._header_:
+                raise TypeError("Invalid Row type: {!r}".format(attrdict))
+            self.__dict__ = attrdict.__dict__
+            return
         if len(attrdict) != self._degree_:
-            raise TypeError("Expected {} attributes, got {}".format(
-                                self._degree_, len(attrdict)))
+            raise TypeError("Expected {} attributes, got {} ({!r})".format(
+                                self._degree_, len(attrdict), attrdict))
         for attr, value in attrdict.items():
             try:
                 setattr(self, attr, self._header_[attr](value))
             except (TypeError, ValueError) as e:
-                raise type(e)(str(e) + ", {} invalid for attribute {}".format(
+                raise type(e)(str(e) + "; {} invalid for attribute {}".format(
                                 repr(value), attr))
             except KeyError:
                 raise TypeError(
@@ -123,10 +141,22 @@ class RelationMeta(type):
         RowClass.__name__ = '.'.join((name, 'RowClass'))
         return type.__new__(cls, name, bases, dct)
 
+    def __eq__(self, other):
+        if not isinstance(other, RelationMeta):
+            return NotImplemented
+        return self.header == other.header
+
+    def __hash__(self):
+        return super().__hash__()
+
 
 class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __init__(self, *args):
+        # Several cases: (1) empty relation (2) being called as a type
+        # validation function (single arg is a Relation) (3) list of
+        # dict-likes, (4) list of Row objects, (5) header tuple followed by
+        # value tuples.
         if len(args) == 0:
             self._rows_ = set()
             return
@@ -138,21 +168,32 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             # value of an attribute it must be immutable.
             self._rows_ = frozenset(args[0]._rows_)
             return
-        if hasattr(args[0], 'items'):
-            self._rows_ = {self.row(x) for x in args}
-            return
-        attrlist = args[0]
-        self._validate_attr_list(attrlist)
         rows = set()
-        for i, row in enumerate(args[1:], start=1):
-            if len(row) != self.degree:
-                raise TypeError(
-                    "Expected {} attributes, got {} in row {} for {}".format(
-                        self.degree, len(row), i, self.__class__.__name__))
-            try:
-                rows.add(self.row({k: v for k, v in zip(attrlist, row)}))
-            except TypeError as e:
-                raise TypeError(str(e) + " in row {}".format(i))
+        if hasattr(args[0], 'items'):
+            for i, d in enumerate(args):
+                try:
+                    rows.add(self.row(d))
+                except TypeError as e:
+                    raise TypeError(str(e) + " in row {}".format(i))
+        elif hasattr(args[0], '_header_'):
+            for i, row in enumerate(args):
+                if row._header_ != self.header:
+                    raise TypeError("Row header does not match relation header "
+                                    "in row {} (got {!r})".format(i, row))
+                rows.add(row)
+            self._rows_ = rows
+        else:
+            attrlist = args[0]
+            self._validate_attr_list(attrlist)
+            for i, row in enumerate(args[1:], start=1):
+                if len(row) != self.degree:
+                    raise TypeError(
+                        "Expected {} attributes, got {} in row {} for {}".format(
+                            self.degree, len(row), i, self.__class__.__name__))
+                try:
+                    rows.add(self.row({k: v for k, v in zip(attrlist, row)}))
+                except TypeError as e:
+                    raise TypeError(str(e) + " in row {}".format(i))
         self._rows_ = rows
 
     def _validate_attr_list(self, attrlist):
@@ -175,9 +216,22 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return self._rows_
 
     def _compare(self, other, method):
+        if not isinstance(other, Relation) or self.header != other.header:
+            return NotImplemented
+        return super()._compare(other, method)
+
+    def __eq__(self, other):
         if not isinstance(other, Relation):
             return False
-        return super()._compare(other, method)
+        if self.header != other.header:
+            return False
+        return self._rows_ == other._rows_
+
+    def __hash__(self):
+        return hash(self._rows_)
+
+    def __ne__(self, other):
+        return not self == other
 
     def __repr__(self):
         r = "{}((".format(self.__class__.__name__)
