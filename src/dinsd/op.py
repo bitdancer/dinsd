@@ -11,10 +11,10 @@ dbg = lambda *args: print(*args, file=sys.stderr)
 # Dynamic relation creation.
 #
 
-def Rel(**kw):
-    return _Rel('rel', kw)
+def rel(**kw):
+    return _rel('rel', kw)
 
-def _Rel(prefix, attr_dict):
+def _rel(prefix, attr_dict):
     new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
     new_Rel = type(new_Rel_name, (Relation,), attr_dict.copy())
     return new_Rel
@@ -70,7 +70,7 @@ def _binary_join(first, second):
     # Create an initially empty new relation of the new type, and then extend
     # it with the joined data.  Because the body is a set we don't have to
     # worry about duplicates.
-    new_rel = _Rel('join', combined_attrs)()
+    new_rel = _rel('join', combined_attrs)()
     for row in first._rows_:
         key = getter(row)
         for row2 in matches(key):
@@ -118,7 +118,7 @@ def rename(relation, **renames):
     for old, new in renames.items():
         holder[new] = new_attrs.pop(old)
     new_attrs.update(holder)
-    new_rel = _Rel('renamed', new_attrs)()
+    new_rel = _rel('renamed', new_attrs)()
     for row in relation._rows_:
         row_data = row._as_dict_()
         holder = {}
@@ -156,7 +156,7 @@ def project(relation, attr_names):
         raise TypeError("Attribute list included invalid attributes: "
                         "{}".format(attr_names - reduced_attrs.keys()))
     reduced_attr_names = reduced_attrs.keys()
-    new_rel = _Rel('project', reduced_attrs)()
+    new_rel = _rel('project', reduced_attrs)()
     for row in relation._rows_:
         new_row_data = {n: v for n, v in row._as_dict_().items()
                              if n in reduced_attr_names}
@@ -189,7 +189,7 @@ def extend(relation, **new_attrs):
     attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
-    new_rel = _Rel('extend', attrs)()
+    new_rel = _rel('extend', attrs)()
     for row in relation:
         new_values = row._as_dict_()
         new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
@@ -320,7 +320,7 @@ def summarize(relvar, compvar, _debug=False, **new_attrs):
         print(x)
     for n, f in new_attrs.items():
         if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, {'rel': r.t_e_m_p}, _expn)
+            new_attrs[n] = lambda r, s=f: eval(s, {'summary': r.t_e_m_p}, _expn)
         else:
             new_attrs[n] = lambda r, f=f: f(r.t_e_m_p)
     return extend(x, **new_attrs) << {'t_e_m_p'}
@@ -341,7 +341,7 @@ def ungroup(relation, attrname):
     row1 = next(iter(relation))
     del attrs[attrname]
     attrs.update(getattr(row1, attrname).header)
-    new_rel = _Rel('ungroup', attrs)()
+    new_rel = _rel('ungroup', attrs)()
     for row in relation:
         new_values = row._as_dict_()
         subrel = new_values.pop(attrname)
@@ -369,7 +369,7 @@ def unwrap(relation, attrname):
     row1 = next(iter(relation))
     del attrs[attrname]
     attrs.update(getattr(row1, attrname)._header_)
-    new_rel = _Rel('unwrap', attrs)()
+    new_rel = _rel('unwrap', attrs)()
     for row in relation:
         new_values = row._as_dict_()
         subrow = new_values.pop(attrname)

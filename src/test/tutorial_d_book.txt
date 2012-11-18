@@ -20,9 +20,14 @@ defined fully in Hugh and C. J.'s seminal work
 This file writes out various examples in dinsd that correspond to examples
 and/or problems from the book, as well as other examples that were inspired by
 the book or explored during the writing of dinsd.  The examples here do not
-particularly follow the book, as writing the implementation required hoping
-around a bit in the conceptual space, but the general pattern does follow
-the book.
+necessarily follow the book (although that is the general trend), as writing
+the implementation required hoping around a bit in the conceptual space.
+
+In addition, while early drafts of this file represented the linear
+development of dinsd, I backtracked to improve things a couple times, and then
+at the point where I was working on comparisons of relations I started doing a
+bunch of refactoring and backtracked to the beginning.  If you are curious
+about the evolution you can check out the repository history.
 
 Where reference is made to specific page numbers or figures in AIRTD, this is
 based on the bookboon.com edition of the book as available for download on
@@ -32,10 +37,41 @@ This file contains blocks of tests that are meant to exercise edge cases as
 well as the primary test cases and examples, because it is the test document
 that I used as I was building the system.  It is, therefore, a cross between a
 design document, a literate test document, and a detailed discussion of the
-system mechanics.  It may not be the best possible introduction to dinsd, but
-if you can make your way through it you will have a fairly deep understanding
-of dinsd and its relationship to TTM and its correspondence (or lack thereof)
-to *Tutorial D*.
+system mechanics, and a comparison of dinsd to *Tutorial D*.  It may not be
+the best possible introduction to dinsd, but if you can make your way through
+it you will have a fairly deep understanding of dinsd and its relationship to
+TTM and its correspondence (or occasionally lack thereof) to *Tutorial D*.
+
+
+
+About the Name
+--------------
+
+When I started dinsd, I knew there was no way I could fully implement
+TTM's *D* in Python.  But I wanted something very like *D*.  Given that I was
+implementing *D* in Python, I figured I should use the name of some character
+that had something to do with the letter D, and Dinsdale immediately came to
+mind.  However, since my program was not going to be a full D, I decided I'd
+shorten the name to indicate it was only a partial thing.  This also served to
+make it a more uniquely searchable term.  I contemplated both 'dins' and
+'dinsd', settling on the latter because it had two Ds in it.
+
+After a bit I realized that I was developing something closer to the true
+spirit of *D* than I had initially thought I'd be able to manage, but still
+something that did not conform to TTM.  It occurred to me that 'dinsd' could
+almost, but not quite, be interpreted as "D Is Not D", and I briefly
+considered changing the name to disnd.  That's a lot harder to pronounce,
+though.
+
+And then it occurred to me that the big difference between my (non-conformant)
+implementation of *D* and a real *D* is that Python does not have compile
+time, static typing.  And thus the real acronym behind the name dinsd was
+revealed:
+
+    D Is Not Static D
+
+It is otherwise as close to *D* as I understood how to make it.
+
 
 
 Scalars, Rows, and Relations (and a Few Words About Databases)
@@ -46,8 +82,11 @@ Databases and Terminology
 
 The concept of a database holding a set of relations is central to *Tutorial
 D*, but the process for defining a database is only introduced implicitly.  We
-will do the same, talking about the conceptual framework of the database,
-but defer the discussion of the syntax for defining one until later.
+will do the same, talking about the conceptual framework of the database, but
+defer the discussion of the syntax for defining one until later.  The
+relational algebra, which is the main subject of the system and this document,
+can be discussed without reference to the enclosing database or any
+concept of persistent storage, and we will take that approach.
 
 A database in dinsd consists of a container for the database, and a name and
 definition for all of the relations that are stored in the container.  This is
@@ -79,14 +118,36 @@ and a set of attributes, one attribute per attribute in the header, plus a
 specific value, of the type defined by the header, for each attribute.
 
 
+Lack of Static Typing
+~~~~~~~~~~~~~~~~~~~~~
+
+As alluded to in the ``About`` section, while *TTM* requires static tying
+(Prescription 1), Python is not a compiled language and does not support
+static typing.  Therefore dinsd can never be technically compliant with *TTM*.
+
+However, Python is *strictly* typed.  Every object in the system has a strict
+type.  It is the names that refer to those objects that are not themselves
+typed, and can refer to any object.  So dinsd does not provide "early warning"
+if you mix types inappropriately.  It does, however, provide runtime warning.
+I believe that dinsd observes the spirit of *TTM*, even if it doesn't conform
+to the letter.
+
+Python and dinds, then, separate the creation of a relation *object* (which
+has a type) from creating a reference to that object in a database (and
+therefore storing it as global, application independent state).  As indicated,
+we will postpone the discussion of creating databases until later.  For now,
+we will create relation objects in the namespace of this test document, where
+they will not outlast the test run.
+
+
 Types, User Defined Types, and Scalars
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Python is strictly typed.  Defining new types in Python is very simple:  you
-define a class.  (Classes are, in fact, of type ``type`` in Python).  So, to
-define the type for an attribute, we need a class that is that type.  For
-standard types (``int``, ``str``, etc), we can use the Python built in types.
-For what TTM calls "user defined types", we define a new class.
+Defining new types in Python is very simple:  you define a class.  (Classes
+are, in fact, of type ``type`` in Python).  So, to define the type for an
+attribute, we need a class that is that type.  For standard types (``int``,
+``str``, etc), we can use the Python built in types.  For what TTM calls "user
+defined types", we define a new class.
 
 In order to be usable in relation definitions, every user defined scaler type
 (ie: non-relation type) used with dinsd must conform to the common syntax and
@@ -210,6 +271,43 @@ later.
     >>> from dinsd.op import expression_namespace
     >>> expression_namespace['SID'] = SID
     >>> expression_namespace['CID'] = CID
+
+
+Defining Relations
+~~~~~~~~~~~~~~~~~~
+
+The *Tutorial D* syntax for defining a Relation type is given on page
+42 of my copy of AITDT:
+
+    RELATION { StudentId SID, Name NAME, CourseId CID }
+
+The braces indicate that the attributes are a set, not an ordered list.
+
+In translating these examples to dinsd, I'm going to do two things in addition
+to using the dinsd syntax: (1) I'm going to use ``str`` instead of a ``NAME``
+type both for simplicity and to show how Python standard types work in a dinsd
+context, and (2) I'm going to convert from *Tutorial D*s case convention to
+Python's.  Python's case convention (see :pep:``8``) is that classes (types)
+are named with CamelCase, while variables, methods, and functions are named
+with underscore_separated_lower_case.  In standard Python code we also make
+much less use of blanks around grouping operators such as braces and
+parenthesis.
+
+With those preliminaries out of the way, the dinsd version of the above
+(anonymous) type declaration is:
+
+    >>> from dinsd.op import rel
+    >>> rel(student_id=SID, name=str, course_id=CID)  # doctest: +NORMALIZE_WHITESPACE
+    rel_course_id_name_student_id({'course_id': CID, 'name': str,
+         'student_id': SID})
+
+As you can see, the relation is not actually anonymous in dinsd: the system
+constructs a type name from the attribute names joined by '_'s and prefixed by
+``rel_``.  This is because in Python every class (type) has to have a name,
+and it would be confusing for all of the different types to have the name
+'Rel'.  The constructed names also help when debugging expressions involving
+anonymous relations, since they will appear in error messages and can give a
+clue as to what relation produced the error.
 
 
 Defining and Instantiating Relations
@@ -756,8 +854,9 @@ we cannot join them:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class 'str'>, second: <class '__main__.SID'> found in joined
-        relations with type names <class '__main__.PermissiveIds'> and <class
-        '__main__.IsEnrolledOn'>
+        relations with type names PermissiveIds({'name': str,
+        'student_id': str}) and IsEnrolledOn({'course_id': CID,
+        'student_id': SID})
 
 An error like this in a multi-join also indicates in which argument the error
 was detected:
@@ -768,9 +867,9 @@ was detected:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in joined
-        relations with type names <class 'dinsd.dbdef.join_course_id_name_student_id'>
-        and <class '__main__.PermissiveIds'> (error detected while processing
-        argument 2)
+        relations with type names join_course_id_name_student_id({'course_id':
+        CID, 'name': str, 'student_id': SID}) and PermissiveIds({'name': str,
+        'student_id': str}) (error detected while processing argument 2)
 
 In this error message you also get a peak at the names that are used for the
 automatically generated ``Relation`` types used for the ``join`` result: a
@@ -1241,7 +1340,7 @@ relation, not an identity at the object level:
     False
 
 
-Rel
+rel
 ~~~
 
 In contemplating the "use the tools introduced so far" solution to the
@@ -1251,19 +1350,19 @@ has syntax for doing this, but up to this point dinsd hasn't, though we
 could have used it in a few examples up above.
 
 So, the dinsd way of dynamically creating a relation definition and a single
-instance of that definition at the same time is ``Rel``:
+instance of that definition at the same time is ``rel``:
 
-    >>> from dinsd.op import Rel
-    >>> print(Rel(name=str, sid=SID)(('name', 'sid'), ('Boris', 'S1')))
+    >>> from dinsd.op import rel
+    >>> print(rel(name=str, sid=SID)(('name', 'sid'), ('Boris', 'S1')))
     +-------+-----+
     | name  | sid |
     +-------+-----+
     | Boris | S1  |
     +-------+-----+
 
-``Rel`` is essentially the ``lambda`` of relations:
+``rel`` is essentially the ``lambda`` of relations:
 
-    >>> namelist = Rel(name=str)
+    >>> namelist = rel(name=str)
     >>> print(namelist(('name',), ('Boris',), ('Anne',)))
     +-------+
     | name  |
@@ -1282,7 +1381,7 @@ instance of that definition at the same time is ``Rel``:
 Now we can complete the "existing operators" version of the restriction
 query at the start of 4.7:
 
-    >>> print((is_called & Rel(name=str)(dict(name='Boris')))
+    >>> print((is_called & rel(name=str)(dict(name='Boris')))
     ...              >> {'student_id'})
     +------------+
     | student_id |
@@ -1291,7 +1390,7 @@ query at the start of 4.7:
     | S5         |
     +------------+
 
-The ``repr`` of a ``Rel`` is also interesting:
+The ``repr`` of a ``rel`` is also interesting:
 
     >>> namelist()
     rel_name(('name'))
@@ -1490,7 +1589,7 @@ Union is commutative and associative:
     >>> y = y >> {'student_id'}
     >>> x | y == y | x
     True
-    >>> z = Rel(student_id=SID)({'student_id': 'S5'})
+    >>> z = rel(student_id=SID)({'student_id': 'S5'})
     >>> (x | y) | z == x | (y | z) == union(x, y, z)
     True
 
@@ -1506,9 +1605,9 @@ The union of no relations is ``Dum``:
 
 *Tutorial D* has the ability to return an empty union if you specify a
 heading.  The closest equivalent in dinsd is to pass an empty relation defined
-via ``Rel``:
+via ``rel``:
 
-    >>> print(union(Rel(name=str, student_id=SID)()))
+    >>> print(union(rel(name=str, student_id=SID)()))
     +------+------------+
     | name | student_id |
     +------+------------+
@@ -1557,20 +1656,20 @@ relation is empty (no matching rows) we get back the original relation.
 If, however, it is not empty, then by the relational rules *all* the
 rows match, and we get back the empty relation.
 
-    >>> is_called - Rel(foo=str)() == is_called
+    >>> is_called - rel(foo=str)() == is_called
     True
-    >>> is_called - Rel(foo=str)(dict(foo='bar')) == type(is_called)()
+    >>> is_called - rel(foo=str)(dict(foo='bar')) == type(is_called)()
     True
 
 It is an error for match columns with the same name to have different types.
 
-    >>> is_called - Rel(student_id=str)()  # doctest: +NORMALIZE_WHITESPACE
+    >>> is_called - rel(student_id=str)()  # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in
-         match relation (relation type names are <class '__main__.IsCalled'>
-         and <class 'dinsd.dbdef.rel_student_id'>)
+         match relation (relation type names are IsCalled({'name':
+        str, 'student_id': SID}) and rel_student_id({'student_id': str}))
 
 minus
 ~~~~~
@@ -1580,7 +1679,7 @@ relations must have exactly the same columns, meaning that only exact
 matches are removed.
 
     >>> from dinsd.op import minus
-    >>> anne = Rel(student_id=SID, name=str)(dict(student_id='S1', name='Anne'))
+    >>> anne = rel(student_id=SID, name=str)(dict(student_id='S1', name='Anne'))
     >>> print(minus(is_called, anne))
     +----------+------------+
     | name     | student_id |
@@ -1590,7 +1689,7 @@ matches are removed.
     | Cindy    | S3         |
     | Devinder | S4         |
     +----------+------------+
-    >>> minus(is_called, Rel(student_id=SID)())
+    >>> minus(is_called, rel(student_id=SID)())
     Traceback (most recent call last):
         ...
     TypeError: Relation types must match for minus operation
@@ -1836,8 +1935,8 @@ that the two relations have in common.
 
 If there are no common attributes, ``compose`` is the same as ``join``:
 
-    >>> r1 = Rel(foo=int, bar=int)(('foo', 'bar'), (1, 2), (3, 4))
-    >>> r2 = Rel(bing=int, bang=int)(('bing', 'bang'), (5, 6), (7, 8))
+    >>> r1 = rel(foo=int, bar=int)(('foo', 'bar'), (1, 2), (3, 4))
+    >>> r2 = rel(bing=int, bang=int)(('bing', 'bang'), (5, 6), (7, 8))
     >>> join(r1, r2) == compose(r1, r2)
     True
 
@@ -1845,7 +1944,7 @@ Compose is commutative, but not associative:
 
     >>> compose(courses, exam_marks) == compose(exam_marks, courses)
     True
-    >>> r = Rel(student_id=SID, marks=int, name=str)(
+    >>> r = rel(student_id=SID, marks=int, name=str)(
     ...             ('student_id', 'marks', 'name'),
     ...             ('S1',         30,      'Anne'),
     ...             ('S2',         20,      'Borris'))
@@ -1955,7 +2054,7 @@ If we understand Python's ``sum`` operator as being by default an arithmetic
 operator, it produces the correct result when passed an attribute from an
 empty relation:
 
-    >>> sum(compute(Rel(foo=int)(), 'foo'))
+    >>> sum(compute(rel(foo=int)(), 'foo'))
     0
 
 
@@ -1973,7 +2072,7 @@ and min:
 
 ``min`` and ``max`` do not have defined results on an empty relation:
 
-    >>> min(compute(Rel(foo=int)(), 'foo'))
+    >>> min(compute(rel(foo=int)(), 'foo'))
     Traceback (most recent call last):
         ...
     ValueError: min() arg is an empty sequence
@@ -1989,9 +2088,9 @@ its argument, so dinsd provides the ``avg`` function in the ``op`` module.
     >>> from dinsd.op import avg
     >>> round(avg(compute(exam_marks, 'mark')), 2)
     71.17
-    >>> avg(compute(Rel(foo=int)({'foo': 3}), 'foo'))
+    >>> avg(compute(rel(foo=int)({'foo': 3}), 'foo'))
     3.0
-    >>> avg(compute(Rel(foo=int)(), 'foo'))
+    >>> avg(compute(rel(foo=int)(), 'foo'))
     0
 
 any and all
@@ -2007,7 +2106,7 @@ that attribute, of course.
     True
     >>> all(compute(exam_marks, 'mark'))
     True
-    >>> bools = Rel(foo=bool)(('foo',), (True,), (False,), (True,))
+    >>> bools = rel(foo=bool)(('foo',), (True,), (False,), (True,))
     >>> any(compute(bools, 'foo'))
     True
     >>> all(compute(bools, 'foo'))
@@ -2098,7 +2197,7 @@ in the AITDT example 5.6:
 
     >>> expression_namespace['exam_marks'] = exam_marks
     >>> x == extend(courses >> {'course_id'},
-    ...          exam_result="compose(Rel(course_id=CID)("
+    ...          exam_result="compose(rel(course_id=CID)("
     ...                                     "{'course_id': course_id}),"
     ...                               "exam_marks)")
     True
@@ -2107,10 +2206,10 @@ in the AITDT example 5.6:
 next refactor.)
 
 This is a bit ugly...it looks better if we break it up a bit.  And we can
-define the ``Rel`` outside the expression rather than creating a new
+define the ``rel`` outside the expression rather than creating a new
 relation for each row:
 
-    >>> expression_namespace['CID_rel'] = Rel(course_id=CID)
+    >>> expression_namespace['CID_rel'] = rel(course_id=CID)
     >>> exam_result_exp = ("compose(CID_rel({'course_id': course_id}),"
     ...                           "exam_marks)")
     >>> x == extend(courses >> {'course_id'}, exam_result=exam_result_exp)
@@ -2165,7 +2264,7 @@ with this:
 
     >>> c_er2 = extend(exam_marks >> {'course_id'},
     ...          exam_result=(
-    ...             "compose(Rel(course_id=CID)({'course_id': course_id}),"
+    ...             "compose(rel(course_id=CID)({'course_id': course_id}),"
     ...                     "exam_marks)"))
     >>> x = extend(c_er2,
     ...          avg_mark="round(avg(compute(exam_result, 'mark')), 2)")
@@ -2179,9 +2278,9 @@ to string expressions.
 
 In the examples above you can see several different wrapping styles attempting
 to make the expressions readable, but when the expressions get long there is
-oftne no good way to do it.  We can improve this one, though:
+often no good way to do it.  We can improve this one, though:
 
-    >>> expression_namespace['r_cid'] = Rel(course_id=CID)
+    >>> expression_namespace['r_cid'] = rel(course_id=CID)
     >>> c_er = "compose(r_cid({'course_id': course_id}), exam_marks)"
     >>> x = extend(exam_marks >> {'course_id'}, exam_result=c_er)
     >>> c_avg = "round(avg(compute(exam_result, 'mark')), 2)"
@@ -2219,13 +2318,13 @@ operator that expresses that more compactly:
     +-----------+---+
 
 The summarize lambda is being passed the *relation* that the summarize
-computes, not a row.  When we use string notation for the expression,
-we refer to the relation by the special variable ``rel`` (``rel`` is
+computes, not a row.  When we use string notation for the expression, we refer
+to the relation by the special variable ``summary`` (``summary`` is
 defined *only* for ``summarize`` expressions):
 
     >>> from dinsd.op import summarize
     >>> x == summarize(exam_marks, courses >> {'course_id'},
-    ...               n="len(rel)")
+    ...               n="len(summary)")
     True
 
 The above formulation corresponds to the *Tutorial D* ``SUMMARIZE PER``
@@ -2236,7 +2335,7 @@ relation for composition with itself.  We used that pattern in the average
 computation:
 
     >>> av == summarize(exam_marks, {'course_id'},
-    ...                 avg_mark="round(avg(compute(rel, 'mark')), 2)")
+    ...                 avg_mark="round(avg(compute(summary, 'mark')), 2)")
     True
 
 Definitely a worthwhile simplification.
@@ -2247,7 +2346,7 @@ argument ``_deubg``.  If set to ``True``, the intermediate table extended with
 the composed data is printed to stdout:
 
     >>> x =summarize(exam_marks, {'course_id'}, _debug=True,
-    ...              avg_mark="round(avg(compute(rel, 'mark')), 2)")
+    ...              avg_mark="round(avg(compute(summary, 'mark')), 2)")
     +-----------+-----------------------+
     | course_id | t_e_m_p               |
     +-----------+-----------------------+
@@ -2279,7 +2378,7 @@ they may be a mix of strings and lambda expressions:
 
     >>> x = summarize(exam_marks, {'course_id'},
     ...               attendees=lambda r: len(r),
-    ...               avg_mark="round(avg(compute(rel, 'mark')), 2)")
+    ...               avg_mark="round(avg(compute(summary, 'mark')), 2)")
     >>> print(display(x, 'course_id', 'attendees', 'avg_mark'))
     +-----------+-----------+----------+
     | course_id | attendees | avg_mark |
@@ -2472,7 +2571,7 @@ value.  dinsd's row objects aren't exposed as standalone classes, but they are
 readily available using the ``row`` attribute of a relation.  So we can
 write the dinsd equivalent of 5.14 as follows:
 
-    >>> contact_info = Rel(name=str, house=str, street=str, city=str, zip=str)(
+    >>> contact_info = rel(name=str, house=str, street=str, city=str, zip=str)(
     ...                     ('name',  'house', 'street',  'city',   'zip'),
     ...                     ('Anne',  '120',   'Peach',   'London', '00111'),
     ...                     ('Boris', '5',     'Rose',    'Kiev',   '00112'))
@@ -2568,10 +2667,10 @@ We already saw an example of ``union`` being used as an aggregator (that is,
 taking an iterator as input).  This also works for the join-type operators,
 which we will now prove for testing completeness.
 
-    >>> R = Rel(a=int, b=int)
+    >>> R = rel(a=int, b=int)
     >>> a = R(('a', 'b'), (1, 2), (3, 4))
     >>> b = R(('a', 'b'), (1, 2), (7, 8))
-    >>> c = Rel(c=int, d=int)(('c', 'd'), (5, 6))
+    >>> c = rel(c=int, d=int)(('c', 'd'), (5, 6))
     >>> join((a, b))
     join_a_b(('a', 'b'), (1, 2))
     >>> intersect((a, b))
@@ -2583,10 +2682,10 @@ which we will now prove for testing completeness.
 Comparison
 ----------
 
-Like ``Rel``, Python uses ``<=`` and ``>=`` for subset and superset,
+Like ``rel``, Python uses ``<=`` and ``>=`` for subset and superset,
 respectively.  These operators work with relations of like type:
 
-    >>> R = Rel(foo=int, bar=int)
+    >>> R = rel(foo=int, bar=int)
     >>> r1 = R(('foo', 'bar'), (1, 2), (3, 4), (5, 6))
     >>> r2 = R(('foo', 'bar'), (1, 2), (3, 4))
     >>> r3 = R(('foo', 'bar'), (3, 4))
@@ -2795,33 +2894,3 @@ Which gets us the expected result.  So does:
     +----------+------------+
 
 So, I think in both of these examples he just had the wrong table name.
-
-
-
-About the Name
---------------
-
-When I started dinsd, I knew there was no way I could fully implement
-TTM's *D* in Python.  But I wanted something very like *D*.  Given that I was
-implementing *D* in Python, I figured I should use the name of some character
-that had something to do with the letter D, and Dinsdale immediately came to
-mind.  However, since my program was not going to be a full D, I decided I'd
-shorten the name to indicate it was only a partial thing.  This also served to
-make it a more uniquely searchable term.  I contemplated both 'dins' and
-'dinsd', settling on the latter because it had two Ds in it.
-
-After a bit I realized that I was developing something closer to the true
-spirit of *D* than I had initially thought I'd be able to manage, but still
-something that did not conform to TTM.  It occurred to me that 'dinsd' could
-almost, but not quite, be interpreted as "D Is Not D", and I briefly
-considered changing the name to disnd.  That's a lot harder to pronounce,
-though.
-
-And then it occurred to me that the big difference between my (non-conformant)
-implementation of *D* and a real *D* is that Python does not have compile
-time, static typing.  And thus the real acronym behind the name dinsd was
-revealed:
-
-    D Is Not Static D
-
-It is otherwise as close to *D* as I understood how to make it.

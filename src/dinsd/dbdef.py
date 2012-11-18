@@ -170,6 +170,13 @@ class RelationMeta(type):
     def __hash__(self):
         return super().__hash__()
 
+    def __repr__(self):
+        r = "{}({{".format(self.__name__)
+        r += ', '.join([repr(n)+': '+(v.__name__)
+                        for n, v in sorted(self.header.items())])
+        r += '})'
+        return r
+
 
 class Relation(RichCompareMixin, metaclass=RelationMeta):
 
