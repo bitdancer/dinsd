@@ -1,4 +1,4 @@
-from collections import Mapping
+from collections.abc import Set
 from operator import attrgetter, itemgetter
 from itertools import zip_longest
 
@@ -135,7 +135,7 @@ class Row(RichCompareMixin, metaclass=RowMeta):
 
     def _as_locals_(self):
         l = self.__dict__.copy()
-        l['row'] = self
+        l['r'] = self
         return l
 
 
@@ -196,8 +196,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __init__(self, *args):
         # Several cases: (1) empty relation (2) being called as a type
-        # validation function (single arg is a Relation) (3) list of dict-likes
-        # and/or Rows, (5) header tuple followed by value tuples.
+        # validation function (single arg is a Relation) (3) iterable of
+        # dict-likes and/or Rows (4) header tuple followed by value tuples.
         if len(args) == 0:
             self._rows_ = set()
             return
@@ -210,12 +210,16 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._rows_ = frozenset(args[0]._rows_)
             return
         rows = set()
-        if hasattr(args[0], 'items') or hasattr(args[0], '_header_'):
+        if (len(args) == 1 and isinstance(args[0], Set) or
+                hasattr(args[0], 'items') or hasattr(args[0], '_header_')):
+            if isinstance(args[0], Set):
+                args = args[0]
             for i, o in enumerate(args):
                 if hasattr(o, '_header_'):
                     if o._header_ != self.header:
                         raise TypeError("Row header does not match relation header "
-                                        "in row {} (got {!r})".format(i, o))
+                                        "in row {} (got {!r} for {!r})".format(
+                                        i, o, type(self)))
                 else:
                     try:
                         o = self.row(o)
@@ -238,9 +242,11 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def _validate_attr_list(self, attrlist):
         if len(attrlist) != self.degree:
-            raise TypeError(
-                "Expected {} attributes, got {} in header row for {}".format(
-                    self.degree, len(attrlist), self.__class__.__name__))
+            raise TypeError("Expected {} attributes({}), got {} ({}) in "
+                    "header row for {}".format(
+                    self.degree, sorted(self.header),
+                    len(attrlist), sorted(attrlist),
+                    self.__class__.__name__))
         for attr in attrlist:
             if attr not in self.header:
                 raise AttributeError("{!r} relation has no attribute {!r}".format(
@@ -274,19 +280,12 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return not self == other
 
     def __repr__(self):
-        r = "{}((".format(self.__class__.__name__)
         names = sorted(self.header)
-        r += ', '.join([repr(x) for x in names])
-        if not self._rows_:
-            return r + '))'
-        r += '), '
-        rows = []
-        if len(names):
-            for row in sorted(self._rows_, key=attrgetter(*names)):
-                rows.append('(' + ', '.join([repr(row[x])
-                                             for x in names]) + ')')
-        r += ', '.join(rows) + ')'
-        return r
+        if self._rows_:
+            return "{}({{{}}})".format(self.__class__.__name__,
+                ', '.join(repr(row)
+                          for row in sorted(self._rows_, key=attrgetter(*names))))
+        return repr(self.__class__) + '()'
 
     def __display__(self, *columns, sort=[]):
         toprint = [list(map(printable, columns))]

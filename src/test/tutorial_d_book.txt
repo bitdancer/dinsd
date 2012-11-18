@@ -558,8 +558,53 @@ And a dictionary and keywords can be mixed:
 Instantiating Relations
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-All ``Relation`` types automatically have an ``__init__`` method that allows
-us to construct a relation of that type by providing data to extend the type.
+Given the preceding, the dinsd equivalent to AITDT's example 2.3 (page 45):
+
+    RELATION {
+        TUPLE { StudentId SID('S1'), CourseId CID('C1'), Name NAME('Anne')},
+        TUPLE { StudentId SID('S1'), CourseId CID('C2'), Name NAME('Anne')},
+        TUPLE { StudentId SID('S2'), CourseId CID('C1'), Name NAME('Boris')},
+        TUPLE { StudentId SID('S3'), CourseId CID('C3'), Name NAME('Cindy')},
+        TUPLE { StudentId SID('S4'), CourseId CID('C1'), Name NAME('Devinder')},
+        }
+
+should be reasonably obvious.  We'll do the dictionary/set form first, since
+it is closest to the *Tutorial D* notation:
+
+    >>> x = rel({
+    ...     row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
+    ...     row({'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'}),
+    ...     row({'student_id': SID('S2'), 'course_id': CID('C1'), 'name': 'Boris'}),
+    ...     row({'student_id': SID('S3'), 'course_id': CID('C3'), 'name': 'Cindy'}),
+    ...     row({'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'}),
+    ...     })
+    >>> x                                    # doctest: +NORMALIZE_WHITESPACE
+    rel_course_id_name_student_id({row({'course_id': CID('C1'), 'name': 'Anne',
+    'student_id': SID('S1')}), row({'course_id': CID('C1'), 'name': 'Boris',
+    'student_id': SID('S2')}), row({'course_id': CID('C1'), 'name': 'Devinder',
+    'student_id': SID('S4')}), row({'course_id': CID('C2'), 'name': 'Anne',
+    'student_id': SID('S1')}), row({'course_id': CID('C3'), 'name': 'Cindy',
+    'student_id': SID('S3')})})
+
+Note that the records are sorted.  This is so that we get a consistent repr
+for doctests and to make it easier to compare relations by their repr.
+
+The ``repr`` is a bit hard to parse visually, though, since it is so long and
+ends up line wrapped at arbitrary points.  Relations also have an ``str`` form
+that is much easier to parse visually:
+
+    >>> print(x)
+    +-----------+----------+------------+
+    | course_id | name     | student_id |
+    +-----------+----------+------------+
+    | C1        | Anne     | S1         |
+    | C1        | Boris    | S2         |
+    | C1        | Devinder | S4         |
+    | C2        | Anne     | S1         |
+    | C3        | Cindy    | S3         |
+    +-----------+----------+------------+
+
+XXX: START HERE
 
 The most verbose and most general way of creating such a relation instance is
 as follows:
@@ -690,41 +735,11 @@ the definition order, only on the types, which cannot change.
 
 So, in dinsd you can choose the level of correspondence to the *Tutorial D*
 literal notation that you prefer.  All of the above representations produce
-the same relvar value:
+the same relation value:
 
     >>> is_enrolled_on == is_enrolled_on2 == is_enrolled_on3 == is_enrolled_on4
     True
 
-It's ``repr`` is one of the more compact version of the literal representation:
-
-    >>> is_enrolled_on     # doctest: +NORMALIZE_WHITESPACE
-    IsEnrolledOn(('course_id', 'name',    'student_id'),
-                   (CID('C1'), 'Anne',     SID('S1')),
-                   (CID('C1'), 'Boris',    SID('S2')),
-                   (CID('C1'), 'Devinder', SID('S4')),
-                   (CID('C2'), 'Anne',     SID('S1')),
-                   (CID('C3'), 'Cindy',    SID('S3')))
-
-Of course, the real repr is a single line and so is not as pretty as the
-example makes it look.  We've lined up the example so that you can notice that
-the attributes are sorted alphabetically, and the rows are sorted according to
-their values as tuples.  We could also just allow them to be in their
-"natural" order, but in Python that is semi-random and it is more convenient
-to have a consistent ordering in the representation.
-
-The ``str`` (printed) representation is likewise sorted, but is in a more
-convenient format for inspecting the relation:
-
-    >>> print(is_enrolled_on)
-    +-----------+----------+------------+
-    | course_id | name     | student_id |
-    +-----------+----------+------------+
-    | C1        | Anne     | S1         |
-    | C1        | Boris    | S2         |
-    | C1        | Devinder | S4         |
-    | C2        | Anne     | S1         |
-    | C3        | Cindy    | S3         |
-    +-----------+----------+------------+
 
 Testing the Edges
 ~~~~~~~~~~~~~~~~~
@@ -736,12 +751,15 @@ First of all, we can create an empty Relation:
 
     >>> is_enrolled_on = IsEnrolledOn()
     >>> is_enrolled_on
-    IsEnrolledOn(('course_id', 'name', 'student_id'))
+    IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID})()
     >>> print(is_enrolled_on)
     +-----------+------+------------+
     | course_id | name | student_id |
     +-----------+------+------------+
     +-----------+------+------------+
+
+Note that because there are no rows to indicate the names and types of the
+attributes, the repr of an empty relation includes the header definition.
 
 The dictionary passed to the row constructor must have the right number of
 values:
@@ -807,11 +825,12 @@ a ``Relation``, but is provided for completeness.
 The same type checking happens when instantiating a Relation using the
 shorthand, and additionally reports which row is in error:
 
-    >>> IsEnrolledOn(('course_id', 'name'),
+    >>> IsEnrolledOn(('course_id', 'name'),   # doctest: +NORMALIZE_WHITESPACE
     ...               ('S1', 'Anne'))
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 2 in header row for IsEnrolledOn
+    TypeError: Expected 3 attributes(['course_id', 'name', 'student_id']), got 2
+        (['course_id', 'name']) in header row for IsEnrolledOn
     >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne'))
     Traceback (most recent call last):
@@ -876,7 +895,8 @@ associated type.  We'll define a throwaway type for this:
     Traceback (most recent call last):
         ...
     TypeError: Row header does not match relation header in row 0 (got
-        Foo.row({'name': 'Anne', 'student_id': SID('S1')}))
+        Foo.row({'name': 'Anne', 'student_id': SID('S1')}) for
+        IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID}))
     >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
     ...     Foo.row({'student_id': SID('S1'), 'name': 'Anne'}),
@@ -884,7 +904,8 @@ associated type.  We'll define a throwaway type for this:
     Traceback (most recent call last):
         ...
     TypeError: Row header does not match relation header in row 1 (got
-        Foo.row({'name': 'Anne', 'student_id': SID('S1')}))
+        Foo.row({'name': 'Anne', 'student_id': SID('S1')}) for
+        IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID}))
 
 By the way, ``Row``s and dictionaries can be mixed:
 
@@ -1622,7 +1643,7 @@ query at the start of 4.7:
 The ``repr`` of a ``rel`` is also interesting:
 
     >>> namelist()
-    rel_name(('name'))
+    rel_name({'name': str})()
 
 Observe that the name is ``rel_`` followed by the '_' joined names of the
 attributes.  This is a general pattern followed by dinsd when dynamically
@@ -2026,13 +2047,13 @@ Exercise 3:
 Exercise 4:
 
     >>> is_called - Dee
-    IsCalled(('name', 'student_id'))
+    IsCalled({'name': str, 'student_id': SID})()
     >>> is_called - Dum == is_called
     True
     >>> is_called - is_called
-    IsCalled(('name', 'student_id'))
+    IsCalled({'name': str, 'student_id': SID})()
     >>> (is_called - is_called) - is_called
-    IsCalled(('name', 'student_id'))
+    IsCalled({'name': str, 'student_id': SID})()
     >>> is_called - (is_called - is_called) == is_called
     True
 
@@ -2126,7 +2147,7 @@ operator.
 A match against an empty relation is empty:
 
     >>> matching(type(courses)(), courses)
-    Course(('course_id', 'title'))
+    Course({'course_id': CID, 'title': str})()
 
 In the reverse of the case for ``notmatching``, if there are no common
 attributes matching against an empty relation produces an empty relation,
@@ -2134,7 +2155,7 @@ while matching against a non-empty relation produces the original
 relation:
 
     >>> matching(courses, Dum)
-    Course(('course_id', 'title'))
+    Course({'course_id': CID, 'title': str})()
     >>> matching(courses, Dee) == courses
     True
 
@@ -2770,10 +2791,10 @@ that iterator.  That is, it acts as an aggregation function.  The built-in
 ``ungroup`` is more efficient, though.
 
 We can also do this using a string valued expression, by using the special
-variable ``row`` to access the entire row:
+variable ``r`` to access the entire row:
 
     >>> expression_namespace['r_type'] = type(results)
-    >>> t_func = "times(exam_results, r_type(row) << {'exam_results'})"
+    >>> t_func = "times(exam_results, r_type(r) << {'exam_results'})"
     >>> exam_marks == union(compute(extend(results, t=t_func), 't'))
     True
 
@@ -2901,11 +2922,17 @@ which we will now prove for testing completeness.
     >>> b = R(('a', 'b'), (1, 2), (7, 8))
     >>> c = rel(c=int, d=int)(('c', 'd'), (5, 6))
     >>> join((a, b))
-    join_a_b(('a', 'b'), (1, 2))
+    join_a_b({join_a_b.row({'a': 1, 'b': 2})})
     >>> intersect((a, b))
-    rel_a_b(('a', 'b'), (1, 2))
-    >>> times((a, c))
-    join_a_b_c_d(('a', 'b', 'c', 'd'), (1, 2, 5, 6), (3, 4, 5, 6))
+    rel_a_b({rel_a_b.row({'a': 1, 'b': 2})})
+    >>> times((a, c))               # doctest: +NORMALIZE_WHITESPACE
+    join_a_b_c_d({join_a_b_c_d.row({'a': 1, 'b': 2, 'c': 5, 'd': 6}),
+                  join_a_b_c_d.row({'a': 3, 'b': 4, 'c': 5, 'd': 6})})
+
+Sharp eyes will note that while ``join`` and ``times`` result in computed
+relation names beginning with ``join_``, ``intersect`` does not.  This is
+because ``intersect`` operations on relations of the same type, so there is no
+need to compute a new type.
 
 
 Comparison

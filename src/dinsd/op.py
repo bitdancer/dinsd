@@ -1,7 +1,8 @@
 from operator import attrgetter
 from collections import defaultdict
+from collections.abc import Mapping, Set
 from itertools import accumulate, repeat
-from dinsd.dbdef import Relation, Dum, Dee
+from dinsd.dbdef import Relation, Dum, Dee, row
 
 # For debugging only.
 import sys
@@ -12,22 +13,42 @@ dbg = lambda *args: print(*args, file=sys.stderr)
 #
 
 def rel(*args, **kw):
-    name = None
+    name = body = None
     if len(args)==1:
-        kw = dict(args[0], **kw)
+        arg = args[0]
+        if isinstance(arg, (Mapping, Set)) and not arg:
+            # Treat as relation literal
+            return Dum
+        if isinstance(arg, set):
+            # Relation literal.
+            if '__name__' in kw:
+                name = kw.pop('__name__')
+            if kw:
+                raise TypeError("keywords attributes not valid in relation "
+                                "literal form of rel call")
+            r = next(iter(arg))
+            if not hasattr(r, '_header_'):
+                r = row(r)
+            kw = r._header_.copy()
+            body = arg
+        else:
+            kw = dict(arg, **kw)
     if '__name__' in kw:
         name = kw.pop('__name__')
-    if any(n.startswith('_') for n in kw):
+    if not body and any(n.startswith('_') for n in kw):
         raise ValueError("Invalid relational attribute name {!r}".format(
             [n for n in sorted(kw) if n.startswith('_')][0]))
-    if name:
-        return type(name, (Relation,), kw)
-    return _rel('rel', kw)
+    if name is None:
+        name = _make_name('rel', kw)
+    new_rel = type(name, (Relation,), kw)
+    return new_rel(body) if body else new_rel
+
+def _make_name(prefix, attrs):
+    return prefix + '_' + '_'.join(sorted(attrs))
 
 def _rel(prefix, attr_dict):
-    new_Rel_name = prefix + '_' + '_'.join(sorted(attr_dict.keys()))
-    new_Rel = type(new_Rel_name, (Relation,), attr_dict.copy())
-    return new_Rel
+    new_Rel_name = _make_name(prefix, attr_dict)
+    return type(new_Rel_name, (Relation,), attr_dict.copy())
 
 #
 # Relational Operators
