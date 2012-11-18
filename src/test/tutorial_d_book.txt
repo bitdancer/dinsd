@@ -294,10 +294,12 @@ much less use of blanks around grouping operators such as braces and
 parenthesis.
 
 With those preliminaries out of the way, the dinsd version of the above
-(anonymous) type declaration is:
+(anonymous) type declaration looks very similar, but uses Python's existing
+syntax:
 
     >>> from dinsd.op import rel
-    >>> rel(student_id=SID, name=str, course_id=CID)  # doctest: +NORMALIZE_WHITESPACE
+    >>> x = rel({'student_id': SID, 'name': str, 'course_id': CID})
+    >>> x                                   # doctest: +NORMALIZE_WHITESPACE
     rel_course_id_name_student_id({'course_id': CID, 'name': str,
          'student_id': SID})
 
@@ -309,28 +311,134 @@ and it would be confusing for all of the different types to have the name
 anonymous relations, since they will appear in error messages and can give a
 clue as to what relation produced the error.
 
+In Python, dictionaries are unordered, and the keys of a dictionary are a set
+(that is, no two keys may be equal), so this declaration fully satisfies
+those *TTM* requirements:
 
-Defining and Instantiating Relations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    >>> x == rel({'student_id': SID, 'course_id': CID, 'name': str})
+    True
+    >>> x == rel({'student_id': SID, 'course_id': CID, 'name': int, 'name': str})
+    True
 
-A relation in dinsd is also a class, which is nice because in TTM it is also a
-type, making this consistent between TTM and dinsd/Python.  As mentioned
-above, for a relation, the class (type) definition consists of a list of
-attributes and their types.
+In the second case, though, order does matter.  Rather than raising an error
+when a dict literal contains duplicate key names, Python just uses the last
+occurrence to determine the value:
 
-We will demonstrate this by defining the example relation used throughout the
-first couple chapters of AIRDT.  This corresponds to the  *Tutorial D* type
-definition that is given on page 42 of AIRDT.
+    >>> y = rel({'student_id': SID, 'course_id': CID, 'name': str, 'name': int})
+    >>> x == y
+    False
+    >>> y                                   # doctest: +NORMALIZE_WHITESPACE
+    rel_course_id_name_student_id({'course_id': CID, 'name': int,
+         'student_id': SID})
 
-    >>> class IsEnrolledOn(dbdef.Relation):
+There is an alternate way to declare anonymous relations in dinsd that will
+raise an error if keys are duplicated, and that is to use the Python keyword
+syntax to specify the attribute names and values:
+
+    >>> x == rel(student_id=SID, course_id=CID, name=str)
+    True
+    >>> x == rel(student_id=SID, course_id=CID, name=str, name=int)
+    Traceback (most recent call last):
+        ...
+    SyntaxError: keyword argument repeated
+
+To use this form the attribute names must be valid Python identifiers.  This
+is true in general.  Much of the dinsd code does not depend on relation
+attributes being Python identifiers, but dinsd is not tested to see if
+non-identifier attributes are supported, and some Python implementations will
+impose stricter compliance to this rule than CPython does.
+
+Experienced Python users will observe that the above gives two different ways
+to do the same thing, and in Python we usually try to stick to there being
+"one obvious way to do it".  We provide the first way above only because it
+looks more like the *Tutorial D* version.  We consider the keyword version to
+be "the one obvious way to do it".
+
+There is also a third way to define a relation, which is the obvious way
+to define a *named* relation, and that is to use Python's class declaration
+syntax, subclassing from the special base class ``Relation``.
+
+    >>> from dinsd.dbdef import Relation
+    >>> class IsEnrolledOn(Relation):
     ...     student_id = SID
     ...     name = str
     ...     course_id = CID
+    >>> IsEnrolledOn
+    IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID})
 
-Because relations share a common semantic, we don't need to define an explicit
-``__init__`` function.  All ``Relation`` types automatically have an
-``__init__`` method that allows us to construct a relation of that type by
-providing data to extend the type.
+There is an important subtlety to be aware of here for Python programmers:
+although the above declaration appears to define actual Python class
+attributes, I referred to ``Relation`` as a "special" base class because
+it is not a normal Python class.  It has a metaclass that takes any
+attribute whose name does not start with an '_' and turns it into an
+attribute in the relation's ``header``:
+
+    >>> sorted(IsEnrolledOn.header.items())  # doctest: +NORMALIZE_WHITESPACE
+    [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
+     ('student_id', <class '__main__.SID'>)]
+    >>> IsEnrolledOn.student_id
+    Traceback (most recent call last):
+        ...
+    AttributeError: type object 'IsEnrolledOn' has no attribute 'student_id'
+
+Yes, every relation has a ``header`` attribute, and the ``attributes`` of a
+relation are not Python attributes of the relation.  (They *are* Python
+attributes of the *rows*, which we haven't discussed yet.)
+
+There is, unfortunately, no "duplicate safe" way of using the class
+declaration form of defining a relation.  This is because Python names
+are dynamically typed, so assigning a new value to an existing name is
+not an error:
+
+    >>> class IsEnrolledOn2(Relation):
+    ...     student_id = SID
+    ...     name = str
+    ...     course_id = CID
+    ...     name = int
+    >>> IsEnrolledOn2
+    IsEnrolledOn2({'course_id': CID, 'name': int, 'student_id': SID})
+
+You can stay closer to the type-ideal of *TTM*, if you prefer, by using a
+different form of the ``rel`` function to define a named relation:
+
+    >>> IsEnrolledOn3 = rel(student_id=SID, course_id=CID, name=str,
+    ...                     __name__='IsEnrolledOn3')
+    >>> IsEnrolledOn3
+    IsEnrolledOn3({'course_id': CID, 'name': str, 'student_id': SID})
+    >>> IsEnrolledOn3 == IsEnrolledOn
+    True
+
+Here we are using the special keyword argument ``__name__`` to set the
+corresponding (Python) attribute of the newly created class.
+
+Before we move on, here are some edge case tests to make the testing of
+``rel`` more complete (we'll be testing ``Relation`` in a subsequent section).
+
+The only special keyword supported is ``__name__``:
+
+    >>> rel(student_id=SID, _foo=str)
+    Traceback (most recent call last):
+        ...
+    TypeError: Unexpected keyword argument _foo
+
+The dictionary and keyword forms may be mixed.  This is supported in analog to
+Python's support for both a dictionary and a keyword list in the ``dict``
+constructor, and because it is occasionally convenient to use this form to
+merge some new attributes into an existing attribute list.  (This test also
+makes sure that the input dictionary is not mutated.)
+
+    >>> orig = {'student_id': SID}
+    >>> test = orig.copy()
+    >>> rel(test, course_id=CID, name=str) == IsEnrolledOn
+    True
+    >>> assert test == orig
+
+
+Instantiating Relations
+~~~~~~~~~~~~~~~~~~~~~~~
+
+All ``Relation`` types automatically have an ``__init__`` method that allows
+us to construct a relation of that type by providing data to extend the type.
 
 The most verbose and most general way of creating such a relation instance is
 as follows:
