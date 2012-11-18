@@ -139,12 +139,17 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return l
 
 
-def row(attrdict):
-    dct = {'_header_': {n: type(v) for n, v in attrdict.items()},
-           '_degree_': len(attrdict),
+def row(*args, **kw):
+    if len(args)==1:
+        kw = dict(args[0], **kw)
+    if any(n.startswith('_') for n in kw):
+        raise ValueError("Invalid relational attribute name {!r}".format(
+            [n for n in sorted(kw) if n.startswith('_')][0]))
+    dct = {'_header_': {n: type(v) for n, v in kw.items()},
+           '_degree_': len(kw),
            '_relation_name_': None}
-    cls = type('row_' + '_'.join(sorted(attrdict.keys())), (Row,), dct)
-    return cls(attrdict)
+    cls = type('row_' + '_'.join(sorted(kw.keys())), (Row,), dct)
+    return cls(kw)
 
 
 class RelationMeta(type):

@@ -373,11 +373,11 @@ identifiers that start with an ``_``:
     >>> rel({'_foo': int})
     Traceback (most recent call last):
         ...
-    TypeError: Invalid relational attribute name '_foo'
+    ValueError: Invalid relational attribute name '_foo'
     >>> rel(student_id=SID, _foo=str)
     Traceback (most recent call last):
         ...
-    TypeError: Invalid relational attribute name '_foo'
+    ValueError: Invalid relational attribute name '_foo'
 
 There is also a third way to define a relation, which is the obvious way
 to define a *named* relation, and that is to use Python's class declaration
@@ -520,6 +520,39 @@ but named as explained above:
     >>> sorted(x._header_.items())      # doctest: +NORMALIZE_WHITESPACE
     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
      ('student_id', <class '__main__.SID'>)]
+
+As with ``rel``, any attribute names that start with an ``_`` are rejected:
+
+    >>> row({'_foo': 10})
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid relational attribute name '_foo'
+
+Also as with ``rel``, there is a keyword form for ``row`` literals:
+
+    >>> y = row(student_id=SID('S1'), course_id=CID('C1'), name='Anne')
+    >>> x == y
+    True
+
+Which will object to multiply defined keywords:
+
+    >>> row(student_id=SID('S1'), student_id=SID('S2'))
+    Traceback (most recent call last):
+        ...
+    SyntaxError: keyword argument repeated
+
+Keyword arguments that start with ``_`` are disallowed; even, in this
+case, ``__name__``, which has no meaning for a row object:
+
+    >>> row(student_id=SID('S1'), __name__=1)
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid relational attribute name '__name__'
+
+And a dictionary and keywords can be mixed:
+
+    >>> row({'name': 'Anne'}, student_id=SID('S1'))
+    row({'name': 'Anne', 'student_id': SID('S1')})
 
 
 Instantiating Relations
