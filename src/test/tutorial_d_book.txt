@@ -352,7 +352,32 @@ Experienced Python users will observe that the above gives two different ways
 to do the same thing, and in Python we usually try to stick to there being
 "one obvious way to do it".  We provide the first way above only because it
 looks more like the *Tutorial D* version.  We consider the keyword version to
-be "the one obvious way to do it".
+ue "the one obvious way to do it".
+
+The dictionary and keyword forms may be mixed.  This is supported in analog to
+Python's support for both a dictionary and a keyword list in the ``dict``
+constructor, and because it is occasionally convenient to use this form to
+merge some new attributes into an existing attribute list.  (This test also
+makes sure that the input dictionary is not mutated.)
+
+    >>> orig = {'student_id': SID}
+    >>> test = orig.copy()
+    >>> rel(test, course_id=CID, name=str) == x
+    True
+    >>> assert test == orig
+
+We mentioned that attribute name should be Python identifiers.  For reasons
+that will become clear when we talk about rows below, we *disallow*
+identifiers that start with an ``_``:
+
+    >>> rel({'_foo': int})
+    Traceback (most recent call last):
+        ...
+    TypeError: Invalid relational attribute name '_foo'
+    >>> rel(student_id=SID, _foo=str)
+    Traceback (most recent call last):
+        ...
+    TypeError: Invalid relational attribute name '_foo'
 
 There is also a third way to define a relation, which is the obvious way
 to define a *named* relation, and that is to use Python's class declaration
@@ -385,6 +410,14 @@ Yes, every relation has a ``header`` attribute, and the ``attributes`` of a
 relation are not Python attributes of the relation.  (They *are* Python
 attributes of the *rows*, which we haven't discussed yet.)
 
+Relations also have an attribute ``degree``, which gives the number of
+attributes.  This is entirely equivalent to ``len(relation.header)``,
+but is provided because it corresponds to the terminology used in *TTM*
+and is a convenient property to have.
+
+    >>> IsEnrolledOn.degree
+    3
+
 There is, unfortunately, no "duplicate safe" way of using the class
 declaration form of defining a relation.  This is because Python names
 are dynamically typed, so assigning a new value to an existing name is
@@ -411,27 +444,82 @@ different form of the ``rel`` function to define a named relation:
 Here we are using the special keyword argument ``__name__`` to set the
 corresponding (Python) attribute of the newly created class.
 
-Before we move on, here are some edge case tests to make the testing of
-``rel`` more complete (we'll be testing ``Relation`` in a subsequent section).
+XXX: I haven't been able to get the below to work yet; there's something I'm
+not understanding about how metaclasses work.
 
-The only special keyword supported is ``__name__``:
+A small aside: in dinsd a relation type is *entirely* defined by its header,
+as required by *TTM*.  Because this is the case, and it would therefore
+completely screw up a program if the header of a relation that had one or more
+instances were changed, we make the ``header`` attribute of relations read
+only:
 
-    >>> rel(student_id=SID, _foo=str)
-    Traceback (most recent call last):
-        ...
-    TypeError: Unexpected keyword argument _foo
+    .>>> IsEnrolledOn.header = {}
+    .Traceback (most recent call last):
+    .    ...
+    .AttributeError: can't set attribute
 
-The dictionary and keyword forms may be mixed.  This is supported in analog to
-Python's support for both a dictionary and a keyword list in the ``dict``
-constructor, and because it is occasionally convenient to use this form to
-merge some new attributes into an existing attribute list.  (This test also
-makes sure that the input dictionary is not mutated.)
+Since ``degree`` is derived from ``header``, it is also read-only:
 
-    >>> orig = {'student_id': SID}
-    >>> test = orig.copy()
-    >>> rel(test, course_id=CID, name=str) == IsEnrolledOn
-    True
-    >>> assert test == orig
+    .>>> IsEnrolledOn.degree = 0
+    .Traceback (most recent call last):
+    .    ...
+    .AttributeError: can't set attribute
+
+
+Row Literals
+~~~~~~~~~~~~
+
+Remember, a dinsd "row" corresponds to a *Tutorial D* "tuple".  (Unlike
+"attribute", which is used in Python fairly loosely, "tuple" means something
+very precise in Python, and it isn't a *Tutorial D* tuple).
+
+On page 44 of my copy of AITDT, there is this example of a TUPLE literal:
+
+    TUPLE { StudentId SID('S1'), CourseId CID('C1'), Name NAME('Anne') }
+
+Considering that I'm coming from a Python dynamically typed background, it
+took me an inordinately long time to understand that the above is *implicitly
+type* by the names of its attributes and the type of its concrete values.
+Once I figured that out, though, it was simple to support it in dinsd:
+
+    >>> from dinsd.dbdef import row
+    >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'})
+    >>> x
+    row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
+
+A ``row`` object has Python attributes to match the relational attributes of
+its header:
+
+    >>> x.course_id
+    CID('C1')
+    >>> x.name
+    'Anne'
+
+As we saw above, identifiers that start with an ``_`` are rejected by ``rel``.
+This is so that row objects can have Python attributes in addition to their
+relational-specific attributes.  In Python's standard programming conventions,
+names that begin with a ``_`` are usually intended to be "private" names,
+names that are not part of the public API.  Disallowing such names as
+relational attributes is a small price to pay for the flexibility it gives
+us, and it is in-line with Python's standard conventions.
+
+However, we have some attributes that we want as part of the *public* API,
+but we've just constrained ourselves to marking them as private.  In
+a similar situation (the "named tuple" class), Python just ignores this
+dichotomy and uses names that start with ``_`` as part of the public API.
+dinsd is a little more strict about its naming, by also *appending* a
+``_`` to names that start with a ``_`` but are nonetheless intended to be
+part of the public API.
+
+So, rows have two public non-relational attributes of interest.  These
+correspond to the ``degree`` and ``header`` attributes of relations,
+but named as explained above:
+
+    >>> x._degree_
+    3
+    >>> sorted(x._header_.items())      # doctest: +NORMALIZE_WHITESPACE
+    [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
+     ('student_id', <class '__main__.SID'>)]
 
 
 Instantiating Relations

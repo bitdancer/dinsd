@@ -18,7 +18,7 @@ def rel(*args, **kw):
     if '__name__' in kw:
         name = kw.pop('__name__')
     if any(n.startswith('_') for n in kw):
-        raise TypeError("Unexpected keyword argument {}".format(
+        raise TypeError("Invalid relational attribute name {!r}".format(
             [n for n in sorted(kw) if n.startswith('_')][0]))
     if name:
         return type(name, (Relation,), kw)

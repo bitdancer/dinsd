@@ -162,6 +162,15 @@ class RelationMeta(type):
         RowClass.__name__ = '.'.join((name, 'RowClass'))
         return type.__new__(cls, name, bases, dct)
 
+    # XXX: This doesn't work, punt on it for now.
+    #@property
+    #def header(self):
+    #    return self._header
+
+    #@property
+    #def degree(self):
+    #    return len(self._header)
+
     def __eq__(self, other):
         if not isinstance(other, RelationMeta):
             return NotImplemented
