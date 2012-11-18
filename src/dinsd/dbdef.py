@@ -119,7 +119,7 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return hash(self._cmpkey())
 
     def __repr__(self):
-        name = '' if self._relation_name_ is None else self._relation_name_+'.'
+        name = '' if self._relation_name is None else self._relation_name+'.'
         return "{}row({{{}}})".format(
             name,
             ', '.join("{!r}: {!r}".format(k, v)
@@ -147,7 +147,7 @@ def row(*args, **kw):
             [n for n in sorted(kw) if n.startswith('_')][0]))
     dct = {'_header_': {n: type(v) for n, v in kw.items()},
            '_degree_': len(kw),
-           '_relation_name_': None}
+           '_relation_name': None}
     cls = type('row_' + '_'.join(sorted(kw.keys())), (Row,), dct)
     return cls(kw)
 
@@ -162,7 +162,7 @@ class RelationMeta(type):
         class RowClass(Row):
             _header_ = header
             _degree_ = len(attrs)
-            _relation_name_ = name
+            _relation_name = name
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
         return type.__new__(cls, name, bases, dct)
