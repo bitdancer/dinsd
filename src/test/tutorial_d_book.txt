@@ -350,9 +350,15 @@ impose stricter compliance to this rule than CPython does.
 
 Experienced Python users will observe that the above gives two different ways
 to do the same thing, and in Python we usually try to stick to there being
-"one obvious way to do it".  We provide the first way above only because it
-looks more like the *Tutorial D* version.  We consider the keyword version to
-ue "the one obvious way to do it".
+"one obvious way to do it".  dinsd breaks this guideline somewhat.  Different
+notations are more useful in different contexts in dinsd, yet the operators
+are all dealing with the same underlying data types.  Therefore dinsd follows
+another Python principle, that of "least surprise", by supporting all of the
+different notations in all of the contexts that it makes sense.  The first way
+above is provided primarily because looks more like the *Tutorial D* version,
+but in the context of relational expressions it is often the most economic
+notation.  For standalone anonymous relation type creation, we consider the
+keyword version to be the one obvious way to do it.
 
 The dictionary and keyword forms may be mixed.  This is supported in analog to
 Python's support for both a dictionary and a keyword list in the ``dict``
@@ -360,11 +366,14 @@ constructor, and because it is occasionally convenient to use this form to
 merge some new attributes into an existing attribute list.  (This test also
 makes sure that the input dictionary is not mutated.)
 
-    >>> orig = {'student_id': SID}
+    >>> orig = {'student_id': SID, 'name': int}
     >>> test = orig.copy()
     >>> rel(test, course_id=CID, name=str) == x
     True
     >>> assert test == orig
+
+As with ``dict``, this is an update operation, so the values specified by
+the keyword arguments overwrite those in the dictionary argument.
 
 We mentioned that attribute name should be Python identifiers.  For reasons
 that will become clear when we talk about rows below, we *disallow*
@@ -551,7 +560,7 @@ case, ``__name__``, which has no meaning for a row object:
 
 And a dictionary and keywords can be mixed:
 
-    >>> row({'name': 'Anne'}, student_id=SID('S1'))
+    >>> row({'name': 'Anne', 'student_id': SID('S3')}, student_id=SID('S1'))
     row({'name': 'Anne', 'student_id': SID('S1')})
 
 
