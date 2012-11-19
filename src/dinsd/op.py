@@ -1,6 +1,6 @@
 from operator import attrgetter
 from collections import defaultdict
-from itertools import accumulate, repeat
+from itertools import accumulate, repeat, chain
 from dinsd.dbdef import Relation, Dum, Dee, row
 
 # For debugging only.
@@ -12,34 +12,47 @@ dbg = lambda *args: print(*args, file=sys.stderr)
 #
 
 def rel(*args, **kw):
+    # Three possibilities.  (1) no arguments or keywords, or a single argument
+    # that is an empty dictionary or set: a relation literal representing Dum.
+    # (2) a single dictionary argument whose values are all types, possibly
+    # with additional keyword arguments whose values are types: a relation
+    # declaration.  (3) an iterable or a list of arguments consisting of
+    # dictionary and/or Row objects all of the same type: a relation literal
+    # whose type is determined by the type of the first item in the iterator or
+    # the first argument in the argument list.
     name = body = None
-    if len(args)==1:
-        arg = args[0]
-        if (hasattr(arg, 'items') or hasattr(arg, 'union')) and not arg:
-            # Treat as relation literal
-            return Dum
-        if not hasattr(arg, 'items'):
-            # Relation literal.
-            if '__name__' in kw:
-                name = kw.pop('__name__')
-            if kw:
-                raise TypeError("keywords attributes not valid in relation "
-                                "literal form of rel call")
-            r = next(iter(arg))
-            if not hasattr(r, '_header_'):
-                r = row(r)
-            kw = r._header_.copy()
-            body = arg
-        else:
-            kw = dict(arg, **kw)
     if '__name__' in kw:
         name = kw.pop('__name__')
-    if not body and any(n.startswith('_') for n in kw):
-        raise ValueError("Invalid relational attribute name {!r}".format(
-            [n for n in sorted(kw) if n.startswith('_')][0]))
+    if (not args and not kw) or (len(args) == 1 and
+            (hasattr(args[0], 'items') or hasattr(args[0], 'union'))
+            and not args[0]):
+        # (1) Relation literal representing Dum.
+        return Dum
+    if (not args and kw or len(args) == 1 and hasattr(args[0], 'values') and
+            all(isinstance(v, type) for v in args[0].values())):
+        # (2) Relation type declaration.
+        header = args[0].copy() if args else {}
+        header.update(kw)
+        if any(n.startswith('_') for n in header):
+            raise ValueError("Invalid relational attribute name {!r}".format(
+                [n for n in sorted(header) if n.startswith('_')][0]))
+    else:
+        # (3) Relation literal form.
+        if kw:
+            raise TypeError("keywords attributes not valid in relation "
+                            "literal form of rel call")
+        if len(args) == 1:
+            # Single argument iterator that is not a type dict.
+            args = args[0]
+        iterable = iter(args)
+        r = next(iterable)
+        if not hasattr(r, '_header_'):
+            r = row(r)
+        header = r._header_.copy()
+        body = chain([r], iterable)
     if name is None:
-        name = _make_name('rel', kw)
-    new_rel = type(name, (Relation,), kw)
+        name = _make_name('rel', header)
+    new_rel = type(name, (Relation,), header)
     return new_rel(body) if body else new_rel
 
 def _make_name(prefix, attrs):

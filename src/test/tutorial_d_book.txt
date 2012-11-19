@@ -631,6 +631,20 @@ pass them as a list:
     >>> y == x
     True
 
+A Python can turn a list of arguments into an iterator automatically, and many
+Python functions that accept an iterator also accept an equivalent list of
+arguments.  dinsd supports this call form for the ``rel`` function:
+
+    >>> y = rel(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
+    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
+    ...     {'student_id': SID('S2'), 'course_id': CID('C1'), 'name': 'Boris'},
+    ...     {'student_id': SID('S3'), 'course_id': CID('C3'), 'name': 'Cindy'},
+    ...     {'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'},
+    ...     )
+    >>> y == x
+    True
+
 We can even mix dictionaries and rows in these forms, because the two are
 logically interchangeable.
 
@@ -643,6 +657,15 @@ logically interchangeable.
     ...     ))
     >>> y == x
     True
+    >>> y = rel(
+    ...     row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
+    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
+    ...     row({'student_id': SID('S2'), 'course_id': CID('C1'), 'name': 'Boris'}),
+    ...     {'student_id': SID('S3'), 'course_id': CID('C3'), 'name': 'Cindy'},
+    ...     row({'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'}),
+    ...     )
+    >>> y == x
+    True
 
 You might ask why we bother with a row object at all...the answer has to do
 with Python's strong typing.  If we didn't have a type for rows that was
@@ -652,9 +675,8 @@ a test document more than it is a tutorial, we need to cover all the places
 that both are acceptable.  The ultimate introductory tutorial may well omit
 mention of row objects except in the context of error messages.
 
-
 XXX: START HERE  Before proceeding, need tests for row sorting and for the
-duplicate row error.  Also probably a multi-argument form for rel.
+various rel error cases, including the duplicate row error from relation.
 
 The most verbose and most general way of creating such a relation instance is
 as follows:
