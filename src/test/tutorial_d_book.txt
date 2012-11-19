@@ -653,7 +653,8 @@ that both are acceptable.  The ultimate introductory tutorial may well omit
 mention of row objects except in the context of error messages.
 
 
-XXX: START HERE
+XXX: START HERE  Before proceeding, need tests for row sorting and for the
+duplicate row error.  Also probably a multi-argument form for rel.
 
 The most verbose and most general way of creating such a relation instance is
 as follows:

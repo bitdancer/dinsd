@@ -195,14 +195,16 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def __init__(self, *args):
         # Several cases: (1) empty relation (2) being called as a type
-        # validation function (single arg is a Relation) (3) iterable of
-        # dict-likes and/or Rows (4) header tuple followed by value tuples.
+        # validation function (single arg is a Relation) (3) header tuple
+        # followed by value tuples (4) iterable of dict-likes and/or Rows,
+        # which could be a single argument or could be one dict/Row per arg.
         if len(args) == 0:
+            # (1) Empty relation.
             self._rows_ = set()
             return
         if (len(args)==1 and isinstance(args[0], Relation) and
                 args[0].header == self.header):
-            # We were called as a type validation function.  Return an
+            # (2) We were called as a type validation function.  Return an
             # immutable copy, because the only time this happens is when a
             # relation is the value of an attribute, and when a relation is a
             # value of an attribute it must be immutable.
@@ -216,11 +218,11 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                 hasattr(args[0], '__iter__') and
                 hasattr(args[0], '__len__') and
                 isinstance(next(iter(args[0])), str)):
-            # Tuple form.  Tuple form is a special shorthand, and we only allow
-            # it in argument list form, not single-iterator-argument form.
-            # Furthermore, while the list of arguments could be sourced from a
-            # generator (not that that would be a good idea), the arguments
-            # themselves cannot be.
+            # (3) Tuple form.  Tuple form is a special shorthand, and we only
+            # allow it in argument list form, not single-iterator-argument
+            # form.  Furthermore, while the list of arguments could be sourced
+            # from a generator (not that that would be a good idea), the
+            # arguments themselves cannot be.
             attrlist = args[0]
             self._validate_attr_list(attrlist)
             for i, o in enumerate(args[1:], start=1):
@@ -233,11 +235,11 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                 except TypeError as e:
                     raise TypeError(str(e) + " in row {}".format(i))
         else:
+            # (4) iterator of dicts and/or Rows.
             if len(args) == 1 and not (hasattr(args[0], 'items') or
                                        hasattr(args[0], '_header_')):
                 # Single iterator argument form.
                 args = args[0]
-            # Iterator of dicts and/or rows.
             for i, o in enumerate(args):
                 if hasattr(o, '_header_'):
                     # This one is a row.
