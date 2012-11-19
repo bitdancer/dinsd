@@ -41,8 +41,9 @@ def rel(*args, **kw):
         if kw:
             raise TypeError("keywords attributes not valid in relation "
                             "literal form of rel call")
-        if len(args) == 1:
-            # Single argument iterator that is not a type dict.
+        if (len(args) == 1 and not hasattr(args[0], 'items') and
+                               not hasattr(args[0], '_header_')):
+            # Single argument iterator
             args = args[0]
         iterable = iter(args)
         r = next(iterable)

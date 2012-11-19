@@ -564,8 +564,8 @@ And a dictionary and keywords can be mixed:
     row({'name': 'Anne', 'student_id': SID('S1')})
 
 
-Instantiating Relations
-~~~~~~~~~~~~~~~~~~~~~~~
+Relation Literals
+~~~~~~~~~~~~~~~~~
 
 Given the preceding, the dinsd equivalent to AITDT's example 2.3 (page 45):
 
@@ -675,8 +675,104 @@ a test document more than it is a tutorial, we need to cover all the places
 that both are acceptable.  The ultimate introductory tutorial may well omit
 mention of row objects except in the context of error messages.
 
+Any Python iterator can be used as the argument to ``rel``.  This includes
+a generator:
+
+    >>> def multiplication_table():
+    ...     for a in range(10):
+    ...         for b in range(10):
+    ...             yield row(a=a, b=b, result=a*b)
+    >>> print(rel(multiplication_table()))
+    +---+---+--------+
+    | a | b | result |
+    +---+---+--------+
+    | 0 | 0 | 0      |
+    | 0 | 1 | 0      |
+    | 0 | 2 | 0      |
+    ...
+    | 2 | 8 | 16     |
+    | 2 | 9 | 18     |
+    | 3 | 0 | 0      |
+    | 3 | 1 | 3      |
+    ...
+    | 9 | 7 | 63     |
+    | 9 | 8 | 72     |
+    | 9 | 9 | 81     |
+    +---+---+--------+
+
+It is possible to define a single row literal (this may seem obvious,
+but it needs to be tested since it is an edge case):
+
+    >>> rel({'foo': 1, 'bar': 2})
+    rel_bar_foo({row({'bar': 2, 'foo': 1})})
+
+A relation may not contain two rows that are identical, and you will get
+an error if you try to specify two identical rows in a relation literal:
+
+    >>> rel({'foo': 1}, {'foo': 2}, {'foo': 1}, {'foo': 4})
+    Traceback (most recent call last):
+        ...
+    ValueError: Duplicate row: rel_foo.row({'foo': 1}) in row 2 of input
+
+(Remember that Python lists are zero origined.)
+
+It is also an error to specify unlike types in a relation literal.  The type
+of the first row is assumed to be the "correct" type of the relation:
+
+    >>> rel({'foo': 1}, {'foo': 'bar'})        # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: invalid literal for int() with base 10: 'bar'; 'bar' invalid
+        for attribute foo in row 1
+    >>> rel({'foo': 1}, {'foo': 1, 'bar': 2})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 1 attributes, got 2 ({...}) in row 1
+
+The restriction to names that do not start with ``_`` is of course enforced
+also in a relation literal:
+
+    >>> rel({'foo': 1, '_bar': 2})
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid relational attribute name '_bar'
+
+It is valid to specify a relation literal with no attributes (degree zero) and
+no rows (cardinality 0).  Since it is impossible to determine *a priori*
+whether an empty ``dict`` is a type description or a row, we semi-arbitrarily
+declare it to be a type definition signifying no attributes (the rationale is
+that writing ``typename({})`` for the relation type with no attributes is
+consistent with our standard notation for type names).  An empty set is
+unambiguously zero rows, in which case the type defaults to no attributes,
+which it also does if not arguments at all are passed to ``rel``.  That gives
+us three equivalent forms for the relation with no attributes and no rows,
+based on the established semantics plus our arbitrary rule about the meaning
+of an empty dict:
+
+    >>> rel()
+    DumDee({})()
+    >>> rel({})
+    DumDee({})()
+    >>> rel(set())
+    DumDee({})()
+
+We'll discuss ``DumDee`` a bit more later.
+
+We can also write a literal for a relation with no attributes (degree 0) and
+one row with no attributes (cardinality 1).  There is only one way to write
+that literal:
+
+    >>> rel(row())
+    rel_({row({})})
+
 XXX: START HERE  Before proceeding, need tests for row sorting and for the
-various rel error cases, including the duplicate row error from relation.
+remaining rel relation literal error cases.  Oh, yeah, and we need to
+eliminate named types in favor of the standard Relation({header}) naming, and
+therefore make DumDee and rel_ above be Relation({}).
+
+
+Extending Relation Types Into Relations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The most verbose and most general way of creating such a relation instance is
 as follows:

@@ -251,14 +251,15 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                     # This one is a dict, turn it into a row.
                     try:
                         o = self.row(o)
-                    except TypeError as e:
-                        raise TypeError(str(e) + " in row {}".format(i))
+                    except (ValueError, TypeError) as e:
+                        raise type(e)(str(e) + " in row {}".format(i))
                 rows.append(o)
         # One way or another we now have a list of Row objects.
         rowset = set()
-        for r in rows:
+        for i, r in enumerate(rows):
             if r in rowset:
-                raise ValueError("Duplicate row: {!r}".format(r))
+                raise ValueError(
+                    "Duplicate row: {!r} in row {} of input".format(r, i))
             rowset.add(r)
         self._rows_ = rowset
 
