@@ -1,6 +1,5 @@
 from operator import attrgetter
 from collections import defaultdict
-from collections.abc import Mapping, Set
 from itertools import accumulate, repeat
 from dinsd.dbdef import Relation, Dum, Dee, row
 
@@ -16,10 +15,10 @@ def rel(*args, **kw):
     name = body = None
     if len(args)==1:
         arg = args[0]
-        if isinstance(arg, (Mapping, Set)) and not arg:
+        if (hasattr(arg, 'items') or hasattr(arg, 'union')) and not arg:
             # Treat as relation literal
             return Dum
-        if isinstance(arg, set):
+        if not hasattr(arg, 'items'):
             # Relation literal.
             if '__name__' in kw:
                 name = kw.pop('__name__')

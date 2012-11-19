@@ -1,4 +1,3 @@
-from collections.abc import Set
 from operator import attrgetter, itemgetter
 from itertools import zip_longest
 
@@ -103,7 +102,7 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return tuple(sorted(self.__dict__.items()))
 
     def _compare(self, other, method):
-        if not isinstance(other, Row) or self._header__ != other._header_:
+        if not isinstance(other, Row) or self._header_ != other._header_:
             return NotImplemented
         return super()._compare(other, method)
 
@@ -209,24 +208,19 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             # value of an attribute it must be immutable.
             self._rows_ = frozenset(args[0]._rows_)
             return
-        rows = set()
-        if (len(args) == 1 and isinstance(args[0], Set) or
-                hasattr(args[0], 'items') or hasattr(args[0], '_header_')):
-            if isinstance(args[0], Set):
-                args = args[0]
-            for i, o in enumerate(args):
-                if hasattr(o, '_header_'):
-                    if o._header_ != self.header:
-                        raise TypeError("Row header does not match relation header "
-                                        "in row {} (got {!r} for {!r})".format(
-                                        i, o, type(self)))
-                else:
-                    try:
-                        o = self.row(o)
-                    except TypeError as e:
-                        raise TypeError(str(e) + " in row {}".format(i))
-                rows.add(o)
-        else:
+        rows = []
+        first = None
+        if (not hasattr(args[0], 'items') and
+                not hasattr(args[0], 'union') and
+                not hasattr(args[0], '_header_') and
+                hasattr(args[0], '__iter__') and
+                hasattr(args[0], '__len__') and
+                isinstance(next(iter(args[0])), str)):
+            # Tuple form.  Tuple form is a special shorthand, and we only allow
+            # it in argument list form, not single-iterator-argument form.
+            # Furthermore, while the list of arguments could be sourced from a
+            # generator (not that that would be a good idea), the arguments
+            # themselves cannot be.
             attrlist = args[0]
             self._validate_attr_list(attrlist)
             for i, o in enumerate(args[1:], start=1):
@@ -235,10 +229,36 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                         "Expected {} attributes, got {} in row {} for {}".format(
                             self.degree, len(o), i, self.__class__.__name__))
                 try:
-                    rows.add(self.row({k: v for k, v in zip(attrlist, o)}))
+                    rows.append(self.row({k: v for k, v in zip(attrlist, o)}))
                 except TypeError as e:
                     raise TypeError(str(e) + " in row {}".format(i))
-        self._rows_ = rows
+        else:
+            if len(args) == 1 and not (hasattr(args[0], 'items') or
+                                       hasattr(args[0], '_header_')):
+                # Single iterator argument form.
+                args = args[0]
+            # Iterator of dicts and/or rows.
+            for i, o in enumerate(args):
+                if hasattr(o, '_header_'):
+                    # This one is a row.
+                    if o._header_ != self.header:
+                        raise TypeError("Row header does not match relation header "
+                                        "in row {} (got {!r} for {!r})".format(
+                                        i, o, type(self)))
+                else:
+                    # This one is a dict, turn it into a row.
+                    try:
+                        o = self.row(o)
+                    except TypeError as e:
+                        raise TypeError(str(e) + " in row {}".format(i))
+                rows.append(o)
+        # One way or another we now have a list of Row objects.
+        rowset = set()
+        for r in rows:
+            if r in rowset:
+                raise ValueError("Duplicate row: {!r}".format(r))
+            rowset.add(r)
+        self._rows_ = rowset
 
     def _validate_attr_list(self, attrlist):
         if len(attrlist) != self.degree:
@@ -284,7 +304,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         if self._rows_:
             return "{}({{{}}})".format(self.__class__.__name__,
                 ', '.join(repr(row)
-                          for row in sorted(self._rows_, key=attrgetter(*names))))
+                          for row in sorted(self._rows_)))
         return repr(self.__class__) + '()'
 
     def __display__(self, *columns, sort=[]):
