@@ -756,8 +756,7 @@ form above:
     True
 
 We can also write a literal for a relation with no attributes (degree 0) and
-one row with no attributes (cardinality 1).  There is only one way to write
-that literal:
+one row with no attributes (cardinality 1):
 
     >>> rel(row())
     rel({row({})})

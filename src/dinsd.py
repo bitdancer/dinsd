@@ -13,7 +13,7 @@ dbg = lambda *args: print(*args, file=sys.stderr)
 #
 
 
-class RichCompareMixin:
+class _RichCompareMixin:
 
     # Flexible rich compare adapted from recipe by Lenart Regbro.
 
@@ -52,7 +52,7 @@ class RichCompareMixin:
 #
 
 
-class Scaler(RichCompareMixin):
+class Scaler(_RichCompareMixin):
 
     def _cmpkey(self):
         return self.value
@@ -75,10 +75,10 @@ class Scaler(RichCompareMixin):
 #
 
 
-class RowMeta(type):
+class _RowMeta(type):
 
     def __eq__(self, other):
-        if not isinstance(other, RowMeta):
+        if not isinstance(other, _RowMeta):
             return NotImplemented
         return self._header_ == other._header_
 
@@ -86,10 +86,10 @@ class RowMeta(type):
         return super().__hash__()
 
 
-class Row(RichCompareMixin, metaclass=RowMeta):
+class _Row(_RichCompareMixin, metaclass=_RowMeta):
 
     def __init__(self, attrdict):
-        if isinstance(attrdict, Row):
+        if isinstance(attrdict, _Row):
             # We are being called as a type function.
             if self._header_ != attrdict._header_:
                 raise TypeError("Invalid Row type: {!r}".format(attrdict))
@@ -121,12 +121,12 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return tuple(sorted(self.__dict__.items()))
 
     def _compare(self, other, method):
-        if not isinstance(other, Row) or self._header_ != other._header_:
+        if not isinstance(other, _Row) or self._header_ != other._header_:
             return NotImplemented
         return super()._compare(other, method)
 
     def __eq__(self, other):
-        if not isinstance(other, Row):
+        if not isinstance(other, _Row):
             return False
         return self._cmpkey() == other._cmpkey()
 
@@ -161,14 +161,14 @@ class Row(RichCompareMixin, metaclass=RowMeta):
 #
 
 
-class RelationMeta(type):
+class _RelationMeta(type):
 
     def __new__(cls, name, bases, dct):
         attrs = [x for x in dct if not x.startswith('_')]
         header = {name: dct.pop(name) for name in attrs}
         dct['header'] = header
         dct['degree'] = len(attrs)
-        class RowClass(Row):
+        class RowClass(_Row):
             _header_ = header
             _degree_ = len(attrs)
         dct['row'] = RowClass
@@ -187,7 +187,7 @@ class RelationMeta(type):
     #    return len(self._header)
 
     def __eq__(self, other):
-        if not isinstance(other, RelationMeta):
+        if not isinstance(other, _RelationMeta):
             return NotImplemented
         return self.header == other.header
 
@@ -195,7 +195,7 @@ class RelationMeta(type):
         return super().__hash__()
 
 
-class Relation(RichCompareMixin, metaclass=RelationMeta):
+class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
 
     def __init__(self, *args):
         # Several cases: (1) empty relation (2) being called as a type
@@ -206,7 +206,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             # (1) Empty relation.
             self._rows_ = set()
             return
-        if (len(args)==1 and isinstance(args[0], Relation) and
+        if (len(args)==1 and isinstance(args[0], _Relation) and
                 args[0].header == self.header):
             # (2) We were called as a type validation function.  Return an
             # immutable copy, because the only time this happens is when a
@@ -296,12 +296,12 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return self._rows_
 
     def _compare(self, other, method):
-        if not isinstance(other, Relation) or self.header != other.header:
+        if not isinstance(other, _Relation) or self.header != other.header:
             return NotImplemented
         return super()._compare(other, method)
 
     def __eq__(self, other):
-        if not isinstance(other, Relation):
+        if not isinstance(other, _Relation):
             return False
         if self.header != other.header:
             return False
@@ -344,8 +344,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return _display(self, *sorted(self.header))
 
 
-Dum = Relation()
-Dee = Relation({})
+Dum = _Relation()
+Dee = _Relation({})
 
 
 
@@ -362,7 +362,7 @@ def row(*args, **kw):
             [n for n in sorted(kw) if n.startswith('_')][0]))
     dct = {'_header_': {n: type(v) for n, v in kw.items()},
            '_degree_': len(kw)}
-    cls = type('row_' + '_'.join(sorted(kw.keys())), (Row,), dct)
+    cls = type('row_' + '_'.join(sorted(kw.keys())), (_Row,), dct)
     return cls(kw)
 
 
@@ -406,7 +406,7 @@ def rel(*args, **kw):
             r = row(r)
         header = r._header_.copy()
         body = chain([r], iterable)
-    new_rel = type(_make_name('rel', header), (Relation,), header)
+    new_rel = type(_make_name('rel', header), (_Relation,), header)
     return new_rel(body) if body else new_rel
 
 def _make_name(prefix, attrs):
@@ -414,7 +414,7 @@ def _make_name(prefix, attrs):
 
 def _rel(prefix, attr_dict):
     new_Rel_name = _make_name(prefix, attr_dict)
-    return type(new_Rel_name, (Relation,), attr_dict.copy())
+    return type(new_Rel_name, (_Relation,), attr_dict.copy())
 
 
 
@@ -426,7 +426,7 @@ def _rel(prefix, attr_dict):
 def join(*relations):
     if not relations:
         return Dee
-    if len(relations)==1 and not isinstance(relations[0], Relation):
+    if len(relations)==1 and not isinstance(relations[0], _Relation):
         # Assume it is an iterator.
         relations = relations[0]
     joined, *relations = relations
@@ -483,7 +483,7 @@ def _binary_join(first, second):
 def intersect(*relations):
     if not relations:
         return Dee
-    if len(relations)==1 and not isinstance(relations[0], Relation):
+    if len(relations)==1 and not isinstance(relations[0], _Relation):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
@@ -499,7 +499,7 @@ def intersect(*relations):
 def times(*relations):
     if not relations:
         return Dee
-    if len(relations)==1 and not isinstance(relations[0], Relation):
+    if len(relations)==1 and not isinstance(relations[0], _Relation):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
@@ -593,7 +593,7 @@ def extend(relation, **new_attrs):
 def union(*relations):
     if len(relations) == 0:
         return Dum
-    if len(relations)==1 and not isinstance(relations[0], Relation):
+    if len(relations)==1 and not isinstance(relations[0], _Relation):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
@@ -704,7 +704,7 @@ def _display(relation, *columns, sort=[]):
     return '\n'.join(r)
 
 
-class printable(RichCompareMixin):
+class printable(_RichCompareMixin):
 
     def __init__(self, content):
         self.source = content
@@ -767,7 +767,7 @@ def avg(iterator):
 
 
 def summarize(relvar, compvar, _debug=False, **new_attrs):
-    if not isinstance(compvar, Relation):
+    if not isinstance(compvar, _Relation):
         # Assume it is an attribute name list
         compvar = relvar >> compvar
     x = extend(compvar, t_e_m_p=lambda r: compose(relvar, type(compvar)(r)))
