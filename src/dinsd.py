@@ -345,11 +345,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
         return _display(self, *sorted(self.header))
 
 
-class DumDee(Relation):
-    pass
-
-Dum = DumDee()
-Dee = DumDee({})
+Dum = Relation()
+Dee = Relation({})
 
 
 
