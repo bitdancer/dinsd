@@ -1,7 +1,9 @@
-import collections
-import itertools
-import operator
-_imports = {'collections', 'itertools', 'operator'}
+import collections as _collections
+import contextlib as _contextlib
+import itertools as _itertools
+import operator as _operator
+import threading as _threading
+import types as _types
 
 # For debugging only.
 #import sys
@@ -72,7 +74,7 @@ class Scaler(_RichCompareMixin):
 
 
 #
-# Row types (TTM/Tutorial D TUPLE Types)
+# Row _types (TTM/Tutorial D TUPLE Types)
 #
 
 
@@ -153,12 +155,13 @@ class _Row(_RichCompareMixin, metaclass=_RowMeta):
     def _as_locals_(self):
         l = self.__dict__.copy()
         l['r'] = self
+        l.update(_locals[_threading.current_thread].__dict__)
         return l
 
 
 
 #
-# Relation types
+# Relation _types
 #
 
 
@@ -283,7 +286,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
                 raise AttributeError(
                     "{!r} has no attribute {!r}".format(self.__class__, attr))
 
-    # Miscellaneous operators.
+    # Miscellaneous _operators.
 
     def __iter__(self):
         return iter(self._rows_)
@@ -291,7 +294,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
     def __len__(self):
         return len(self._rows_)
 
-    # Comparison operators (see RichCompareMixin).
+    # Comparison _operators (see RichCompareMixin).
 
     def _cmpkey(self):
         return self._rows_
@@ -314,7 +317,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
     def __hash__(self):
         return hash(self._rows_)
 
-    # Infix relational operators.
+    # Infix relational _operators.
 
     def __and__(self, other):                   # &
         return _binary_join(self, other)
@@ -331,7 +334,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
     def __sub__(self, other):                   # -
         return notmatching(self, other)
 
-    # Presentation operators.
+    # Presentation _operators.
 
     def __repr__(self):
         names = sorted(self.header)
@@ -406,7 +409,7 @@ def rel(*args, **kw):
         if not hasattr(r, '_header_'):
             r = row(r)
         header = r._header_.copy()
-        body = itertools.chain([r], iterable)
+        body = _itertools.chain([r], iterable)
     new_rel = type(_make_name('rel', header), (_Relation,), header)
     return new_rel(body) if body else new_rel
 
@@ -460,8 +463,8 @@ def _binary_join(first, second):
             combined_attrs[attr] = typ
     if common_attrs:
         # Build index for the match columns.
-        getter = operator.attrgetter(*common_attrs)
-        index = collections.defaultdict(list)
+        getter = _operator.attrgetter(*common_attrs)
+        index = _collections.defaultdict(list)
         for row in second:
             index[getter(row)].append(row)
         matches = lambda key: index[key]
@@ -564,7 +567,7 @@ def project(relation, attr_names):
 
 def where(relation, selector):
     if isinstance(selector, str):
-        selector = lambda r, s=selector: eval(s, r._as_locals_(), _expn)
+        selector = lambda r, s=selector: eval(s, r._as_locals_(), _all)
     new_rel = type(relation)()
     for row in relation._rows_:
         if selector(row):
@@ -579,7 +582,7 @@ def extend(relation, **new_attrs):
         raise TypeError("Cannot extend empty relation")
     for n, f in new_attrs.items():
         if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, r._as_locals_(), _expn)
+            new_attrs[n] = lambda r, s=f: eval(s, r._as_locals_(), _all)
     attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
@@ -634,7 +637,7 @@ def _matcher(first, second, match):
         if bool(second) == match:   # exclusive or
             new_rel._rows_.update(first._rows_)
         return new_rel
-    getter = operator.attrgetter(*common_attrs)
+    getter = _operator.attrgetter(*common_attrs)
     index = set()
     for row in second:
         index.add(getter(row))
@@ -676,7 +679,7 @@ def display(relation, *columns, **kw):
 
 def _display(relation, *columns, sort=[]):
     toprint = [list(map(_printable, columns))]
-    getter = operator.attrgetter(*columns) if columns else lambda x: x
+    getter = _operator.attrgetter(*columns) if columns else lambda x: x
     # Working around a little Python wart here.
     if len(columns) == 1:
         rows = [(_printable(getter(row)),) for row in relation._rows_]
@@ -688,7 +691,7 @@ def _display(relation, *columns, sort=[]):
     indexes = []
     for c in tosort:
         indexes.append(columns.index(c))
-    sortgetter = operator.itemgetter(*indexes) if indexes else None
+    sortgetter = _operator.itemgetter(*indexes) if indexes else None
     toprint.extend(sorted(rows, key=sortgetter))
     widths = [max([x.width for x in vals]) for vals in zip(*toprint)]
     sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
@@ -701,7 +704,7 @@ def _display(relation, *columns, sort=[]):
     else:
         for row in toprint[1:]:
             r.extend(_tline(parts, widths)
-                     for parts in itertools.zip_longest(*row))
+                     for parts in _itertools.zip_longest(*row))
     r.append(sep)
     return '\n'.join(r)
 
@@ -742,7 +745,7 @@ def _tline(parts, widths):
 
 def compute(relvar, func):
     if isinstance(func, str):
-        func = lambda r, s=func: eval(s, r._as_locals_(), _expn)
+        func = lambda r, s=func: eval(s, r._as_locals_(), _all)
     for row in relvar:
         yield func(row)
 
@@ -756,7 +759,7 @@ def avg(iterator):
     summation.
     """
     c = 0
-    for s, c in itertools.accumulate(zip(iterator, itertools.repeat(1)),
+    for s, c in _itertools.accumulate(zip(iterator, _itertools.repeat(1)),
                                      lambda x, y: (x[0]+y[0], x[1]+y[1])):
         pass
     return 0 if c==0 else s/c
@@ -777,7 +780,7 @@ def summarize(relvar, compvar, _debug=False, **new_attrs):
         print(x)
     for n, f in new_attrs.items():
         if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, {'summary': r.t_e_m_p}, _expn)
+            new_attrs[n] = lambda r, s=f: eval(s, {'summary': r.t_e_m_p}, _all)
         else:
             new_attrs[n] = lambda r, f=f: f(r.t_e_m_p)
     return extend(x, **new_attrs) << {'t_e_m_p'}
@@ -838,18 +841,30 @@ def unwrap(relation, attrname):
 
 
 #
-# Define public namespaces.
+# Namespace management
 #
+
+
+# The bulk of the public API.
 _names = {x for x in globals() if not x.startswith('_')}
-_names -= _imports
 
-# XXX: Temporary expression global namespace.
-expression_namespace = {n: v for n, v in globals().items()
-                             if n in _names}
-_expn = expression_namespace
-_names.add('expression_namespace')
+# Expression global namespace.
+_all = {n: v for n, v in globals().items() if n in _names}
+expression_namespace = _all
 
-# This is useful when playing with relational algebra in the Python shell.  It
-# should be equivalent to the module API namespace.
-__all__ = list(_names)
-del _imports, _names
+
+# 'with ns()' support.
+_locals = _collections.defaultdict(_types.SimpleNamespace)
+
+@_contextlib.contextmanager
+def ns(*args, **kw):
+    ns = _threading.local()
+    ns.__dict__.update(*args, **kw)
+    _locals[_threading.current_thread] = ns
+    yield ns
+    del _locals[_threading.current_thread]
+
+
+# "import *" support: use this only when playing with relational algebra in the
+# Python shell.
+__all__ = list(_names) + ['ns', 'expression_namespace']

@@ -75,8 +75,8 @@ revealed:
 It is otherwise as close to *D* as I understood how to make it.
 
 
-About the Namespace
-~~~~~~~~~~~~~~~~~~~
+About the Namespace(s)
+~~~~~~~~~~~~~~~~~~~~~~
 
 In Python terms, dinsd consists of a single module (namespace) named
 ``dinsd``.  We could access all of dinsd through this namespace, using
@@ -96,18 +96,23 @@ the Python shell, it can be very useful to do ``from dinsd import *``.  Per
 best practices for Python programming this is the *only* time you should use
 that form.
 
-Currently dinsd also defines a separate namespace that is used during
-expression evaluation (much more on that below).  It is named
-``expression_namespace``, and starts out containing the same names and values
-as that imported by ``from dinsd import *``.  We can't full test this in this
-test document, but we can at least check that the set of names in ``__all__``
-(which is what determines what ``import *`` imports) and the set of names in
-``expression_namespace`` are the same:
+dinsd also defines a separate namespace that is used during expression
+evaluation (much more on that below).  It is named ``expression_namespace``,
+and starts out containing the same names and values as that imported by ``from
+dinsd import *``.  We can't fully test this in this test document, but we can
+at least check that the set of names in ``__all__`` (which is what determines
+what ``import *`` imports) and the set of names in ``expression_namespace``
+are initially the same, except for ``expression_namespace`` itself and
+the ``ns`` context manager (more on that when we talk about expressions).
 
     >>> from dinsd import __all__, expression_namespace
     >>> ({n for n in __all__} - {n for n in expression_namespace} == 
-    ...     {'expression_namespace'})
+    ...     {'expression_namespace', 'ns'})
     True
+
+The ``expression_namespace`` is a global registry, so only truly global
+objects such as application created types and functions should be registered
+in it.
 
 
 
@@ -309,9 +314,8 @@ To prove that this straightforward Python implementation is correct:
     TypeError: unorderable types: SID() > CID()
 
 In dinsd there is one more thing we need to do with user defined types: we
-need to register them in the ``expression_namespace``.  This allows them
-to be used in functions expressed using a string value, about which more
-later.
+need to register them in the ``expression_namespace``.  This allows them to be
+used in string valued expressions, about which more later.
 
     >>> from dinsd import expression_namespace
     >>> expression_namespace['SID'] = SID
@@ -713,8 +717,10 @@ a generator:
 It is possible to define a single row literal (this may seem obvious,
 but it needs to be tested since it is an edge case):
 
-    >>> rel({'foo': 1, 'bar': 2})
-    rel({row({'bar': 2, 'foo': 1})})
+    >>> rel({'foo': 1, 'bar': CID('C1')})
+    rel({row({'bar': CID('C1'), 'foo': 1})})
+    >>> rel(row(student_id=SID('S1')))
+    rel({row({'student_id': SID('S1')})})
 
 A relation may not contain two rows that are identical, and you will get
 an error if you try to specify two identical rows in a relation literal:
@@ -2587,27 +2593,25 @@ table, but the complexity is not warranted by the minimal use that such a
 facility would be likely to get.
 
 Here is the simpler, direct equivalent of the expression used for this table
-in the AIRDT example 5.6:
+in the AIRDT example 5.6, using dinsd's ``with ns(...)`` support to make
+``exam_marks`` temporarily available in the expression namespace:
 
-    >>> expression_namespace['exam_marks'] = exam_marks
-    >>> x == extend(courses >> {'course_id'},
-    ...          exam_result="compose(rel(course_id=CID)("
-    ...                                     "{'course_id': course_id}),"
-    ...                               "exam_marks)")
+    >>> from dinsd import ns
+    >>> with ns(exam_marks=exam_marks):
+    ...     x == extend(courses >> {'course_id'}, exam_result=(
+    ...             "compose(rel(row(course_id=course_id)), exam_marks)"))
     True
 
-(XXX: having to add exam_marks to the namespace will get dealt with in the
-next refactor.)
+If ``exam_marks`` and ``courses`` were both part of the same database this
+would happen automatically, but we haven't covered creating database yet, so
+for now we need to use ``with``.
 
-This is a bit ugly...it looks better if we break it up a bit.  And we can
-define the ``rel`` outside the expression rather than creating a new
-relation for each row:
-
-    >>> expression_namespace['CID_rel'] = rel(course_id=CID)
-    >>> exam_result_exp = ("compose(CID_rel({'course_id': course_id}),"
-    ...                           "exam_marks)")
-    >>> x == extend(courses >> {'course_id'}, exam_result=exam_result_exp)
-    True
+Note that while dinsd's ``with ns(...)`` shares some similarities
+with *Tutorial D*'s ``WITH`` expression, its purpose is subtly different.  We can
+achieve the affect of *Tutorial D*'s ``WITH`` in Python simply by assigning an
+expression to a name.  But those names are only available in the full *Python*
+context...to *also* make them available in the special evaluation environment
+of a string-valued function expression, we use ``with ns(...)``.
 
 Having successfully written first expression above, and successfully
 translated example 5.6, I have to admit that I had no clue what AIRDT's
@@ -2654,14 +2658,15 @@ Also take note that my convention of using intermediate variables to simplify
 complex expressions is exactly reason AIRDT uses the *Tutorial D* ``WITH``
 expression in these examples.  In this case I chose to only split it for
 printing, but if we follow the pattern from AIRDT more closely we end up
-with this:
+with this (using our ``with`` to put ``exam_marks`` in the expression
+namespace and simple name assignment to do what the *Tutorial D* ``WITH``
+does in the example from the book):
 
-    >>> c_er2 = extend(exam_marks >> {'course_id'},
-    ...          exam_result=(
-    ...             "compose(rel(course_id=CID)({'course_id': course_id}),"
-    ...                     "exam_marks)"))
+    >>> with ns(exam_marks=exam_marks):
+    ...     c_er2 = extend(exam_marks >> {'course_id'}, exam_result=(
+    ...               "compose(rel(row(course_id=course_id)), exam_marks)"))
     >>> x = extend(c_er2,
-    ...          avg_mark="round(avg(compute(exam_result, 'mark')), 2)")
+    ...            avg_mark="round(avg(compute(exam_result, 'mark')), 2)")
     >>> x = x << {'exam_result'}
     >>> x == av
     True
@@ -2669,23 +2674,6 @@ with this:
 At least, I think that's what the AIRDT example is doing.  One benefit of
 computing an intermediate relation is that we are able to switch back
 to string expressions.
-
-In the examples above you can see several different wrapping styles attempting
-to make the expressions readable, but when the expressions get long there is
-often no good way to do it.  We can improve this one, though:
-
-    >>> expression_namespace['r_cid'] = rel(course_id=CID)
-    >>> c_er = "compose(r_cid({'course_id': course_id}), exam_marks)"
-    >>> x = extend(exam_marks >> {'course_id'}, exam_result=c_er)
-    >>> c_avg = "round(avg(compute(exam_result, 'mark')), 2)"
-    >>> x = extend(x, avg_mark=c_avg) << {'exam_result'}
-    >>> x == av
-    True
-
-It's a tossup which is easier to follow, I think.  It is interesting that I
-felt the need to resort to Hungarian Notation for the relation and expression
-variables.  It seems like there is an irreducible minimum of complexity in
-relational algebra expressions.
 
 
 summarize
@@ -2937,9 +2925,9 @@ that iterator.  That is, it acts as an aggregation function.  The built-in
 We can also do this using a string valued expression, by using the special
 variable ``r`` to access the entire row:
 
-    >>> expression_namespace['r_type'] = type(results)
-    >>> t_func = "times(exam_results, r_type(r) << {'exam_results'})"
-    >>> exam_marks == union(compute(extend(results, t=t_func), 't'))
+    >>> with ns(results=results):
+    ...     t_func = "times(exam_results, type(results)(r) << {'exam_results'})"
+    ...     exam_marks == union(compute(extend(results, t=t_func), 't'))
     True
 
 It is an error to pass ``ungroup`` a column not in the relation:
@@ -3249,14 +3237,17 @@ result:
 
 I wonder why he didn't use that formulation?
 
-And here is the dinsd formulation based on example 5.17:
+And here is the dinsd formulation based on example 5.17, using a slightly
+different form of the ``ns`` context manager:
 
-    >>> expression_namespace['enrollment'] = is_called & is_enrolled_on
-    >>> expression_namespace['r_sid'] = type(is_called >> {'student_id'})
-    >>> print(where(is_called, (            # doctest: +NORMALIZE_WHITESPACE
-    ...         "compose(enrollment, r_sid(dict(student_id=student_id))) <= "
-    ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
-    ...             "<< {'mark'}")))
+    >>> with ns() as ns:
+    ...     ns.exam_marks = exam_marks
+    ...     ns.enrollment = is_called & is_enrolled_on
+    ...     ns.r_sid = type(is_called >> {'student_id'})
+    ...     print(where(is_called, (           # doctest: +NORMALIZE_WHITESPACE
+    ...            "compose(enrollment, r_sid(dict(student_id=student_id))) <= "
+    ...            "compose(exam_marks, r_sid(dict(student_id=student_id))) "
+    ...                "<< {'mark'}")))
     Traceback (most recent call last):
         ...
     TypeError: unorderable types: rel({'course_id': CID, 'name': str})() <=
