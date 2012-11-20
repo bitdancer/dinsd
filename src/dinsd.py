@@ -173,6 +173,8 @@ class RelationMeta(type):
             _degree_ = len(attrs)
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
+        name = "rel({{{}}})".format( ', '.join([repr(n)+': '+(v.__name__)
+                                    for n, v in sorted(header.items())]))
         return type.__new__(cls, name, bases, dct)
 
     # XXX: This doesn't work, punt on it for now.
@@ -191,11 +193,6 @@ class RelationMeta(type):
 
     def __hash__(self):
         return super().__hash__()
-
-    def __repr__(self):
-        return "rel({{{}}})".format(
-            ', '.join([repr(n)+': '+(v.__name__)
-                       for n, v in sorted(self.header.items())]))
 
 
 class Relation(RichCompareMixin, metaclass=RelationMeta):
@@ -234,9 +231,12 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._validate_attr_list(attrlist)
             for i, o in enumerate(args[1:], start=1):
                 if len(o) != self.degree:
-                    raise TypeError( "Expected {} attributes, got {} in row {} "
-                        "for relation type {}".format(
-                            self.degree, len(o), i, repr(self.__class__)))
+                    raise TypeError("Expected {} attributes, got {} in row {} "
+                                    "for {}".format(
+                                        self.degree,
+                                        len(o),
+                                        i,
+                                        repr(self.__class__)))
                 try:
                     rows.append(self.row({k: v for k, v in zip(attrlist, o)}))
                 except TypeError as e:
@@ -252,8 +252,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                     # This one is a row.
                     if o._header_ != self.header:
                         raise TypeError("Row header does not match relation header "
-                                        "in row {} (got {!r} for relation type "
-                                        "{!r})".format(i, o, type(self)))
+                                        "in row {} (got {!r} for {!r})".format(
+                                            i, o, type(self)))
                 else:
                     # This one is a dict, turn it into a row.
                     try:
@@ -273,15 +273,14 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
     def _validate_attr_list(self, attrlist):
         if len(attrlist) != self.degree:
             raise TypeError("Expected {} attributes, got {} ({}) in "
-                    "header row for relation type {}".format(
-                    self.degree,
-                    len(attrlist), sorted(attrlist),
-                    repr(self.__class__)))
+                            "header row for {}".format(
+                                self.degree,
+                                len(attrlist), sorted(attrlist),
+                                repr(self.__class__)))
         for attr in attrlist:
             if attr not in self.header:
                 raise AttributeError(
-                    "Relation type {!r} has no attribute {!r}".format(
-                         repr(self.__class__), attr))
+                    "{!r} has no attribute {!r}".format(self.__class__, attr))
 
     # Miscellaneous operators.
 
@@ -339,7 +338,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             return "rel({{{}}})".format(
                 ', '.join(repr(row)
                           for row in sorted(self._rows_)))
-        return repr(self.__class__) + '()'
+        return self.__class__.__name__ + '()'
 
     def __str__(self):
         return _display(self, *sorted(self.header))
@@ -368,30 +367,28 @@ def row(*args, **kw):
 
 
 def rel(*args, **kw):
-    # Three possibilities.  (1) no arguments or keywords, or a single argument
-    # that is an empty dictionary or set: a relation literal representing Dum.
-    # (2) a single dictionary argument whose values are all types, possibly
-    # with additional keyword arguments whose values are types: a relation
-    # declaration.  (3) an iterable or a list of arguments consisting of
-    # dictionary and/or Row objects all of the same type: a relation literal
-    # whose type is determined by the type of the first item in the iterator or
-    # the first argument in the argument list.
+    # For reasons that derive from trying to imitate Tutorial D and may not be
+    # the best idea, there are two overloaded cases here:  defining a type, and
+    # relation literals.  Type definition is characterized by a single,
+    # possibly empty, dictionary argument whose values are all types, possibly
+    # with additional keyword arguments whose values are types. A relation
+    # literal is everything else: an iterable or a list of arguments consisting
+    # of dictionary and/or Row objects all of the same type: the type of the
+    # literal is determined by the type of the first item in the iterator or
+    # the first argument in the argument list.  If there are no arguments or
+    # keywords, or a single argument that is an empty iterator, then we have a
+    # relation literal representing Dum.
     body = None
-    if (not args and not kw) or (len(args) == 1 and
-            (hasattr(args[0], 'items') or hasattr(args[0], 'union'))
-            and not args[0]):
-        # (1) Relation literal representing Dum.
-        return Dum
     if (not args and kw or len(args) == 1 and hasattr(args[0], 'values') and
             all(isinstance(v, type) for v in args[0].values())):
-        # (2) Relation type declaration.
+        # Relation type declaration.
         header = args[0].copy() if args else {}
         header.update(kw)
         if any(n.startswith('_') for n in header):
             raise ValueError("Invalid relational attribute name {!r}".format(
                 [n for n in sorted(header) if n.startswith('_')][0]))
     else:
-        # (3) Relation literal form.
+        # Relation literal form.
         if kw:
             raise TypeError("keywords attributes not valid in relation "
                             "literal form of rel call")
@@ -400,7 +397,11 @@ def rel(*args, **kw):
             # Single argument iterator
             args = args[0]
         iterable = iter(args)
-        r = next(iterable)
+        try:
+            r = next(iterable)
+        except StopIteration:
+            # Empty iterator == relation literal for Dum.
+            return Dum
         if not hasattr(r, '_header_'):
             r = row(r)
         header = r._header_.copy()
@@ -446,7 +447,7 @@ def _binary_join(first, second):
             if typ != combined_attrs[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
                     "with different type (first: {}, second: {} found "
-                    "in joined relations with type names {} and {}".format(
+                    "in joined relations with types {} and {}".format(
                         attr,
                         combined_attrs[attr],
                         typ,
@@ -613,7 +614,7 @@ def _common_attrs(first, second):
             if typ != first.header[attr]:
                 raise TypeError("Duplicate attribute name ({!r}) "
                     "with different type (first: {}, second: {} "
-                    "found in match relation (relation type names "
+                    "found in match relation (relation types "
                     "are {} and {})".format(
                         attr,
                         first.header[attr],

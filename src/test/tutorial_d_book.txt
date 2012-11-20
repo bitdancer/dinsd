@@ -330,7 +330,9 @@ as its result:
 
     >>> x = rel({'student_id': SID, 'name': str, 'course_id': CID})
     >>> x 
-    rel({'course_id': CID, 'name': str, 'student_id': SID})
+    <class 'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
+
+(Recall that extension types in Python are defined by classes.)
 
 In Python, dictionaries are unordered, and the keys of a dictionary are a set
 (that is, no two keys may be equal), so this declaration fully satisfies
@@ -351,7 +353,7 @@ The order does matter in this case:
     >>> x == y
     False
     >>> y
-    rel({'course_id': CID, 'name': int, 'student_id': SID})
+    <class 'dinsd.rel({'course_id': CID, 'name': int, 'student_id': SID})'>
 
 There is an alternate way to declare relations in dinsd that *will* raise an
 error if keys are duplicated, and that is to use the Python keyword syntax to
@@ -727,23 +729,31 @@ also in a relation literal:
     ValueError: Invalid relational attribute name '_bar'
 
 It is valid to specify a relation literal with no attributes (degree zero) and
-no rows (cardinality 0).  Since it is impossible to determine *a priori*
-whether an empty ``dict`` is a type description or a row, we semi-arbitrarily
-declare it to be a type definition signifying no attributes (the rationale is
-that writing ``typename({})`` for the relation type with no attributes is
-consistent with our standard notation for type names).  An empty set is
-unambiguously zero rows, in which case the type defaults to no attributes,
-which it also does if not arguments at all are passed to ``rel``.  That gives
-us three equivalent forms for the relation with no attributes and no rows,
-based on the established semantics plus our arbitrary rule about the meaning
-of an empty dict:
+no rows (cardinality 0).  Given that we are allowing a plain dictionary to
+represent a row, there is a syntactic ambiguity in the ``rel`` notation: is
+``rel()`` the degree 0 cardinality 0 type, or an instance of a relation of
+that type?  The same question applies to ``rel({})``.  Because our type name
+notation uses ``rel({})`` to represent the degree zero cardinality zero type,
+we resolve the ambiguity by declaring that ``rel({})`` returns that type:
+
+    >>> rel({})
+    <class 'dinsd.rel({})'>
+
+while ``rel()`` returns an instance of that type:
 
     >>> rel()
     rel({})()
-    >>> rel({})
-    rel({})()
-    >>> rel(set())
-    rel({})()
+
+We could also resolve the ambiguity by not allowing an unadorned dictionary to
+represent a row.  There are arguments both in favor and against, and I won't
+know which one weighs more with me until I've actually coded an application in
+dinsd, so for the moment we have the situation described above.
+
+Note that passing any empty iterator to ``rel`` is equivalent to the second
+form above:
+
+    >>> rel() == rel(set()) == rel([]) == rel(tuple())
+    True
 
 We can also write a literal for a relation with no attributes (degree 0) and
 one row with no attributes (cardinality 1).  There is only one way to write
@@ -753,9 +763,7 @@ that literal:
     rel({row({})})
 
 XXX: START HERE  Before proceeding, need tests for row sorting and for the
-remaining rel relation literal error cases.  Oh, yeah, and we need to
-eliminate named types in favor of the standard Relation({header}) naming, and
-therefore make DumDee and rel_ above be Relation({}).
+remaining rel relation literal error cases.
 
 
 Extending Relation Types Into Relations
@@ -984,15 +992,15 @@ shorthand, and additionally reports which row is in error:
     Traceback (most recent call last):
         ...
     TypeError: Expected 3 attributes, got 2 (['course_id', 'name']) in header
-        row for relation type rel({'course_id': CID, 'name': str,
-        'student_id': SID})
+        row for <class 'dinsd.rel({'course_id': CID, 'name': str,
+        'student_id': SID})'>
     >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
     ...              ('course_id', 'name', 'student_id'),
     ...              ('C1', 'Anne'))
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 2 in row 1 for relation type
-        rel({'course_id': CID, 'name': str, 'student_id': SID})
+    TypeError: Expected 3 attributes, got 2 in row 1 for <class
+        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
     >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
     ...               ('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne', 'S1'),
@@ -1000,16 +1008,16 @@ shorthand, and additionally reports which row is in error:
     ...               )
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 4 in row 2 for relation type
-        rel({'course_id': CID, 'name': str, 'student_id': SID})
+    TypeError: Expected 3 attributes, got 4 in row 2 for <class
+        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
     >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
     ...               ('course_id', 'name', 'foo'),
     ...               ('C1', 'Anne', 'S1'),
     ...               )
     Traceback (most recent call last):
         ...
-    AttributeError: Relation type "rel({'course_id': CID, 'name': str,
-        'student_id': SID})" has no attribute 'foo'
+    AttributeError: <class 'dinsd.rel({'course_id': CID, 'name': str,
+        'student_id': SID})'> has no attribute 'foo'
     >>> IsEnrolledOn(                   # doctest: +NORMALIZE_WHITESPACE
     ...               ('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne', 'S1'),
@@ -1054,8 +1062,8 @@ associated type.  We'll define a throwaway type for this:
     Traceback (most recent call last):
         ...
     TypeError: Row header does not match relation header in row 0 (got
-        row({'name': 'Anne', 'student_id': SID('S1')}) for relation type
-        rel({'course_id': CID, 'name': str, 'student_id': SID}))
+        row({'name': 'Anne', 'student_id': SID('S1')}) for <class
+        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>)
     >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
     ...     Foo.row({'student_id': SID('S1'), 'name': 'Anne'}),
@@ -1063,8 +1071,8 @@ associated type.  We'll define a throwaway type for this:
     Traceback (most recent call last):
         ...
     TypeError: Row header does not match relation header in row 1 (got
-        row({'name': 'Anne', 'student_id': SID('S1')}) for relation type
-        rel({'course_id': CID, 'name': str, 'student_id': SID}))
+        row({'name': 'Anne', 'student_id': SID('S1')}) for <class
+        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>)
 
 By the way, ``Row``s and dictionaries can be mixed:
 
@@ -1239,8 +1247,8 @@ we cannot join them:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class 'str'>, second: <class '__main__.SID'> found in joined
-        relations with type names rel({'name': str, 'student_id': str}) and
-        rel({'course_id': CID, 'student_id': SID})
+        relations with types <class 'dinsd.rel({'name': str, 'student_id':
+        str})'> and <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
 
 An error like this in a multi-join also indicates in which argument the error
 was detected:
@@ -1251,9 +1259,9 @@ was detected:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in joined
-        relations with type names rel({'course_id': CID, 'name': str,
-        'student_id': SID}) and rel({'name': str, 'student_id': str})
-        (error detected while processing argument 2)
+        relations with types <class 'dinsd.rel({'course_id': CID, 'name': str,
+        'student_id': SID})'> and <class 'dinsd.rel({'name': str,
+        'student_id': str})'> (error detected while processing argument 2)
 
 In this error message you also get a peak at the names that are used for the
 automatically generated ``Relation`` types used for the ``join`` result: a
@@ -2050,8 +2058,8 @@ It is an error for match columns with the same name to have different types.
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in
-         match relation (relation type names are rel({'name': str,
-         'student_id': SID}) and rel({'student_id': str}))
+         match relation (relation types are <class 'dinsd.rel({'name': str,
+         'student_id': SID})'> and <class 'dinsd.rel({'student_id': str})'>)
 
 minus
 ~~~~~
@@ -3139,22 +3147,26 @@ comparable:
 
     >>> r1 == is_enrolled_on
     False
-    >>> r1 < is_enrolled_on
+    >>> r1 < is_enrolled_on                 # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() < rel_course_id_student_id()
-    >>> r1 <= is_enrolled_on
+    TypeError: unorderable types: rel({'bar': int, 'foo': int})() <
+        rel({'course_id': CID, 'student_id': SID})()
+    >>> r1 <= is_enrolled_on                # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() <= rel_course_id_student_id()
-    >>> r1 > is_enrolled_on
+    TypeError: unorderable types: rel({'bar': int, 'foo': int})() <=
+        rel({'course_id': CID, 'student_id': SID})()
+    >>> r1 > is_enrolled_on                 # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() > rel_course_id_student_id()
-    >>> r1 >= is_enrolled_on
+    TypeError: unorderable types: rel({'bar': int, 'foo': int})() >
+        rel({'course_id': CID, 'student_id': SID})()
+    >>> r1 >= is_enrolled_on                # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() >= rel_course_id_student_id()
+    TypeError: unorderable types: rel({'bar': int, 'foo': int})() >=
+        rel({'course_id': CID, 'student_id': SID})()
 
 In preparation for our next example, we'll add a course for a student that
 does not have a corresponding mark in ``exam_marks``:
@@ -3223,13 +3235,14 @@ And here is the dinsd formulation based on example 5.17:
 
     >>> expression_namespace['enrollment'] = is_called & is_enrolled_on
     >>> expression_namespace['r_sid'] = type(is_called >> {'student_id'})
-    >>> print(where(is_called, (
+    >>> print(where(is_called, (            # doctest: +NORMALIZE_WHITESPACE
     ...         "compose(enrollment, r_sid(dict(student_id=student_id))) <= "
     ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
     ...             "<< {'mark'}")))
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: project_course_id_name() <= project_course_id()
+    TypeError: unorderable types: rel({'course_id': CID, 'name': str})() <=
+        rel({'course_id': CID})()
 
 Hmm.  Composing enrollment gives us ``course_id`` and ``name``.  Composing
 ``exam_marks`` gives us ``course_id`` and ``marks``... and we then get
