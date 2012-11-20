@@ -82,7 +82,7 @@ In Python terms, dinsd consists of a single module (namespace) named
 ``dinsd``.  We could access all of dinsd through this namespace, using
 a single import:
 
-    >>> from dinsd import dbdef
+    >>> import dinsd
 
 However, it will be much more convenient for this document to use the various
 names without referencing them from the ``dinsd`` namespace, so we will import
@@ -205,7 +205,8 @@ define a total ordering of the values, as required by TTM.
 Wee can define the ``SID`` and ``CID`` types that are introduced in section
 2.8 (page 42 of my copy of AIRDT) as follows:
 
-    >>> class ID(dbdef.Scaler):
+    >>> from dinsd import Scaler
+    >>> class ID(Scaler):
     ...
     ...     def __init__(self, id):
     ...         if isinstance(id, self.__class__):
@@ -293,7 +294,7 @@ need to register them in the ``expression_namespace``.  This allows them
 to be used in functions expressed using a string value, about which more
 later.
 
-    >>> from dinsd.op import expression_namespace
+    >>> from dinsd import expression_namespace
     >>> expression_namespace['SID'] = SID
     >>> expression_namespace['CID'] = CID
 
@@ -322,7 +323,7 @@ With those preliminaries out of the way, the dinsd version of the above
 (anonymous) type declaration looks very similar, but uses Python's existing
 syntax:
 
-    >>> from dinsd.op import rel
+    >>> from dinsd import rel
     >>> x = rel({'student_id': SID, 'name': str, 'course_id': CID})
     >>> x                                   # doctest: +NORMALIZE_WHITESPACE
     rel_course_id_name_student_id({'course_id': CID, 'name': str,
@@ -417,7 +418,7 @@ There is also a third way to define a relation, which is the obvious way
 to define a *named* relation, and that is to use Python's class declaration
 syntax, subclassing from the special base class ``Relation``.
 
-    >>> from dinsd.dbdef import Relation
+    >>> from dinsd import Relation
     >>> class IsEnrolledOn(Relation):
     ...     student_id = SID
     ...     name = str
@@ -516,7 +517,7 @@ took me an inordinately long time to understand that the above is *implicitly
 type* by the names of its attributes and the type of its concrete values.
 Once I figured that out, though, it was simple to support it in dinsd:
 
-    >>> from dinsd.dbdef import row
+    >>> from dinsd import row
     >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'})
     >>> x
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
@@ -821,7 +822,7 @@ that it is possible to infer the correct header for a row (TTM tuple) from
 its attribute names and the types of its values.  dinsd supports this as well,
 through the ``row`` function:
 
-    >>> x = dbdef.row({'student_id': SID('S1'), 'course_id': CID('C1'),
+    >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'),
     ...           'name': 'Anne'})
     >>> x
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
@@ -841,7 +842,7 @@ Just like in *Tutorial D*, when you write a generic ``row`` declaration,
 you *must* use the exact type for the attribute values.  Otherwise you
 end up with a row with a different type:
 
-    >>> z = dbdef.row({'course_id': 'C1', 'name': 'Anne', 'student_id': 'S1'})
+    >>> z = row({'course_id': 'C1', 'name': 'Anne', 'student_id': 'S1'})
     >>> z == y
     False
 
@@ -1079,7 +1080,7 @@ dictionary form:
 To test the errors in the row form, we need a second relation and its
 associated type.  We'll define a throwaway type for this:
 
-    >>> class Foo(dbdef.Relation):
+    >>> class Foo(Relation):
     ...     student_id = SID
     ...     name = str
     >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
@@ -1116,20 +1117,12 @@ By the way, ``Row``s and dictionaries can be mixed:
 Relational Operators
 --------------------
 
-Analogous to how the classes used for defining row and relation types are
-collected into the dinsd ``dbdef`` namespace, the methods used to define
-various relational operators are defined in their own namespace, in this case
-named ``op``.  It is annoying to type ``op.`` in front of the operators,
-though, since we type them much more often than the dbdef class names.
-So we'll import each operator at the start of the section discussing it.
-
-
 Example Relations
 ~~~~~~~~~~~~~~~~~
 
 Here are the two relations used in the examples in Chapter 4 of AIRDT:
 
-    >>> class IsCalled(dbdef.Relation):
+    >>> class IsCalled(Relation):
     ...     student_id = SID
     ...     name = str
     >>> is_called = IsCalled(
@@ -1150,7 +1143,7 @@ Here are the two relations used in the examples in Chapter 4 of AIRDT:
     | Cindy    | S3         |
     | Devinder | S4         |
     +----------+------------+
-    >>> class IsEnrolledOn(dbdef.Relation):
+    >>> class IsEnrolledOn(Relation):
     ...     student_id = SID
     ...     course_id = CID
     >>> is_enrolled_on = IsEnrolledOn(
@@ -1204,7 +1197,7 @@ display
 because it is useful in the examples, and it is located in the ``op``
 namespace.
 
-    >>> from dinsd.op import display
+    >>> from dinsd import display
 
 The value returned by ``display`` is very similar to the value returned
 by turning a relation in to a string, except that we can control the
@@ -1236,7 +1229,7 @@ we can print the relations in the same column order that is used in AITDM:
 join
 ~~~~
 
-    >>> from dinsd.op import join
+    >>> from dinsd import join
 
 Here is the straightforward ``join`` of the two tables above:
 
@@ -1284,7 +1277,7 @@ On page 93 there is a discussion of cases where we *can't* perform a join.  In
 particular, if two tables have columns with the same name but different types,
 we cannot join them:
 
-    >>> class PermissiveIds(dbdef.Relation):
+    >>> class PermissiveIds(Relation):
     ...     student_id = str
     ...     name = str
     >>> permissive_is_called = PermissiveIds(
@@ -1363,7 +1356,7 @@ We also define a monadic join to simply return the argument:
 intersect
 ~~~~~~~~~
 
-    >>> from dinsd.op import intersect
+    >>> from dinsd import intersect
 
 This is really a special case of ``join``: the case where all of the
 attributes of the two relations being joined are the same.  It is
@@ -1395,7 +1388,7 @@ attributes:
 times
 ~~~~~
 
-    >>> from dinsd.op import times
+    >>> from dinsd import times
 
 Another special case of ``join``.  I'm not as fond of this operator name, but
 I can't think of a better one.  In this case, there are *no* attributes in
@@ -1405,7 +1398,7 @@ product of the two sets of values.
 Use cases for this are not common, so we won't even try to come up with a
 sensible example:
 
-    >>> class Foo(dbdef.Relation):
+    >>> class Foo(Relation):
     ...     bar = str
     >>> foo = Foo(('bar',), ('fizz',), ('gin',))
     >>> print(times(last_year, foo))
@@ -1438,7 +1431,7 @@ two relations:
     | course_id | student_id |
     +-----------+------------+
     +-----------+------------+
-    >>> class Bar(dbdef.Relation):
+    >>> class Bar(Relation):
     ...     foo = str
     >>> bar = Bar(('foo',), ('gin',), ('fiz',))
     >>> print(times(last_year, bar, foo))
@@ -1463,7 +1456,7 @@ two relations:
 rename
 ~~~~~~
 
-    >>> from dinsd.op import rename
+    >>> from dinsd import rename
 
 This is operator is not one discussed in the original literature on the
 relational algebra (according to AITDM), but is needed for certain logical
@@ -1585,7 +1578,7 @@ because we have to have a name for our implementation so we might as well
 expose it and thus allow it to be used in functional as well as operator
 style.
 
-    >>> from dinsd.op import project
+    >>> from dinsd import project
 
 ``project`` takes as its argument a set of attribute names, and returns a
 relation containing just those attributes (and the corresponding values):
@@ -1631,7 +1624,7 @@ implementation.)
 
 Here is the same thing using the functional notation:
 
-    >>> from dinsd.op import all_but
+    >>> from dinsd import all_but
     >>> same_name == project(shared_name, all_but({'name'}))
     True
 
@@ -1724,9 +1717,9 @@ practice has quickly become to refer to them as ``Dum`` (or ``DUM``) and
 capitalization for the analogous logical constants``True`` and ``False``.
 
 We define these constants, which are instances of an otherwise not too useful
-``Relation`` named ``DumDee``, in the ``dbdef`` module:
+``Relation`` named ``DumDee``:
 
-    >>> from dinsd.dbdef import Dum, Dee
+    >>> from dinsd import Dum, Dee
 
 ``Dum`` is a relation with no attributes and no values:
 
@@ -1767,7 +1760,7 @@ the edge cases of various relational operators.
 
 Note that unlike Python's ``True`` and ``False``, which are singletons, there
 may be other relation instances equivalent to ``Dum`` and ``Dee`` besides the
-two defined in ``dbdef``.  Conceptually they are the "same" relation, but in
+two defined as constants.  Conceptually they are the "same" relation, but in
 Python object terms they may be different objects:
 
     >>> is_called >> {} is Dee
@@ -1795,7 +1788,7 @@ could have used it in a few examples up above.
 So, the dinsd way of dynamically creating a relation definition and a single
 instance of that definition at the same time is ``rel``:
 
-    >>> from dinsd.op import rel
+    >>> from dinsd import rel
     >>> print(rel(name=str, sid=SID)(('name', 'sid'), ('Boris', 'S1')))
     +-------+-----+
     | name  | sid |
@@ -1849,7 +1842,7 @@ where
 I'm don't quite understand how ``where`` is a part of the relational algebra,
 but there is no denying its usefulness.
 
-    >>> from dinsd.op import where
+    >>> from dinsd import where
 
 Example 4.7 on page 105 looks like this:
 
@@ -1945,7 +1938,7 @@ This operator allows us to create a new relation that extends an existing
 relation by performing a computation on the attributes of the initial
 relation.
 
-    >>> from dinsd.op import extend
+    >>> from dinsd import extend
 
 Here is the expression that results in the example in figure 4.10 on pages
 109 and 109:
@@ -2001,7 +1994,7 @@ operator, but is restricted to being an operator on relations whose
 types are equal.  dinsd, like *Tutorial D*, provides ``union`` both
 as a function and as an operator.  In dinsd the operator is ``|``.
 
-    >>> from dinsd.op import union
+    >>> from dinsd import union
 
 We compute example 4.9 on page 111 thusly:
 
@@ -2067,7 +2060,7 @@ we approximately follow the *Tutorial D* naming for this function.  Since
 it is the more general of the two difference functions (``minus`` and
 ``notmatching``), we also provide it as the operator ``-``.
 
-    >>> from dinsd.op import notmatching
+    >>> from dinsd import notmatching
 
 Here is example 4.11 from page 115:
 
@@ -2121,7 +2114,7 @@ The ``minus`` operator is a subset of ``notmatching``, where the two
 relations must have exactly the same columns, meaning that only exact
 matches are removed.
 
-    >>> from dinsd.op import minus
+    >>> from dinsd import minus
     >>> anne = rel(student_id=SID, name=str)(dict(student_id='S1', name='Anne'))
     >>> print(minus(is_called, anne))
     +----------+------------+
@@ -2155,18 +2148,18 @@ Exercise 2:
     ...         if isinstance(value, date):
     ...             return value
     ...         return super().__new__(cls, *value)
-    >>> class Cust(dbdef.Relation):
+    >>> class Cust(Relation):
     ...     c_no = str
     ...     discount = float
-    >>> class Orders(dbdef.Relation):
+    >>> class Orders(Relation):
     ...     o_no = str
     ...     c_no = str
     ...     date = date_type
-    >>> class OrderItem(dbdef.Relation):
+    >>> class OrderItem(Relation):
     ...     o_no = str
     ...     p_no = str
     ...     qty = int
-    >>> class Product(dbdef.Relation):
+    >>> class Product(Relation):
     ...     p_no = str
     ...     unit_price = float
     >>> cust = Cust(
@@ -2209,7 +2202,7 @@ Exercise 2:
 
 Exercise 3:
 
-    >>> class ExamMark(dbdef.Relation):
+    >>> class ExamMark(Relation):
     ...     student_id = SID
     ...     course_id = CID
     ...     mark = int
@@ -2273,7 +2266,7 @@ Following along in Chapter 5, for completeness.  We already defined the
 ``exam_marks`` relation instance in one of the problems above.  Now we'll add
 courses.
 
-    >>> class Course(dbdef.Relation):
+    >>> class Course(Relation):
     ...     course_id = CID
     ...     title = str
     >>> courses = Course(
@@ -2322,7 +2315,7 @@ becomes the dinsd expression:
 The ``matching`` relational operator encapsulates this (union plus
 projecting away any columns obtained from the second relation):
 
-    >>> from dinsd.op import matching
+    >>> from dinsd import matching
     >>> print(matching(courses, exam_marks))
     +-----------+------------+
     | course_id | title      |
@@ -2355,7 +2348,7 @@ relation:
 compose
 ~~~~~~~
 
-    >>> from dinsd.op import compose
+    >>> from dinsd import compose
 
 ``compose`` joins its operands and then projects away the attributes
 that the two relations have in common.
@@ -2433,7 +2426,7 @@ students with marks above 50:
 compute
 ~~~~~~~
 
-    >>> from dinsd.op import compute
+    >>> from dinsd import compute
 
 ``compute`` has no analog in *Tutorial D*.  All of the aggregate functions
 in *Tutorial D* version 2 have the ability to use an arbitrary expression
@@ -2528,7 +2521,7 @@ Python doesn't have a function that corresponds directly to the *Tutorial D*
 a single iterator that does not support ``len`` (which compute does not) as
 its argument, so dinsd provides the ``avg`` function in the ``op`` module.
 
-    >>> from dinsd.op import avg
+    >>> from dinsd import avg
     >>> round(avg(compute(exam_marks, 'mark')), 2)
     71.17
     >>> avg(compute(rel(foo=int)({'foo': 3}), 'foo'))
@@ -2748,7 +2741,7 @@ list of matching data from another table (which could be the same table) and
 then aggregating over that extracted data is very common.  So we have an
 operator that expresses that more compactly:
 
-    >>> from dinsd.op import summarize
+    >>> from dinsd import summarize
     >>> x = summarize(exam_marks, courses >> {'course_id'},
     ...               n=lambda r: len(r))
     >>> print(x)
@@ -2766,7 +2759,7 @@ computes, not a row.  When we use string notation for the expression, we refer
 to the relation by the special variable ``summary`` (``summary`` is
 defined *only* for ``summarize`` expressions):
 
-    >>> from dinsd.op import summarize
+    >>> from dinsd import summarize
     >>> x == summarize(exam_marks, courses >> {'course_id'},
     ...               n="len(summary)")
     True
@@ -2836,7 +2829,7 @@ they may be a mix of strings and lambda expressions:
 group
 ~~~~~
 
-    >>> from dinsd.op import group
+    >>> from dinsd import group
 
 ``group`` encapsulates the ``extend``/``compose`` sub-operation of summarize:
 
@@ -2964,7 +2957,7 @@ with a single attribute, whose single value is the original relation:
 ungroup
 ~~~~~~~
 
-    >>> from dinsd.op import ungroup
+    >>> from dinsd import ungroup
 
 ``ungroup`` effectively undoes what ``group`` does:
 
@@ -3034,7 +3027,7 @@ write the dinsd equivalent of 5.14 as follows:
 
 The shorthand operator ``wrap`` does the same thing more compactly:
 
-    >>> from dinsd.op import wrap
+    >>> from dinsd import wrap
     >>> addrs == wrap(contact_info, address={'house', 'street', 'city', 'zip'})
     True
 
@@ -3080,7 +3073,7 @@ purpose programming language, we don't need to add new any facilities:
 
 ``unrwap`` is of course much simpler to use:
 
-    >>> from dinsd.op import unwrap
+    >>> from dinsd import unwrap
     >>> contact_info == unwrap(addrs, 'address')
     True
 
