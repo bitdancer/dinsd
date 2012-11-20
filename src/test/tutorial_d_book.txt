@@ -91,6 +91,25 @@ program is of course free to either refer to everything though an import such
 as the preceding, or to import the names that it wants to use directly into
 its own namespace.
 
+On the other hand, if you are experimenting with dinsd and relation algebra in
+the Python shell, it can be very useful to do ``from dinsd import *``.  Per
+best practices for Python programming this is the *only* time you should use
+that form.
+
+Currently dinsd also defines a separate namespace that is used during
+expression evaluation (much more on that below).  It is named
+``expression_namespace``, and starts out containing the same names and values
+as that imported by ``from dinsd import *``.  We can't full test this in this
+test document, but we can at least check that the set of names in ``__all__``
+(which is what determines what ``import *`` imports) and the set of names in
+``expression_namespace`` are the same:
+
+    >>> from dinsd import __all__, expression_namespace
+    >>> ({n for n in __all__} - {n for n in expression_namespace} == 
+    ...     {'expression_namespace'})
+    True
+
+
 
 Databases, Terminology, and Conformance
 ---------------------------------------

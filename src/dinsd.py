@@ -1,10 +1,11 @@
-from operator import attrgetter, itemgetter
-from collections import defaultdict
-from itertools import accumulate, repeat, chain, zip_longest
+import collections
+import itertools
+import operator
+_imports = {'collections', 'itertools', 'operator'}
 
 # For debugging only.
-import sys
-dbg = lambda *args: print(*args, file=sys.stderr)
+#import sys
+#dbg = lambda *args: print(*args, file=sys.stderr)
 
 
 
@@ -405,7 +406,7 @@ def rel(*args, **kw):
         if not hasattr(r, '_header_'):
             r = row(r)
         header = r._header_.copy()
-        body = chain([r], iterable)
+        body = itertools.chain([r], iterable)
     new_rel = type(_make_name('rel', header), (_Relation,), header)
     return new_rel(body) if body else new_rel
 
@@ -459,8 +460,8 @@ def _binary_join(first, second):
             combined_attrs[attr] = typ
     if common_attrs:
         # Build index for the match columns.
-        getter = attrgetter(*common_attrs)
-        index = defaultdict(list)
+        getter = operator.attrgetter(*common_attrs)
+        index = collections.defaultdict(list)
         for row in second:
             index[getter(row)].append(row)
         matches = lambda key: index[key]
@@ -633,7 +634,7 @@ def _matcher(first, second, match):
         if bool(second) == match:   # exclusive or
             new_rel._rows_.update(first._rows_)
         return new_rel
-    getter = attrgetter(*common_attrs)
+    getter = operator.attrgetter(*common_attrs)
     index = set()
     for row in second:
         index.add(getter(row))
@@ -674,20 +675,20 @@ def display(relation, *columns, **kw):
 
 
 def _display(relation, *columns, sort=[]):
-    toprint = [list(map(printable, columns))]
-    getter = attrgetter(*columns) if columns else lambda x: x
+    toprint = [list(map(_printable, columns))]
+    getter = operator.attrgetter(*columns) if columns else lambda x: x
     # Working around a little Python wart here.
     if len(columns) == 1:
-        rows = [(printable(getter(row)),) for row in relation._rows_]
+        rows = [(_printable(getter(row)),) for row in relation._rows_]
     else:
-        rows = [list(map(printable, getter(row))) for row in relation._rows_]
+        rows = [list(map(_printable, getter(row))) for row in relation._rows_]
     tosort = [sort] if isinstance(sort, str) else sort
     if not tosort:
         tosort = columns
     indexes = []
     for c in tosort:
         indexes.append(columns.index(c))
-    sortgetter = itemgetter(*indexes) if indexes else None
+    sortgetter = operator.itemgetter(*indexes) if indexes else None
     toprint.extend(sorted(rows, key=sortgetter))
     widths = [max([x.width for x in vals]) for vals in zip(*toprint)]
     sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
@@ -699,12 +700,13 @@ def _display(relation, *columns, sort=[]):
         r.append("||")
     else:
         for row in toprint[1:]:
-            r.extend(_tline(parts, widths) for parts in zip_longest(*row))
+            r.extend(_tline(parts, widths)
+                     for parts in itertools.zip_longest(*row))
     r.append(sep)
     return '\n'.join(r)
 
 
-class printable(_RichCompareMixin):
+class _printable(_RichCompareMixin):
 
     def __init__(self, content):
         self.source = content
@@ -724,7 +726,7 @@ class printable(_RichCompareMixin):
             yield line
 
     def __repr__(self):
-        return "printable({!r})".format(self.source)
+        return "_printable({!r})".format(self.source)
 
 
 def _tline(parts, widths):
@@ -754,8 +756,8 @@ def avg(iterator):
     summation.
     """
     c = 0
-    for s, c in accumulate(zip(iterator, repeat(1)),
-                           lambda x, y: (x[0]+y[0], x[1]+y[1])):
+    for s, c in itertools.accumulate(zip(iterator, itertools.repeat(1)),
+                                     lambda x, y: (x[0]+y[0], x[1]+y[1])):
         pass
     return 0 if c==0 else s/c
 
@@ -836,8 +838,18 @@ def unwrap(relation, attrname):
 
 
 #
-# XXX: Temporary expression global namespace.
+# Define public namespaces.
 #
+_names = {x for x in globals() if not x.startswith('_')}
+_names -= _imports
+
+# XXX: Temporary expression global namespace.
 expression_namespace = {n: v for n, v in globals().items()
-                             if not n.startswith('_')}
+                             if n in _names}
 _expn = expression_namespace
+_names.add('expression_namespace')
+
+# This is useful when playing with relational algebra in the Python shell.  It
+# should be equivalent to the module API namespace.
+__all__ = list(_names)
+del _imports, _names
