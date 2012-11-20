@@ -6,6 +6,13 @@ from itertools import accumulate, repeat, chain, zip_longest
 import sys
 dbg = lambda *args: print(*args, file=sys.stderr)
 
+
+
+#
+# Total Ordering infrastructure
+#
+
+
 class RichCompareMixin:
 
     # Flexible rich compare adapted from recipe by Lenart Regbro.
@@ -39,6 +46,12 @@ class RichCompareMixin:
         return hash(self._cmpkey())
 
 
+
+#
+# User Defined type support
+#
+
+
 class Scaler(RichCompareMixin):
 
     def _cmpkey(self):
@@ -54,6 +67,12 @@ class Scaler(RichCompareMixin):
 
     def __repr__(self):
         return "{}({!r})".format(self.__class__.__name__, self.value)
+
+
+
+#
+# Row types (TTM/Tutorial D TUPLE Types)
+#
 
 
 class RowMeta(type):
@@ -138,17 +157,10 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return l
 
 
-def row(*args, **kw):
-    if len(args)==1:
-        kw = dict(args[0], **kw)
-    if any(n.startswith('_') for n in kw):
-        raise ValueError("Invalid relational attribute name {!r}".format(
-            [n for n in sorted(kw) if n.startswith('_')][0]))
-    dct = {'_header_': {n: type(v) for n, v in kw.items()},
-           '_degree_': len(kw),
-           '_relation_name': None}
-    cls = type('row_' + '_'.join(sorted(kw.keys())), (Row,), dct)
-    return cls(kw)
+
+#
+# Relation types
+#
 
 
 class RelationMeta(type):
@@ -333,66 +345,9 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                           for row in sorted(self._rows_)))
         return repr(self.__class__) + '()'
 
-    def __display__(self, *columns, sort=[]):
-        toprint = [list(map(printable, columns))]
-        getter = attrgetter(*columns) if columns else lambda x: x
-        # Working around a little Python wart here.
-        if len(columns) == 1:
-            rows = [(printable(getter(row)),) for row in self._rows_]
-        else:
-            rows = [list(map(printable, getter(row))) for row in self._rows_]
-        tosort = [sort] if isinstance(sort, str) else sort
-        if not tosort:
-            tosort = columns
-        indexes = []
-        for c in tosort:
-            indexes.append(columns.index(c))
-        sortgetter = itemgetter(*indexes) if indexes else None
-        toprint.extend(sorted(rows, key=sortgetter))
-        widths = [max([x.width for x in vals]) for vals in zip(*toprint)]
-        sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
-        r = [sep]
-        r.extend((_tline(parts, widths) for parts in zip(*toprint[0]))
-                 if columns else ['||'])
-        r.append(sep)
-        if not columns and len(toprint)==2:
-            r.append("||")
-        else:
-            for row in toprint[1:]:
-                r.extend(_tline(parts, widths) for parts in zip_longest(*row))
-        r.append(sep)
-        return '\n'.join(r)
-
     def __str__(self):
-        return self.__display__(*sorted(self.header))
+        return _display(self, *sorted(self.header))
 
-
-class printable(RichCompareMixin):
-
-    def __init__(self, content):
-        self.source = content
-        content = str(content)
-        if '\n' in content:
-            self.content = content.splitlines() + ['']
-            self.width = max(map(len, self.content))
-        else:
-            self.width = len(content)
-            self.content = [content]
-
-    def _cmpkey(self):
-        return self.content
-
-    def __iter__(self):
-        for line in self.content:
-            yield line
-
-    def __repr__(self):
-        return "printable({!r})".format(self.source)
-
-
-def _tline(parts, widths):
-    return ('| ' + ' | '.join(('' if v is None else v).ljust(w)
-                                  for v, w in zip(parts, widths)) + ' |')
 
 class DumDee(Relation):
     pass
@@ -401,9 +356,24 @@ Dum = DumDee()
 Dee = DumDee({})
 
 
+
 #
-# Dynamic relation creation.
+# Row and Relation creation.
 #
+
+
+def row(*args, **kw):
+    if len(args)==1:
+        kw = dict(args[0], **kw)
+    if any(n.startswith('_') for n in kw):
+        raise ValueError("Invalid relational attribute name {!r}".format(
+            [n for n in sorted(kw) if n.startswith('_')][0]))
+    dct = {'_header_': {n: type(v) for n, v in kw.items()},
+           '_degree_': len(kw),
+           '_relation_name': None}
+    cls = type('row_' + '_'.join(sorted(kw.keys())), (Row,), dct)
+    return cls(kw)
+
 
 def rel(*args, **kw):
     # Three possibilities.  (1) no arguments or keywords, or a single argument
@@ -457,9 +427,12 @@ def _rel(prefix, attr_dict):
     new_Rel_name = _make_name(prefix, attr_dict)
     return type(new_Rel_name, (Relation,), attr_dict.copy())
 
+
+
 #
 # Relational Operators
 #
+
 
 def join(*relations):
     if not relations:
@@ -700,14 +673,80 @@ def compose(first, second):
     return project(join(first, second), all_but(common_attrs))
 
 
+
+#
+# display machinery
+#
+
+
+def display(relation, *columns, **kw):
+    relation._validate_attr_list(columns)
+    return _display(relation, *columns, **kw)
+
+
+def _display(relation, *columns, sort=[]):
+    toprint = [list(map(printable, columns))]
+    getter = attrgetter(*columns) if columns else lambda x: x
+    # Working around a little Python wart here.
+    if len(columns) == 1:
+        rows = [(printable(getter(row)),) for row in relation._rows_]
+    else:
+        rows = [list(map(printable, getter(row))) for row in relation._rows_]
+    tosort = [sort] if isinstance(sort, str) else sort
+    if not tosort:
+        tosort = columns
+    indexes = []
+    for c in tosort:
+        indexes.append(columns.index(c))
+    sortgetter = itemgetter(*indexes) if indexes else None
+    toprint.extend(sorted(rows, key=sortgetter))
+    widths = [max([x.width for x in vals]) for vals in zip(*toprint)]
+    sep = '+' + '+'.join(['-'*(w+2) for w in widths]) + '+'
+    r = [sep]
+    r.extend((_tline(parts, widths) for parts in zip(*toprint[0]))
+             if columns else ['||'])
+    r.append(sep)
+    if not columns and len(toprint)==2:
+        r.append("||")
+    else:
+        for row in toprint[1:]:
+            r.extend(_tline(parts, widths) for parts in zip_longest(*row))
+    r.append(sep)
+    return '\n'.join(r)
+
+
+class printable(RichCompareMixin):
+
+    def __init__(self, content):
+        self.source = content
+        content = str(content)
+        if '\n' in content:
+            self.content = content.splitlines() + ['']
+            self.width = max(map(len, self.content))
+        else:
+            self.width = len(content)
+            self.content = [content]
+
+    def _cmpkey(self):
+        return self.content
+
+    def __iter__(self):
+        for line in self.content:
+            yield line
+
+    def __repr__(self):
+        return "printable({!r})".format(self.source)
+
+
+def _tline(parts, widths):
+    return ('| ' + ' | '.join(('' if v is None else v).ljust(w)
+                                  for v, w in zip(parts, widths)) + ' |')
+
+
+
 #
 # Aggregate Operators
 #
-
-
-def display(relvar, *columns, **kw):
-    relvar._validate_attr_list(columns)
-    return relvar.__display__(*columns, **kw)
 
 
 def compute(relvar, func):
@@ -732,9 +771,11 @@ def avg(iterator):
     return 0 if c==0 else s/c
 
 
+
 #
 # Extended Operators
 #
+
 
 def summarize(relvar, compvar, _debug=False, **new_attrs):
     if not isinstance(compvar, Relation):
@@ -758,6 +799,7 @@ def group(relation, **kw):
     grouped = relation << attr_names
     grouping_func = lambda r: compose(relation, type(grouped)(r))
     return extend(grouped, **{name: grouping_func})
+
 
 def ungroup(relation, attrname):
     if not(relation):
@@ -801,6 +843,8 @@ def unwrap(relation, attrname):
         new_values.update(subrow._as_dict_())
         new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
+
+
 
 #
 # XXX: Temporary expression global namespace.
