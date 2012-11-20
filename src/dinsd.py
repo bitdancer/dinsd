@@ -275,11 +275,15 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                 raise AttributeError("{!r} relation has no attribute {!r}".format(
                                      self.__class__.__name__, attr))
 
+    # Miscellaneous operators.
+
     def __iter__(self):
         return iter(self._rows_)
 
     def __len__(self):
         return len(self._rows_)
+
+    # Comparison operators (see RichCompareMixin).
 
     def _cmpkey(self):
         return self._rows_
@@ -296,11 +300,30 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             return False
         return self._rows_ == other._rows_
 
+    def __ne__(self, other):
+        return not self == other
+
     def __hash__(self):
         return hash(self._rows_)
 
-    def __ne__(self, other):
-        return not self == other
+    # Infix Relational operators.
+
+    def __and__(self, other):                   # &
+        return _binary_join(self, other)
+
+    def __rshift__(self, other):                # >>
+        return project(self, other)
+
+    def __lshift__(self, other):                # <<
+        return project(self, all_but(other))
+
+    def __or__(self, other):                    # |
+        return union(self, other)
+
+    def __sub__(self, other):                   # -
+        return notmatching(self, other)
+
+    # Presentation operators.
 
     def __repr__(self):
         names = sorted(self.header)
@@ -494,9 +517,6 @@ def _binary_join(first, second):
             new_rel._rows_.add(new_rel.row(attrs))
     return new_rel
 
-# Make '&' the same as binary join for Relations.
-Relation.__and__ = lambda self, other: _binary_join(self, other)
-
 
 def intersect(*relations):
     if not relations:
@@ -578,10 +598,6 @@ def project(relation, attr_names):
         new_rel._rows_.add(new_rel.row(new_row_data))
     return new_rel
 
-# Make >> the project operator, and << the "all_but" operator.
-Relation.__rshift__ = lambda self, other: project(self, other)
-Relation.__lshift__ = lambda self, other: project(self, all_but(other))
-
 
 def where(relation, selector):
     if isinstance(selector, str):
@@ -627,9 +643,6 @@ def union(*relations):
         new_rel._rows_.update(rel._rows_.copy())
     return new_rel
 
-# Make | the union operator.
-Relation.__or__ = lambda self, other: union(self, other)
-
 
 # XXX: this should probably be a public API of some sort.
 def _common_attrs(first, second):
@@ -670,9 +683,6 @@ def _matcher(first, second, match):
 
 def notmatching(first, second):
     return _matcher(first, second, match=False)
-
-# Make - the notmatching operator.
-Relation.__sub__ = lambda self, other: notmatching(self, other)
 
 
 def minus(first, second):
