@@ -319,47 +319,43 @@ variables, methods, and functions are named with
 underscore_separated_lower_case.  In standard Python code we also make much
 less use of blanks around grouping operators such as braces and parenthesis.
 
-With those preliminaries out of the way, the dinsd version of the above
-(anonymous) type declaration looks very similar, but uses Python's existing
-syntax:
+With those preliminaries out of the way...the dinsd equivalent to
+the *Tutorial D* ``RELATION`` keyword is named ``rel``:
 
     >>> from dinsd import rel
-    >>> x = rel({'student_id': SID, 'name': str, 'course_id': CID})
-    >>> x                                   # doctest: +NORMALIZE_WHITESPACE
-    rel_course_id_name_student_id({'course_id': CID, 'name': str,
-         'student_id': SID})
 
-As you can see, the relation is not actually anonymous in dinsd: the system
-constructs a type name from the attribute names joined by '_'s and prefixed by
-``rel_``.  This is because in Python every class (type) has to have a name,
-and it would be confusing for all of the different types to have the name
-'Rel'.  The constructed names also help when debugging expressions involving
-anonymous relations, since they will appear in error messages and can give a
-clue as to what relation produced the error.
+``rel`` is used in a fashion very similar to the above *Tutorial D# statement,
+except that it is an expression that returns a relation type definition
+as its result:
+
+    >>> x = rel({'student_id': SID, 'name': str, 'course_id': CID})
+    >>> x 
+    rel({'course_id': CID, 'name': str, 'student_id': SID})
 
 In Python, dictionaries are unordered, and the keys of a dictionary are a set
 (that is, no two keys may be equal), so this declaration fully satisfies
-those *TTM* requirements:
+the *TTM* requirement that the header of a relation be a set of pairs:
 
     >>> x == rel({'student_id': SID, 'course_id': CID, 'name': str})
     True
+
+However, rather than indicating a syntax error if a key is repeated, Python
+simply uses the last value specified:
+
     >>> x == rel({'student_id': SID, 'course_id': CID, 'name': int, 'name': str})
     True
 
-In the second case, though, order does matter.  Rather than raising an error
-when a dict literal contains duplicate key names, Python just uses the last
-occurrence to determine the value:
+The order does matter in this case:
 
     >>> y = rel({'student_id': SID, 'course_id': CID, 'name': str, 'name': int})
     >>> x == y
     False
-    >>> y                                   # doctest: +NORMALIZE_WHITESPACE
-    rel_course_id_name_student_id({'course_id': CID, 'name': int,
-         'student_id': SID})
+    >>> y
+    rel({'course_id': CID, 'name': int, 'student_id': SID})
 
-There is an alternate way to declare anonymous relations in dinsd that will
-raise an error if keys are duplicated, and that is to use the Python keyword
-syntax to specify the attribute names and values:
+There is an alternate way to declare relations in dinsd that *will* raise an
+error if keys are duplicated, and that is to use the Python keyword syntax to
+specify the attribute names and values:
 
     >>> x == rel(student_id=SID, course_id=CID, name=str)
     True
@@ -369,32 +365,33 @@ syntax to specify the attribute names and values:
     SyntaxError: keyword argument repeated
 
 To use this form the attribute names must be valid Python identifiers.  This
-is true in general.  Much of the dinsd code does not depend on relation
-attributes being Python identifiers, but dinsd is not tested to see if
-non-identifier attributes are supported, and some Python implementations will
-impose stricter compliance to this rule than CPython does.
+restriction is in fact true in the general case.  Much of the dinsd code does
+not depend on relation attributes being Python identifiers, but dinsd is not
+tested to see if non-identifier attributes are supported, so it is unlikely to
+work in practice even if it works in specific cases (for example, some things
+that happen work in CPython will fail in other Python implementations, and
+possibly vice versa.)
 
-Experienced Python users will observe that the above gives two different ways
-to do the same thing, and in Python we usually try to stick to there being
-"one obvious way to do it".  dinsd breaks this guideline somewhat.  Different
-notations are more useful in different contexts in dinsd, yet the operators
-are all dealing with the same underlying data types.  Therefore dinsd follows
-another Python principle, that of "least surprise", by supporting all of the
-different notations in all of the contexts that it makes sense.  The first way
-above is provided primarily because looks more like the *Tutorial D* version,
-but in the context of relational expressions it is often the most economic
-notation.  For standalone anonymous relation type creation, we consider the
-keyword version to be the one obvious way to do it.
+Aside: Experienced Python users will observe that the above gives two
+different ways to do the same thing, and in Python we usually try to stick to
+there being "one obvious way to do it".  dinsd is primarily operating on data
+types that are expressible as dictionaries and sets, and therefore it makes
+sense to support that notation throughout, for consistency.  As discussed
+above, however, the keyword notation has certain advantages, and so we also
+support it where possible.  In this we are following another Python principle,
+that of "least surprise", by supporting each of the different notations in all
+of the contexts in which it makes sense.
 
 The dictionary and keyword forms may be mixed.  This is supported in analog to
 Python's support for both a dictionary and a keyword list in the ``dict``
 constructor, and because it is occasionally convenient to use this form to
-merge some new attributes into an existing attribute list.  (This test also
-makes sure that the input dictionary is not mutated.)
+merge some new attributes into an existing attribute list.  (This test looks a
+little odd because it is important that we make sure that the input dictionary
+is not mutated.)
 
     >>> orig = {'student_id': SID, 'name': int}
     >>> test = orig.copy()
-    >>> rel(test, course_id=CID, name=str) == x
+    >>> x == rel(test, course_id=CID, name=str)
     True
     >>> assert test == orig
 
@@ -403,7 +400,8 @@ the keyword arguments overwrite those in the dictionary argument.
 
 We mentioned that attribute name should be Python identifiers.  For reasons
 that will become clear when we talk about rows below, we *disallow*
-identifiers that start with an ``_``:
+identifiers that start with an ``_``, which are otherwise legal Python
+identifiers:
 
     >>> rel({'_foo': int})
     Traceback (most recent call last):
@@ -414,73 +412,25 @@ identifiers that start with an ``_``:
         ...
     ValueError: Invalid relational attribute name '_foo'
 
-There is also a third way to define a relation, which is the obvious way
-to define a *named* relation, and that is to use Python's class declaration
-syntax, subclassing from the special base class ``Relation``.
+Relation types (and therefore relation objects, but we'll get to those later)
+have an attribute ``degree``, which gives the number of attributes.
 
-    >>> from dinsd import Relation
-    >>> class IsEnrolledOn(Relation):
-    ...     student_id = SID
-    ...     name = str
-    ...     course_id = CID
-    >>> IsEnrolledOn
-    IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID})
-
-There is an important subtlety to be aware of here for Python programmers:
-although the above declaration appears to define actual Python class
-attributes, I referred to ``Relation`` as a "special" base class because
-it is not a normal Python class.  It has a metaclass that takes any
-attribute whose name does not start with an '_' and turns it into an
-attribute in the relation's ``header``:
-
-    >>> sorted(IsEnrolledOn.header.items())  # doctest: +NORMALIZE_WHITESPACE
-    [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
-     ('student_id', <class '__main__.SID'>)]
-    >>> IsEnrolledOn.student_id
-    Traceback (most recent call last):
-        ...
-    AttributeError: type object 'IsEnrolledOn' has no attribute 'student_id'
-
-Yes, every relation has a ``header`` attribute, and the ``attributes`` of a
-relation are not Python attributes of the relation.  (They *are* Python
-attributes of the *rows*, which we haven't discussed yet.)
-
-Relations also have an attribute ``degree``, which gives the number of
-attributes.  This is entirely equivalent to ``len(relation.header)``,
-but is provided because it corresponds to the terminology used in *TTM*
-and is a convenient property to have.
-
-    >>> IsEnrolledOn.degree
+    >>> x.degree
     3
 
-There is, unfortunately, no "duplicate safe" way of using the class
-declaration form of defining a relation.  This is because Python names
-are dynamically typed, so assigning a new value to an existing name is
-not an error:
+Every relation type also has a ``header`` attribute which records the list of
+attributes and their types, and corresponds to the TTM ``HEADER``.  (The
+attributes are not not Python attributes of the relation, but they *are*
+Python attributes of the *rows*, which we haven't discussed yet.)  The header
+is a plain Python dictionary, so we need to sort its items to get a consistent
+representation for the doctest:
 
-    >>> class IsEnrolledOn2(Relation):
-    ...     student_id = SID
-    ...     name = str
-    ...     course_id = CID
-    ...     name = int
-    >>> IsEnrolledOn2
-    IsEnrolledOn2({'course_id': CID, 'name': int, 'student_id': SID})
-
-You can stay closer to the type-ideal of *TTM*, if you prefer, by using a
-different form of the ``rel`` function to define a named relation:
-
-    >>> IsEnrolledOn3 = rel(student_id=SID, course_id=CID, name=str,
-    ...                     __name__='IsEnrolledOn3')
-    >>> IsEnrolledOn3
-    IsEnrolledOn3({'course_id': CID, 'name': str, 'student_id': SID})
-    >>> IsEnrolledOn3 == IsEnrolledOn
-    True
-
-Here we are using the special keyword argument ``__name__`` to set the
-corresponding (Python) attribute of the newly created class.
+    >>> sorted(x.header.items())            # doctest: +NORMALIZE_WHITESPACE
+    [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
+    ('student_id', <class '__main__.SID'>)]
 
 XXX: I haven't been able to get the below to work yet; there's something I'm
-not understanding about how metaclasses work.
+not understanding about how metaclasses work:
 
 A small aside: in dinsd a relation type is *entirely* defined by its header,
 as required by *TTM*.  Because this is the case, and it would therefore
@@ -493,7 +443,8 @@ only:
     .    ...
     .AttributeError: can't set attribute
 
-Since ``degree`` is derived from ``header``, it is also read-only:
+``degree`` is actually ``len(relation.header)``, so this means that it is also
+read-only:
 
     .>>> IsEnrolledOn.degree = 0
     .Traceback (most recent call last):
@@ -514,7 +465,7 @@ On page 44 of my copy of AIRDT, there is this example of a TUPLE literal:
 
 Considering that I'm coming from a Python dynamically typed background, it
 took me an inordinately long time to understand that the above is *implicitly
-type* by the names of its attributes and the type of its concrete values.
+typed* by the names of its attributes and the type of its concrete values.
 Once I figured that out, though, it was simple to support it in dinsd:
 
     >>> from dinsd import row
@@ -535,20 +486,19 @@ This is so that row objects can have Python attributes in addition to their
 relational-specific attributes.  In Python's standard programming conventions,
 names that begin with a ``_`` are usually intended to be "private" names,
 names that are not part of the public API.  Disallowing such names as
-relational attributes is a small price to pay for the flexibility it gives
-us, and it is in-line with Python's standard conventions.
+relational attributes is a small price to pay for the flexibility it gives us,
+and doing so is in any case in-line with Python's standard conventions.
 
-However, we have some attributes that we want as part of the *public* API,
-but we've just constrained ourselves to marking them as private.  In
-a similar situation (the "named tuple" class), Python just ignores this
-dichotomy and uses names that start with ``_`` as part of the public API.
-dinsd is a little more strict about its naming, by also *appending* a
-``_`` to names that start with a ``_`` but are nonetheless intended to be
-part of the public API.
+However, we have some attributes that we want as part of the *public* API, but
+we've just constrained ourselves to marking them as private.  In a similar
+situation (the "named tuple" class), Python just ignores this dichotomy and
+uses names that start with ``_`` as part of the public API.  dinsd is a little
+more strict about its naming, by also *appending* a ``_`` to names that start
+with a ``_`` but are nonetheless intended to be part of the public API.
 
 So, rows have two public non-relational attributes of interest.  These
-correspond to the ``degree`` and ``header`` attributes of relations,
-but named as explained above:
+correspond to the ``degree`` and ``header`` attributes of relations, but named
+as explained above:
 
     >>> x._degree_
     3
@@ -576,13 +526,12 @@ Which will object to multiply defined keywords:
         ...
     SyntaxError: keyword argument repeated
 
-Keyword arguments that start with ``_`` are disallowed; even, in this
-case, ``__name__``, which has no meaning for a row object:
+Keyword arguments that start with ``_`` are disallowed:
 
-    >>> row(student_id=SID('S1'), __name__=1)
+    >>> row(student_id=SID('S1'), _foo=1)
     Traceback (most recent call last):
         ...
-    ValueError: Invalid relational attribute name '__name__'
+    ValueError: Invalid relational attribute name '_foo'
 
 And a dictionary and keywords can be mixed:
 
@@ -603,8 +552,9 @@ Given the preceding, the dinsd equivalent to AIRDT's example 2.3 (page 45):
         TUPLE { StudentId SID('S4'), CourseId CID('C1'), Name NAME('Devinder')},
         }
 
-should be reasonably obvious.  We'll do the dictionary/set form first, since
-it is closest to the *Tutorial D* notation:
+should be reasonably obvious.  We'll do the set-of-rows form first, since
+it is closest to the *Tutorial D* notation, and also because it is the
+most complete and formal specification of a relation literal:
 
     >>> x = rel({
     ...     row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
@@ -614,15 +564,17 @@ it is closest to the *Tutorial D* notation:
     ...     row({'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'}),
     ...     })
     >>> x                                    # doctest: +NORMALIZE_WHITESPACE
-    rel_course_id_name_student_id({row({'course_id': CID('C1'), 'name': 'Anne',
+    rel({row({'course_id': CID('C1'), 'name': 'Anne',
     'student_id': SID('S1')}), row({'course_id': CID('C1'), 'name': 'Boris',
     'student_id': SID('S2')}), row({'course_id': CID('C1'), 'name': 'Devinder',
     'student_id': SID('S4')}), row({'course_id': CID('C2'), 'name': 'Anne',
     'student_id': SID('S1')}), row({'course_id': CID('C3'), 'name': 'Cindy',
     'student_id': SID('S3')})})
 
-Note that the records are sorted.  This is so that we get a consistent repr
-for doctests and to make it easier to compare relations by their repr.
+Note that the rows are sorted.  This is so that we get a consistent repr for
+doctests and to make it easier to compare relations by their repr.  The
+``repr`` of a relation is exactly the most formal version of the literal that
+can be used to create that relation.
 
 The ``repr`` is a bit hard to parse visually, though, since it is so long and
 ends up line wrapped at arbitrary points.  Relations (as opposed to
@@ -645,7 +597,7 @@ types of the values, we don't really need to first turn the dict into a row
 before passing it in to ``rel``.  ``rel`` can process dictionaries to create
 a relation just as easily as it can process rows.  However, Python sets
 can't hold dictionaries (because Python dictionaries are mutable), so we
-pass them as a list:
+instead pass them as a list:
 
     >>> y = rel((
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
@@ -657,9 +609,9 @@ pass them as a list:
     >>> y == x
     True
 
-A Python can turn a list of arguments into an iterator automatically, and many
-Python functions that accept an iterator also accept an equivalent list of
-arguments.  dinsd supports this call form for the ``rel`` function:
+A Python function can turn a list of arguments into an iterator automatically,
+and many Python functions that accept an iterator also accept an equivalent
+list of arguments.  dinsd supports this call form for the ``rel`` function:
 
     >>> y = rel(
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
@@ -671,8 +623,8 @@ arguments.  dinsd supports this call form for the ``rel`` function:
     >>> y == x
     True
 
-We can even mix dictionaries and rows in these forms, because the two are
-logically interchangeable.
+We can even mix dictionaries and rows in these forms, because the dictionaries
+and rows are logically interchangeable.
 
     >>> y = rel((
     ...     row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
@@ -693,13 +645,24 @@ logically interchangeable.
     >>> y == x
     True
 
-You might ask why we bother with a row object at all...the answer has to do
+You might ask why we bother with a row object at all...one answer has to do
 with Python's strong typing.  If we didn't have a type for rows that was
 distinct from the base dictionary type, the implementation and the error
-messages would be much messier and more difficult to work with.  Since this is
-a test document more than it is a tutorial, we need to cover all the places
-that both are acceptable.  The ultimate introductory tutorial may well omit
-mention of row objects except in the context of error messages.
+messages would be much messier and more difficult to work with.  However,
+there is also a pedagogical reason: the keyword form of ``row`` will reject
+duplicate keys, whereas the dictionary form will silently use the last of a
+set of duplicates.  If you wish to hew as close as possible to ``D``, you must
+use the keyword form of ``row``:
+
+    >>> y = rel({
+    ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
+    ...     row(student_id=SID('S1'), course_id=CID('C2'), name='Anne'),
+    ...     row(student_id=SID('S2'), course_id=CID('C1'), name='Boris'),
+    ...     row(student_id=SID('S3'), course_id=CID('C3'), name='Cindy'),
+    ...     row(student_id=SID('S4'), course_id=CID('C1'), name='Devinder'),
+    ...     })
+    >>> y == x
+    True
 
 Any Python iterator can be used as the argument to ``rel``.  This includes
 a generator:
@@ -730,7 +693,7 @@ It is possible to define a single row literal (this may seem obvious,
 but it needs to be tested since it is an edge case):
 
     >>> rel({'foo': 1, 'bar': 2})
-    rel_bar_foo({row({'bar': 2, 'foo': 1})})
+    rel({row({'bar': 2, 'foo': 1})})
 
 A relation may not contain two rows that are identical, and you will get
 an error if you try to specify two identical rows in a relation literal:
@@ -738,7 +701,7 @@ an error if you try to specify two identical rows in a relation literal:
     >>> rel({'foo': 1}, {'foo': 2}, {'foo': 1}, {'foo': 4})
     Traceback (most recent call last):
         ...
-    ValueError: Duplicate row: rel_foo.row({'foo': 1}) in row 2 of input
+    ValueError: Duplicate row: row({'foo': 1}) in row 2 of input
 
 (Remember that Python lists are zero origined.)
 
@@ -776,20 +739,18 @@ based on the established semantics plus our arbitrary rule about the meaning
 of an empty dict:
 
     >>> rel()
-    DumDee({})()
+    rel({})()
     >>> rel({})
-    DumDee({})()
+    rel({})()
     >>> rel(set())
-    DumDee({})()
-
-We'll discuss ``DumDee`` a bit more later.
+    rel({})()
 
 We can also write a literal for a relation with no attributes (degree 0) and
 one row with no attributes (cardinality 1).  There is only one way to write
 that literal:
 
     >>> rel(row())
-    rel_({row({})})
+    rel({row({})})
 
 XXX: START HERE  Before proceeding, need tests for row sorting and for the
 remaining rel relation literal error cases.  Oh, yeah, and we need to
@@ -803,6 +764,7 @@ Extending Relation Types Into Relations
 The most verbose and most general way of creating such a relation instance is
 as follows:
 
+    >>> IsEnrolledOn = rel(student_id=SID, course_id=CID, name=str)
     >>> is_enrolled_on = IsEnrolledOn(
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'}),
@@ -828,9 +790,8 @@ through the ``row`` function:
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
     >>> y = IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
     ...           'name': 'Anne'})
-    >>> y                                    # doctest: +NORMALIZE_WHITESPACE
-    IsEnrolledOn.row({'course_id': CID('C1'), 'name': 'Anne',
-         'student_id': SID('S1')})
+    >>> y
+    row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
     >>> x == y
     True
     >>> type(x) == type(y)
@@ -945,7 +906,7 @@ First of all, we can create an empty Relation:
 
     >>> is_enrolled_on = IsEnrolledOn()
     >>> is_enrolled_on
-    IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID})()
+    rel({'course_id': CID, 'name': str, 'student_id': SID})()
     >>> print(is_enrolled_on)
     +-----------+------+------------+
     | course_id | name | student_id |
@@ -1005,9 +966,8 @@ value form (CID('C1')):
 
 A row also has a distinct ``repr`` and ``str``:
 
-    >>> r                       # doctest: +NORMALIZE_WHITESPACE
-    IsEnrolledOn.row({'course_id': CID('C1'), 'name': 'foo', 'student_id':
-                        SID('S1')})
+    >>> r
+    row({'course_id': CID('C1'), 'name': 'foo', 'student_id': SID('S1')})
     >>> print(r)
     (course_id=C1, name=foo, student_id=S1)
 
@@ -1023,26 +983,33 @@ shorthand, and additionally reports which row is in error:
     ...               ('S1', 'Anne'))
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes(['course_id', 'name', 'student_id']), got 2
-        (['course_id', 'name']) in header row for IsEnrolledOn
-    >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
-    ...               ('C1', 'Anne'))
+    TypeError: Expected 3 attributes, got 2 (['course_id', 'name']) in header
+        row for relation type rel({'course_id': CID, 'name': str,
+        'student_id': SID})
+    >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
+    ...              ('course_id', 'name', 'student_id'),
+    ...              ('C1', 'Anne'))
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 2 in row 1 for IsEnrolledOn
-    >>> IsEnrolledOn(('course_id', 'name', 'student_id'),
+    TypeError: Expected 3 attributes, got 2 in row 1 for relation type
+        rel({'course_id': CID, 'name': str, 'student_id': SID})
+    >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
+    ...               ('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne', 'S1'),
     ...               ('C2', 'Anne', 'S1', 'foo'),
     ...               )
     Traceback (most recent call last):
         ...
-    TypeError: Expected 3 attributes, got 4 in row 2 for IsEnrolledOn
-    >>> IsEnrolledOn(('course_id', 'name', 'foo'),
+    TypeError: Expected 3 attributes, got 4 in row 2 for relation type
+        rel({'course_id': CID, 'name': str, 'student_id': SID})
+    >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
+    ...               ('course_id', 'name', 'foo'),
     ...               ('C1', 'Anne', 'S1'),
     ...               )
     Traceback (most recent call last):
         ...
-    AttributeError: 'IsEnrolledOn' relation has no attribute 'foo'
+    AttributeError: Relation type "rel({'course_id': CID, 'name': str,
+        'student_id': SID})" has no attribute 'foo'
     >>> IsEnrolledOn(                   # doctest: +NORMALIZE_WHITESPACE
     ...               ('course_id', 'name', 'student_id'),
     ...               ('C1', 'Anne', 'S1'),
@@ -1080,17 +1047,15 @@ dictionary form:
 To test the errors in the row form, we need a second relation and its
 associated type.  We'll define a throwaway type for this:
 
-    >>> class Foo(Relation):
-    ...     student_id = SID
-    ...     name = str
+    >>> Foo = rel(student_id=SID, name=str)
     >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
     ...     Foo.row({'student_id': SID('S1'), 'name': 'Anne'}),
     ...     )
     Traceback (most recent call last):
         ...
     TypeError: Row header does not match relation header in row 0 (got
-        Foo.row({'name': 'Anne', 'student_id': SID('S1')}) for
-        IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID}))
+        row({'name': 'Anne', 'student_id': SID('S1')}) for relation type
+        rel({'course_id': CID, 'name': str, 'student_id': SID}))
     >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
     ...     Foo.row({'student_id': SID('S1'), 'name': 'Anne'}),
@@ -1098,8 +1063,8 @@ associated type.  We'll define a throwaway type for this:
     Traceback (most recent call last):
         ...
     TypeError: Row header does not match relation header in row 1 (got
-        Foo.row({'name': 'Anne', 'student_id': SID('S1')}) for
-        IsEnrolledOn({'course_id': CID, 'name': str, 'student_id': SID}))
+        row({'name': 'Anne', 'student_id': SID('S1')}) for relation type
+        rel({'course_id': CID, 'name': str, 'student_id': SID}))
 
 By the way, ``Row``s and dictionaries can be mixed:
 
@@ -1122,9 +1087,7 @@ Example Relations
 
 Here are the two relations used in the examples in Chapter 4 of AIRDT:
 
-    >>> class IsCalled(Relation):
-    ...     student_id = SID
-    ...     name = str
+    >>> IsCalled = rel(student_id=SID, name=str)
     >>> is_called = IsCalled(
     ...     ('student_id',  'name'),
     ...     ('S1',          'Anne'),
@@ -1143,9 +1106,7 @@ Here are the two relations used in the examples in Chapter 4 of AIRDT:
     | Cindy    | S3         |
     | Devinder | S4         |
     +----------+------------+
-    >>> class IsEnrolledOn(Relation):
-    ...     student_id = SID
-    ...     course_id = CID
+    >>> IsEnrolledOn = rel(student_id=SID, course_id=CID)
     >>> is_enrolled_on = IsEnrolledOn(
     ...     ('student_id',  'course_id'),
     ...     ('S1',          'C1'),
@@ -1170,24 +1131,14 @@ We would not be allowed to do this in *Tutorial D* or *TTM* without first
 declaring variables as discarded and *then* defining new types for them.
 Python sees that as pointless busywork and does not require it, but it is one
 of the things that makes dinsd not TTM compliant.  (We will see later,
-however, that disd *does* implement semi-statically-typed relvars inside
-databases.)
+however, that disd *does* implement semi-statically-typed relation
+variables inside databases.)
 
-Python keeps track of objects by pointer, though, not by name, so to Python
-the type of the relation pointed to now by is_enrolled_on is different from
-the type of the relation pointed to by the old is_enrolled_on variables, even
-though the two relation types have the same identifier:
-
-    >>> type(is_enrolled_on).__name__ == type(is_enrolled_on2).__name__
-    True
-    >>> type(is_enrolled_on) == type(is_enrolled_on2)
-    False
-
-That is, Python is *strongly typed*, even though it is also *dynamically
-typed*.  (In fact, if you consider that it is really the object that is typed,
-and that there are no real 'variables' in Python, just names that contain
-references to objects, disnd probably does technically comply with TTM...but
-not with its spirit, which requires static typing.)
+Python is *strongly typed*, even though it is also *dynamically typed*.  If
+you consider that it is really the object that is typed, and that there are no
+real 'variables' in Python, just names that contain references to objects,
+disnd might be considered to technically comply with TTM...but not with its
+spirit, which requires static typing.
 
 
 display
@@ -1277,9 +1228,7 @@ On page 93 there is a discussion of cases where we *can't* perform a join.  In
 particular, if two tables have columns with the same name but different types,
 we cannot join them:
 
-    >>> class PermissiveIds(Relation):
-    ...     student_id = str
-    ...     name = str
+    >>> PermissiveIds = rel(student_id=str, name=str)
     >>> permissive_is_called = PermissiveIds(
     ...     ('student_id', 'name'),
     ...     ('S1', 'Anne'),
@@ -1290,9 +1239,8 @@ we cannot join them:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class 'str'>, second: <class '__main__.SID'> found in joined
-        relations with type names PermissiveIds({'name': str,
-        'student_id': str}) and IsEnrolledOn({'course_id': CID,
-        'student_id': SID})
+        relations with type names rel({'name': str, 'student_id': str}) and
+        rel({'course_id': CID, 'student_id': SID})
 
 An error like this in a multi-join also indicates in which argument the error
 was detected:
@@ -1303,9 +1251,9 @@ was detected:
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in joined
-        relations with type names join_course_id_name_student_id({'course_id':
-        CID, 'name': str, 'student_id': SID}) and PermissiveIds({'name': str,
-        'student_id': str}) (error detected while processing argument 2)
+        relations with type names rel({'course_id': CID, 'name': str,
+        'student_id': SID}) and rel({'name': str, 'student_id': str})
+        (error detected while processing argument 2)
 
 In this error message you also get a peak at the names that are used for the
 automatically generated ``Relation`` types used for the ``join`` result: a
@@ -1398,8 +1346,7 @@ product of the two sets of values.
 Use cases for this are not common, so we won't even try to come up with a
 sensible example:
 
-    >>> class Foo(Relation):
-    ...     bar = str
+    >>> Foo = rel(bar=str)
     >>> foo = Foo(('bar',), ('fizz',), ('gin',))
     >>> print(times(last_year, foo))
     +------+-----------+------------+
@@ -1431,8 +1378,7 @@ two relations:
     | course_id | student_id |
     +-----------+------------+
     +-----------+------------+
-    >>> class Bar(Relation):
-    ...     foo = str
+    >>> Bar = rel(foo=str)
     >>> bar = Bar(('foo',), ('gin',), ('fiz',))
     >>> print(times(last_year, bar, foo))
     +------+-----------+-----+------------+
@@ -1829,7 +1775,7 @@ query at the start of 4.7:
 The ``repr`` of a ``rel`` is also interesting:
 
     >>> namelist()
-    rel_name({'name': str})()
+    rel({'name': str})()
 
 Observe that the name is ``rel_`` followed by the '_' joined names of the
 attributes.  This is a general pattern followed by dinsd when dynamically
@@ -2104,8 +2050,8 @@ It is an error for match columns with the same name to have different types.
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
         (first: <class '__main__.SID'>, second: <class 'str'> found in
-         match relation (relation type names are IsCalled({'name':
-        str, 'student_id': SID}) and rel_student_id({'student_id': str}))
+         match relation (relation type names are rel({'name': str,
+         'student_id': SID}) and rel({'student_id': str}))
 
 minus
 ~~~~~
@@ -2148,20 +2094,10 @@ Exercise 2:
     ...         if isinstance(value, date):
     ...             return value
     ...         return super().__new__(cls, *value)
-    >>> class Cust(Relation):
-    ...     c_no = str
-    ...     discount = float
-    >>> class Orders(Relation):
-    ...     o_no = str
-    ...     c_no = str
-    ...     date = date_type
-    >>> class OrderItem(Relation):
-    ...     o_no = str
-    ...     p_no = str
-    ...     qty = int
-    >>> class Product(Relation):
-    ...     p_no = str
-    ...     unit_price = float
+    >>> Cust = rel(c_no=str, discount=float)
+    >>> Orders = rel(o_no=str, c_no=str, date=date_type)
+    >>> OrderItem = rel(o_no=str, p_no=str, qty=int)
+    >>> Product = rel(p_no=str, unit_price=float)
     >>> cust = Cust(
     ...         ('c_no', 'discount'),
     ...         ('0012', 10.0),
@@ -2202,10 +2138,7 @@ Exercise 2:
 
 Exercise 3:
 
-    >>> class ExamMark(Relation):
-    ...     student_id = SID
-    ...     course_id = CID
-    ...     mark = int
+    >>> ExamMark = rel(student_id=SID, course_id=CID, mark=int)
     >>> exam_marks = ExamMark(
     ...     ('student_id', 'course_id', 'mark'),
     ...     ('S1',         'C1',        85),
@@ -2233,13 +2166,13 @@ Exercise 3:
 Exercise 4:
 
     >>> is_called - Dee
-    IsCalled({'name': str, 'student_id': SID})()
+    rel({'name': str, 'student_id': SID})()
     >>> is_called - Dum == is_called
     True
     >>> is_called - is_called
-    IsCalled({'name': str, 'student_id': SID})()
+    rel({'name': str, 'student_id': SID})()
     >>> (is_called - is_called) - is_called
-    IsCalled({'name': str, 'student_id': SID})()
+    rel({'name': str, 'student_id': SID})()
     >>> is_called - (is_called - is_called) == is_called
     True
 
@@ -2266,9 +2199,7 @@ Following along in Chapter 5, for completeness.  We already defined the
 ``exam_marks`` relation instance in one of the problems above.  Now we'll add
 courses.
 
-    >>> class Course(Relation):
-    ...     course_id = CID
-    ...     title = str
+    >>> Course = rel(course_id=CID, title=str)
     >>> courses = Course(
     ...             ('course_id',   'title'),
     ...             ('C1',          'Database'),
@@ -2333,7 +2264,7 @@ operator.
 A match against an empty relation is empty:
 
     >>> matching(type(courses)(), courses)
-    Course({'course_id': CID, 'title': str})()
+    rel({'course_id': CID, 'title': str})()
 
 In the reverse of the case for ``notmatching``, if there are no common
 attributes matching against an empty relation produces an empty relation,
@@ -2341,7 +2272,7 @@ while matching against a non-empty relation produces the original
 relation:
 
     >>> matching(courses, Dum)
-    Course({'course_id': CID, 'title': str})()
+    rel({'course_id': CID, 'title': str})()
     >>> matching(courses, Dee) == courses
     True
 
@@ -3109,12 +3040,12 @@ which we will now prove for testing completeness.
     >>> b = R(('a', 'b'), (1, 2), (7, 8))
     >>> c = rel(c=int, d=int)(('c', 'd'), (5, 6))
     >>> join((a, b))
-    join_a_b({join_a_b.row({'a': 1, 'b': 2})})
+    rel({row({'a': 1, 'b': 2})})
     >>> intersect((a, b))
-    rel_a_b({rel_a_b.row({'a': 1, 'b': 2})})
+    rel({row({'a': 1, 'b': 2})})
     >>> times((a, c))               # doctest: +NORMALIZE_WHITESPACE
-    join_a_b_c_d({join_a_b_c_d.row({'a': 1, 'b': 2, 'c': 5, 'd': 6}),
-                  join_a_b_c_d.row({'a': 3, 'b': 4, 'c': 5, 'd': 6})})
+    rel({row({'a': 1, 'b': 2, 'c': 5, 'd': 6}),
+         row({'a': 3, 'b': 4, 'c': 5, 'd': 6})})
 
 Sharp eyes will note that while ``join`` and ``times`` result in computed
 relation names beginning with ``join_``, ``intersect`` does not.  This is
@@ -3211,19 +3142,19 @@ comparable:
     >>> r1 < is_enrolled_on
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() < IsEnrolledOn()
+    TypeError: unorderable types: rel_bar_foo() < rel_course_id_student_id()
     >>> r1 <= is_enrolled_on
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() <= IsEnrolledOn()
+    TypeError: unorderable types: rel_bar_foo() <= rel_course_id_student_id()
     >>> r1 > is_enrolled_on
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() > IsEnrolledOn()
+    TypeError: unorderable types: rel_bar_foo() > rel_course_id_student_id()
     >>> r1 >= is_enrolled_on
     Traceback (most recent call last):
         ...
-    TypeError: unorderable types: rel_bar_foo() >= IsEnrolledOn()
+    TypeError: unorderable types: rel_bar_foo() >= rel_course_id_student_id()
 
 In preparation for our next example, we'll add a course for a student that
 does not have a corresponding mark in ``exam_marks``:

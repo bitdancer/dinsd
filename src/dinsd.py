@@ -137,9 +137,7 @@ class Row(RichCompareMixin, metaclass=RowMeta):
         return hash(self._cmpkey())
 
     def __repr__(self):
-        name = '' if self._relation_name is None else self._relation_name+'.'
-        return "{}row({{{}}})".format(
-            name,
+        return "row({{{}}})".format(
             ', '.join("{!r}: {!r}".format(k, v)
                         for k, v in sorted(self.__dict__.items())))
 
@@ -173,7 +171,6 @@ class RelationMeta(type):
         class RowClass(Row):
             _header_ = header
             _degree_ = len(attrs)
-            _relation_name = name
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
         return type.__new__(cls, name, bases, dct)
@@ -196,11 +193,9 @@ class RelationMeta(type):
         return super().__hash__()
 
     def __repr__(self):
-        r = "{}({{".format(self.__name__)
-        r += ', '.join([repr(n)+': '+(v.__name__)
-                        for n, v in sorted(self.header.items())])
-        r += '})'
-        return r
+        return "rel({{{}}})".format(
+            ', '.join([repr(n)+': '+(v.__name__)
+                       for n, v in sorted(self.header.items())]))
 
 
 class Relation(RichCompareMixin, metaclass=RelationMeta):
@@ -239,9 +234,9 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
             self._validate_attr_list(attrlist)
             for i, o in enumerate(args[1:], start=1):
                 if len(o) != self.degree:
-                    raise TypeError(
-                        "Expected {} attributes, got {} in row {} for {}".format(
-                            self.degree, len(o), i, self.__class__.__name__))
+                    raise TypeError( "Expected {} attributes, got {} in row {} "
+                        "for relation type {}".format(
+                            self.degree, len(o), i, repr(self.__class__)))
                 try:
                     rows.append(self.row({k: v for k, v in zip(attrlist, o)}))
                 except TypeError as e:
@@ -257,8 +252,8 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
                     # This one is a row.
                     if o._header_ != self.header:
                         raise TypeError("Row header does not match relation header "
-                                        "in row {} (got {!r} for {!r})".format(
-                                        i, o, type(self)))
+                                        "in row {} (got {!r} for relation type "
+                                        "{!r})".format(i, o, type(self)))
                 else:
                     # This one is a dict, turn it into a row.
                     try:
@@ -277,15 +272,16 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
 
     def _validate_attr_list(self, attrlist):
         if len(attrlist) != self.degree:
-            raise TypeError("Expected {} attributes({}), got {} ({}) in "
-                    "header row for {}".format(
-                    self.degree, sorted(self.header),
+            raise TypeError("Expected {} attributes, got {} ({}) in "
+                    "header row for relation type {}".format(
+                    self.degree,
                     len(attrlist), sorted(attrlist),
-                    self.__class__.__name__))
+                    repr(self.__class__)))
         for attr in attrlist:
             if attr not in self.header:
-                raise AttributeError("{!r} relation has no attribute {!r}".format(
-                                     self.__class__.__name__, attr))
+                raise AttributeError(
+                    "Relation type {!r} has no attribute {!r}".format(
+                         repr(self.__class__), attr))
 
     # Miscellaneous operators.
 
@@ -318,7 +314,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
     def __hash__(self):
         return hash(self._rows_)
 
-    # Infix Relational operators.
+    # Infix relational operators.
 
     def __and__(self, other):                   # &
         return _binary_join(self, other)
@@ -340,7 +336,7 @@ class Relation(RichCompareMixin, metaclass=RelationMeta):
     def __repr__(self):
         names = sorted(self.header)
         if self._rows_:
-            return "{}({{{}}})".format(self.__class__.__name__,
+            return "rel({{{}}})".format(
                 ', '.join(repr(row)
                           for row in sorted(self._rows_)))
         return repr(self.__class__) + '()'
@@ -369,8 +365,7 @@ def row(*args, **kw):
         raise ValueError("Invalid relational attribute name {!r}".format(
             [n for n in sorted(kw) if n.startswith('_')][0]))
     dct = {'_header_': {n: type(v) for n, v in kw.items()},
-           '_degree_': len(kw),
-           '_relation_name': None}
+           '_degree_': len(kw)}
     cls = type('row_' + '_'.join(sorted(kw.keys())), (Row,), dct)
     return cls(kw)
 
@@ -384,9 +379,7 @@ def rel(*args, **kw):
     # dictionary and/or Row objects all of the same type: a relation literal
     # whose type is determined by the type of the first item in the iterator or
     # the first argument in the argument list.
-    name = body = None
-    if '__name__' in kw:
-        name = kw.pop('__name__')
+    body = None
     if (not args and not kw) or (len(args) == 1 and
             (hasattr(args[0], 'items') or hasattr(args[0], 'union'))
             and not args[0]):
@@ -415,9 +408,7 @@ def rel(*args, **kw):
             r = row(r)
         header = r._header_.copy()
         body = chain([r], iterable)
-    if name is None:
-        name = _make_name('rel', header)
-    new_rel = type(name, (Relation,), header)
+    new_rel = type(_make_name('rel', header), (Relation,), header)
     return new_rel(body) if body else new_rel
 
 def _make_name(prefix, attrs):
