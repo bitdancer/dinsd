@@ -454,27 +454,34 @@ representation for the doctest:
     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
     ('student_id', <class '__main__.SID'>)]
 
-XXX: I haven't been able to get the below to work yet; there's something I'm
-not understanding about how metaclasses work:
-
 A small aside: in dinsd a relation type is *entirely* defined by its header,
 as required by *TTM*.  Because this is the case, and it would therefore
 completely screw up a program if the header of a relation that had one or more
 instances were changed, we make the ``header`` attribute of relations read
 only:
 
-    .>>> IsEnrolledOn.header = {}
-    .Traceback (most recent call last):
-    .    ...
-    .AttributeError: can't set attribute
+    >>> x.header = {}
+    Traceback (most recent call last):
+        ...
+    AttributeError: can't set attribute
 
 ``degree`` is actually ``len(relation.header)``, so this means that it is also
 read-only:
 
-    .>>> IsEnrolledOn.degree = 0
-    .Traceback (most recent call last):
-    .    ...
-    .AttributeError: can't set attribute
+    >>> x.degree = 0
+    Traceback (most recent call last):
+        ...
+    AttributeError: can't set attribute
+
+Since a dictionary is itself mutable, we also need to make sure that changes
+made to the dictionary returned by the relation type ``header`` attributes are
+copies, changes to which do not change the original header:
+
+    >>> x.header['course_id'] == CID
+    True
+    >>> x.header['course_id'] = 1
+    >>> x.header['course_id'] == CID
+    True
 
 
 Row Literals

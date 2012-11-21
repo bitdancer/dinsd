@@ -6,8 +6,8 @@ import threading as _threading
 import types as _types
 
 # For debugging only.
-#import sys
-#dbg = lambda *args: print(*args, file=sys.stderr)
+import sys as _sys
+dbg = lambda *args: print(*args, file=_sys.stderr)
 
 
 
@@ -167,39 +167,38 @@ class _Row(_RichCompareMixin, metaclass=_RowMeta):
 
 class _RelationMeta(type):
 
+
     def __new__(cls, name, bases, dct):
-        attrs = [x for x in dct if not x.startswith('_')]
-        header = {name: dct.pop(name) for name in attrs}
-        dct['header'] = header
-        dct['degree'] = len(attrs)
+        header = dct['_header']
         class RowClass(_Row):
             _header_ = header
-            _degree_ = len(attrs)
+            _degree_ = len(header)
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
         name = "rel({{{}}})".format( ', '.join([repr(n)+': '+(v.__name__)
                                     for n, v in sorted(header.items())]))
         return type.__new__(cls, name, bases, dct)
 
-    # XXX: This doesn't work, punt on it for now.
-    #@property
-    #def header(self):
-    #    return self._header
+    @property
+    def header(self):
+        return self._header.copy()
 
-    #@property
-    #def degree(self):
-    #    return len(self._header)
+    @property
+    def degree(self):
+        return len(self._header)
 
     def __eq__(self, other):
         if not isinstance(other, _RelationMeta):
             return NotImplemented
-        return self.header == other.header
+        return self._header == other._header
 
     def __hash__(self):
         return super().__hash__()
 
 
 class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
+
+    _header = {}
 
     def __init__(self, *args):
         # Several cases: (1) empty relation (2) being called as a type
@@ -286,7 +285,17 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
                 raise AttributeError(
                     "{!r} has no attribute {!r}".format(self.__class__, attr))
 
-    # Miscellaneous _operators.
+    # Access to class properties
+
+    @property
+    def header(self):
+        return self.__class__.header
+
+    @property
+    def degree(self):
+        return self.__class__.degree
+
+    # Miscellaneous operators.
 
     def __iter__(self):
         return iter(self._rows_)
@@ -294,20 +303,18 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
     def __len__(self):
         return len(self._rows_)
 
-    # Comparison _operators (see RichCompareMixin).
+    # Comparison operators (see RichCompareMixin).
 
     def _cmpkey(self):
         return self._rows_
 
     def _compare(self, other, method):
-        if not isinstance(other, _Relation) or self.header != other.header:
+        if type(self) != type(other):
             return NotImplemented
         return super()._compare(other, method)
 
     def __eq__(self, other):
-        if not isinstance(other, _Relation):
-            return False
-        if self.header != other.header:
+        if type(self) != type(other):
             return False
         return self._rows_ == other._rows_
 
@@ -317,7 +324,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
     def __hash__(self):
         return hash(self._rows_)
 
-    # Infix relational _operators.
+    # Infix relational operators.
 
     def __and__(self, other):                   # &
         return _binary_join(self, other)
@@ -334,7 +341,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
     def __sub__(self, other):                   # -
         return notmatching(self, other)
 
-    # Presentation _operators.
+    # Presentation operators.
 
     def __repr__(self):
         names = sorted(self.header)
@@ -410,7 +417,7 @@ def rel(*args, **kw):
             r = row(r)
         header = r._header_.copy()
         body = _itertools.chain([r], iterable)
-    new_rel = type(_make_name('rel', header), (_Relation,), header)
+    new_rel = type(_make_name('rel', header), (_Relation,), {'_header': header})
     return new_rel(body) if body else new_rel
 
 def _make_name(prefix, attrs):
@@ -418,7 +425,7 @@ def _make_name(prefix, attrs):
 
 def _rel(prefix, attr_dict):
     new_Rel_name = _make_name(prefix, attr_dict)
-    return type(new_Rel_name, (_Relation,), attr_dict.copy())
+    return type(new_Rel_name, (_Relation,), {'_header': attr_dict.copy()})
 
 
 
