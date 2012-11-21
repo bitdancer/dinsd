@@ -417,15 +417,11 @@ def rel(*args, **kw):
             r = row(r)
         header = r._header_.copy()
         body = _itertools.chain([r], iterable)
-    new_rel = type(_make_name('rel', header), (_Relation,), {'_header': header})
+    new_rel = type('rel', (_Relation,), {'_header': header})
     return new_rel(body) if body else new_rel
 
-def _make_name(prefix, attrs):
-    return prefix + '_' + '_'.join(sorted(attrs))
-
 def _rel(prefix, attr_dict):
-    new_Rel_name = _make_name(prefix, attr_dict)
-    return type(new_Rel_name, (_Relation,), {'_header': attr_dict.copy()})
+    return type('_rel', (_Relation,), {'_header': attr_dict.copy()})
 
 
 
