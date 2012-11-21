@@ -78,6 +78,18 @@ class Scaler(_RichCompareMixin):
 #
 
 
+def row(*args, **kw):
+    if len(args)==1:
+        kw = dict(args[0], **kw)
+    if any(n.startswith('_') for n in kw):
+        raise ValueError("Invalid relational attribute name {!r}".format(
+            [n for n in sorted(kw) if n.startswith('_')][0]))
+    dct = {'_header_': {n: type(v) for n, v in kw.items()},
+           '_degree_': len(kw)}
+    cls = type('row_' + '_'.join(sorted(kw.keys())), (_Row,), dct)
+    return cls(kw)
+
+
 class _RowMeta(type):
 
     def __eq__(self, other):
@@ -161,12 +173,60 @@ class _Row(_RichCompareMixin, metaclass=_RowMeta):
 
 
 #
-# Relation _types
+# Relation types
 #
 
 
-class _RelationMeta(type):
+def rel(*args, **kw):
+    # For reasons that derive from trying to imitate Tutorial D and may not be
+    # the best idea, there are two overloaded cases here:  defining a type, and
+    # relation literals.  Type definition is characterized by a single,
+    # possibly empty, dictionary argument whose values are all types, possibly
+    # with additional keyword arguments whose values are types. A relation
+    # literal is everything else: an iterable or a list of arguments consisting
+    # of dictionary and/or Row objects all of the same type: the type of the
+    # literal is determined by the type of the first item in the iterator or
+    # the first argument in the argument list.  If there are no arguments or
+    # keywords, or a single argument that is an empty iterator, then we have a
+    # relation literal representing Dum.
+    body = None
+    if (not args and kw or len(args) == 1 and hasattr(args[0], 'values') and
+            all(isinstance(v, type) for v in args[0].values())):
+        # Relation type declaration.
+        header = args[0].copy() if args else {}
+        header.update(kw)
+        if any(n.startswith('_') for n in header):
+            raise ValueError("Invalid relational attribute name {!r}".format(
+                [n for n in sorted(header) if n.startswith('_')][0]))
+    else:
+        # Relation literal form.
+        if kw:
+            raise TypeError("keywords attributes not valid in relation "
+                            "literal form of rel call")
+        if (len(args) == 1 and not hasattr(args[0], 'items') and
+                               not hasattr(args[0], '_header_')):
+            # Single argument iterator
+            args = args[0]
+        iterable = iter(args)
+        try:
+            r = next(iterable)
+        except StopIteration:
+            # Empty iterator == relation literal for Dum.
+            return Dum
+        if not hasattr(r, '_header_'):
+            r = row(r)
+        header = r._header_.copy()
+        body = _itertools.chain([r], iterable)
+    new_rel = type('rel', (_Relation,), {'_header': header})
+    return new_rel(body) if body else new_rel
 
+def _rel(prefix, attr_dict):
+    # For internal use we don't need to do all those checks above.  Although
+    # 'prefix' isn't used for anything, it can help during debugging.
+    return type(prefix, (_Relation,), {'_header': attr_dict.copy()})
+
+
+class _RelationMeta(type):
 
     def __new__(cls, name, bases, dct):
         header = dct['_header']
@@ -364,71 +424,6 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
 
 Dum = _Relation()
 Dee = _Relation({})
-
-
-
-#
-# Row and Relation creation.
-#
-
-
-def row(*args, **kw):
-    if len(args)==1:
-        kw = dict(args[0], **kw)
-    if any(n.startswith('_') for n in kw):
-        raise ValueError("Invalid relational attribute name {!r}".format(
-            [n for n in sorted(kw) if n.startswith('_')][0]))
-    dct = {'_header_': {n: type(v) for n, v in kw.items()},
-           '_degree_': len(kw)}
-    cls = type('row_' + '_'.join(sorted(kw.keys())), (_Row,), dct)
-    return cls(kw)
-
-
-def rel(*args, **kw):
-    # For reasons that derive from trying to imitate Tutorial D and may not be
-    # the best idea, there are two overloaded cases here:  defining a type, and
-    # relation literals.  Type definition is characterized by a single,
-    # possibly empty, dictionary argument whose values are all types, possibly
-    # with additional keyword arguments whose values are types. A relation
-    # literal is everything else: an iterable or a list of arguments consisting
-    # of dictionary and/or Row objects all of the same type: the type of the
-    # literal is determined by the type of the first item in the iterator or
-    # the first argument in the argument list.  If there are no arguments or
-    # keywords, or a single argument that is an empty iterator, then we have a
-    # relation literal representing Dum.
-    body = None
-    if (not args and kw or len(args) == 1 and hasattr(args[0], 'values') and
-            all(isinstance(v, type) for v in args[0].values())):
-        # Relation type declaration.
-        header = args[0].copy() if args else {}
-        header.update(kw)
-        if any(n.startswith('_') for n in header):
-            raise ValueError("Invalid relational attribute name {!r}".format(
-                [n for n in sorted(header) if n.startswith('_')][0]))
-    else:
-        # Relation literal form.
-        if kw:
-            raise TypeError("keywords attributes not valid in relation "
-                            "literal form of rel call")
-        if (len(args) == 1 and not hasattr(args[0], 'items') and
-                               not hasattr(args[0], '_header_')):
-            # Single argument iterator
-            args = args[0]
-        iterable = iter(args)
-        try:
-            r = next(iterable)
-        except StopIteration:
-            # Empty iterator == relation literal for Dum.
-            return Dum
-        if not hasattr(r, '_header_'):
-            r = row(r)
-        header = r._header_.copy()
-        body = _itertools.chain([r], iterable)
-    new_rel = type('rel', (_Relation,), {'_header': header})
-    return new_rel(body) if body else new_rel
-
-def _rel(prefix, attr_dict):
-    return type('_rel', (_Relation,), {'_header': attr_dict.copy()})
 
 
 
