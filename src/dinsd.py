@@ -84,15 +84,18 @@ def row(*args, **kw):
     if len(args)==1:
         kw = dict(args[0], **kw)
     header = {}
+    strings = []
     for n, v in sorted(kw.items()):
         if n.startswith('_'):
-            raise ValueError("Invalid relational attribute name {!r}".format(n))
+            raise ValueError("Invalid relational attribute name "
+                             "{!r}".format(n))
         if isinstance(v, type):
             raise ValueError('Invalid value for attribute {!r}: '
                              '"{!r}" is a type'.format(n, v))
-        header[n] = type(v)
+        header[n] = attrtype = type(v)
+        strings.append(repr(n)+': '+attrtype.__name__)
     dct = {'_header_': header, '_degree_': len(kw)}
-    cls = type('row_' + '_'.join(sorted(kw.keys())), (_Row,), dct)
+    cls = type('row({{{}}})'.format(', '.join(strings)), (_Row,), dct)
     return cls(kw)
 
 
@@ -241,9 +244,8 @@ class _RelationMeta(type):
             _degree_ = len(header)
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
-        pairs = sorted(header.items())
         strings = []
-        for (n, v) in pairs:
+        for (n, v) in sorted(header.items()):
             if not isinstance(v, type):
                 raise ValueError(
                     'Invalid value for attribute {!r} in relation type '

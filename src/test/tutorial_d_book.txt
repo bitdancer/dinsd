@@ -595,6 +595,13 @@ the persistence layer we'll see that only objects that are either
 representable natively by the persistent store or can be pickled can be
 stored.
 
+Rows have a type, just like relations have a type:
+
+    >>> type(row(student_id=SID('S1')))
+    <class 'dinsd.row({'student_id': SID})'>
+
+You hardly ever need to think about that fact, though.
+
 
 Relation Literals
 ~~~~~~~~~~~~~~~~~
