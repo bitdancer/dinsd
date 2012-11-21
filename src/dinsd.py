@@ -93,23 +93,28 @@ def row(*args, **kw):
             raise ValueError('Invalid value for attribute {!r}: '
                              '"{!r}" is a type'.format(n, v))
         header[n] = attrtype = type(v)
-    dct = {'_header_': header, '_degree_': len(kw)}
-    cls = _get_type('row', _Row, header, dct)
+    cls = _get_type('row', header)
     return cls(kw)
+
+
+def _row_dct(header):
+    return {'_header': header}
 
 
 class _RowMeta(type):
 
-    def __eq__(self, other):
-        if not isinstance(other, _RowMeta):
-            return NotImplemented
-        return self._header_ == other._header_
+    @property
+    def header(self):
+        return self._header.copy()
 
-    def __hash__(self):
-        return super().__hash__()
+    @property
+    def degree(self):
+        return len(self._header)
 
 
 class _Row(_RichCompareMixin, metaclass=_RowMeta):
+
+    _header = {}
 
     def __init__(self, attrdict):
         if isinstance(attrdict, _Row):
@@ -130,6 +135,14 @@ class _Row(_RichCompareMixin, metaclass=_RowMeta):
             except KeyError:
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None
+
+    @property
+    def _header_(self):
+        return self.__class__.header
+
+    @property
+    def _degree_(self):
+        return self.__class__.degree
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -232,26 +245,20 @@ def rel(*args, **kw):
                 r = row(r)
             header = r._header_.copy()
             body = _itertools.chain([r], iterable)
-    new_rel = _get_type('rel', _Relation, header, {'_header': header})
+    new_rel = _get_type('rel', header)
     return new_rel if body is None else new_rel(body)
+
+
+def _rel_dct(header):
+    return dict(_header=header, row=_get_type('row', header))
 
 
 def _rel(attrdict):
     # For internal use we don't need to do all those checks above.
-    header = attrdict.copy()
-    return _get_type('rel', _Relation, header, {'_header': header})
+    return _get_type('rel', attrdict.copy())
 
 
 class _RelationMeta(type):
-
-    def __new__(cls, name, bases, dct):
-        header = dct['_header']
-        class RowClass(_Row):
-            _header_ = header
-            _degree_ = len(header)
-        dct['row'] = RowClass
-        RowClass.__name__ = '.'.join((name, 'RowClass'))
-        return type.__new__(cls, name, bases, dct)
 
     @property
     def header(self):
@@ -260,14 +267,6 @@ class _RelationMeta(type):
     @property
     def degree(self):
         return len(self._header)
-
-    def __eq__(self, other):
-        if not isinstance(other, _RelationMeta):
-            return NotImplemented
-        return self._header == other._header
-
-    def __hash__(self):
-        return super().__hash__()
 
 
 class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
@@ -435,14 +434,17 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
 # Type registry
 #
 
-_type_registry = {_Row: _weakref.WeakValueDictionary(),
-                  _Relation: _weakref.WeakValueDictionary()}
-def _get_type(typetype, baseclass, header, dct=None):
+_type_registry = {_Relation: _weakref.WeakValueDictionary(),
+                  _Row: _weakref.WeakValueDictionary()}
+_typetype_map = {'rel': (_Relation, _rel_dct),
+                 'row': (_Row, _row_dct)}
+def _get_type(typetype, header):
+    baseclass, dct_maker = _typetype_map[typetype]
     hsig = '_'.join(n+'-'+v.__name__+str(id(v))
                     for n, v in sorted(header.items()))
     cls = _type_registry[baseclass].get(hsig)
     if cls is None:
-        dct = {} if dct is None else dct
+        dct = dct_maker(header)
         name = '{}({{{}}})'.format(
             typetype,
             ', '.join(repr(n)+': '+v.__name__

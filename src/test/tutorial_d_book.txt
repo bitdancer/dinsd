@@ -552,6 +552,17 @@ as explained above:
     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
      ('student_id', <class '__main__.SID'>)]
 
+These attributes are read-only:
+
+    >>> x._degree_ = 1
+    Traceback (most recent call last):
+        ...
+    AttributeError: can't set attribute
+    >>> x._header_ = 1
+    Traceback (most recent call last):
+        ...
+    AttributeError: can't set attribute
+
 As with ``rel``, any attribute names that start with an ``_`` are rejected:
 
     >>> row({'_foo': 10})
@@ -599,18 +610,44 @@ stored.
 
 Rows have a type, just like relations have a type:
 
-    >>> x = type(row(student_id=SID('S1'), name='Anne'))
-    >>> x
+    >>> xt = type(row(student_id=SID('S1'), name='Anne'))
+    >>> xt
     <class 'dinsd.row({'name': str, 'student_id': SID})'>
 
 And, like relation types, only one type object is created for each distinct
 type:
 
-    >>> y = type(row(name='Anne', student_id=SID('S1')))
-    >>> x is y
+    >>> yt = type(row(name='Anne', student_id=SID('S1')))
+    >>> xt is yt
     True
 
+Row types have read-only ``header`` and ``degree`` attributes, just like
+relation types:
+
+    >>> sorted(yt.header.items())
+    [('name', <class 'str'>), ('student_id', <class '__main__.SID'>)]
+    >>> yt.degree
+    2
+    >>> yt.header = 1
+    Traceback (most recent call last):
+        ...
+    AttributeError: can't set attribute
+    >>> yt.degree = 1
+    Traceback (most recent call last):
+        ...
+    AttributeError: can't set attribute
+
 You hardly ever need to think about row types, though.
+
+Note that what is returned by both ``header`` and ``_header_`` is a copy of
+the attribute dict, so mutating it does not affect the original:
+
+    >>> original = yt.header.copy()
+    >>> yt.header['foo'] = 2
+    >>> assert yt.header == original
+    >>> original = y._header_.copy()
+    >>> y._header_['foo'] = 2
+    >>> assert y._header_ == original
 
 
 Relation Literals
@@ -861,11 +898,10 @@ This corresponds directly to the relation definition in example 2.3 on page
 ``tuple`` to avoid confusion with the Python ``tuple`` type.
 
 You will note that a relation has an attribute ``row`` that is a constructor
-for rows of the type defined by the relation's header.  Although this wasn't
-clear to me for quite some time, *Tutorial D* takes advantage of the fact
-that it is possible to infer the correct header for a row (TTM tuple) from
-its attribute names and the types of its values.  dinsd supports this as well,
-through the ``row`` function:
+for rows of the type defined by the relation's header.  While it works fine
+to define rows just with the ``row`` function, using the ``row`` attribute
+of the relation gives the system opportunities to optimize the row creation
+process.  But the rows created by the two methods are entirely equivalent:
 
     >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'),
     ...           'name': 'Anne'})
@@ -877,10 +913,8 @@ through the ``row`` function:
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
     >>> x == y
     True
-    >>> type(x) == type(y)
-    True
     >>> type(x) is type(y)
-    False
+    True
 
 Just like in *Tutorial D*, when you write a generic ``row`` declaration,
 you *must* use the exact type for the attribute values.  Otherwise you
