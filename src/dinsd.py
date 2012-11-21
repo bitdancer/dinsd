@@ -83,11 +83,15 @@ class Scaler(_RichCompareMixin):
 def row(*args, **kw):
     if len(args)==1:
         kw = dict(args[0], **kw)
-    if any(n.startswith('_') for n in kw):
-        raise ValueError("Invalid relational attribute name {!r}".format(
-            [n for n in sorted(kw) if n.startswith('_')][0]))
-    dct = {'_header_': {n: type(v) for n, v in kw.items()},
-           '_degree_': len(kw)}
+    header = {}
+    for n, v in sorted(kw.items()):
+        if n.startswith('_'):
+            raise ValueError("Invalid relational attribute name {!r}".format(n))
+        if isinstance(v, type):
+            raise ValueError('Invalid value for attribute {!r}: '
+                             '"{!r}" is a type'.format(n, v))
+        header[n] = type(v)
+    dct = {'_header_': header, '_degree_': len(kw)}
     cls = type('row_' + '_'.join(sorted(kw.keys())), (_Row,), dct)
     return cls(kw)
 

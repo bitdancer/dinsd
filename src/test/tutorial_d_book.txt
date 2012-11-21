@@ -582,6 +582,19 @@ And a dictionary and keywords can be mixed:
     >>> row({'name': 'Anne', 'student_id': SID('S3')}, student_id=SID('S1'))
     row({'name': 'Anne', 'student_id': SID('S1')})
 
+Types are not legal as row values, only non-type object instances.
+
+    >>> row({'student_id': SID})           # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid value for attribute 'student_id': "<class
+        '__main__.SID'>" is a type
+
+dinsd itself places no other requirements on row values, but when we get to
+the persistence layer we'll see that only objects that are either
+representable natively by the persistent store or can be pickled can be
+stored.
+
 
 Relation Literals
 ~~~~~~~~~~~~~~~~~
