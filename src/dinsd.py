@@ -6,6 +6,7 @@ import itertools as _itertools
 import operator as _operator
 import threading as _threading
 import types as _types
+import weakref as _weakref
 
 # For debugging only.
 import sys as _sys
@@ -84,7 +85,6 @@ def row(*args, **kw):
     if len(args)==1:
         kw = dict(args[0], **kw)
     header = {}
-    strings = []
     for n, v in sorted(kw.items()):
         if n.startswith('_'):
             raise ValueError("Invalid relational attribute name "
@@ -93,9 +93,8 @@ def row(*args, **kw):
             raise ValueError('Invalid value for attribute {!r}: '
                              '"{!r}" is a type'.format(n, v))
         header[n] = attrtype = type(v)
-        strings.append(repr(n)+': '+attrtype.__name__)
     dct = {'_header_': header, '_degree_': len(kw)}
-    cls = type('row({{{}}})'.format(', '.join(strings)), (_Row,), dct)
+    cls = _get_type('row', _Row, header, dct)
     return cls(kw)
 
 
@@ -204,9 +203,14 @@ def rel(*args, **kw):
         # Relation type declaration.
         header = args[0].copy() if args else {}
         header.update(kw)
-        if any(n.startswith('_') for n in header):
-            raise ValueError("Invalid relational attribute name {!r}".format(
-                [n for n in sorted(header) if n.startswith('_')][0]))
+        for n, v in sorted(header.items()):
+            if n.startswith('_'):
+                raise ValueError("Invalid relational attribute name "
+                                 "{!r}".format(n))
+            if not isinstance(v, type):
+                raise ValueError(
+                    'Invalid value for attribute {!r} in relation type '
+                    'definition: "{!r}" is not a type'.format(n, v))
     else:
         # Relation literal form.
         if kw:
@@ -221,18 +225,21 @@ def rel(*args, **kw):
             r = next(iterable)
         except StopIteration:
             # Empty iterator == relation literal for Dum.
-            return Dum
-        if not hasattr(r, '_header_'):
-            r = row(r)
-        header = r._header_.copy()
-        body = _itertools.chain([r], iterable)
-    new_rel = type('rel', (_Relation,), {'_header': header})
-    return new_rel(body) if body else new_rel
+            header = {}
+            body = []
+        else:
+            if not hasattr(r, '_header_'):
+                r = row(r)
+            header = r._header_.copy()
+            body = _itertools.chain([r], iterable)
+    new_rel = _get_type('rel', _Relation, header, {'_header': header})
+    return new_rel if body is None else new_rel(body)
 
-def _rel(prefix, attr_dict):
-    # For internal use we don't need to do all those checks above.  Although
-    # 'prefix' isn't used for anything, it can help during debugging.
-    return type(prefix, (_Relation,), {'_header': attr_dict.copy()})
+
+def _rel(attrdict):
+    # For internal use we don't need to do all those checks above.
+    header = attrdict.copy()
+    return _get_type('rel', _Relation, header, {'_header': header})
 
 
 class _RelationMeta(type):
@@ -244,14 +251,6 @@ class _RelationMeta(type):
             _degree_ = len(header)
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
-        strings = []
-        for (n, v) in sorted(header.items()):
-            if not isinstance(v, type):
-                raise ValueError(
-                    'Invalid value for attribute {!r} in relation type '
-                    'definition: "{!r}" is not a type'.format(n, v))
-            strings.append(repr(n)+': '+v.__name__)
-        name = "rel({{{}}})".format(', '.join(strings))
         return type.__new__(cls, name, bases, dct)
 
     @property
@@ -299,6 +298,7 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
                 not hasattr(args[0], '_header_') and
                 hasattr(args[0], '__iter__') and
                 hasattr(args[0], '__len__') and
+                len(args[0]) and
                 isinstance(next(iter(args[0])), str)):
             # (3) Tuple form.  Tuple form is a special shorthand, and we only
             # allow it in argument list form, not single-iterator-argument
@@ -430,14 +430,36 @@ class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
         return _display(self, *sorted(self.header))
 
 
-Dum = _Relation()
-Dee = _Relation({})
+
+#
+# Type registry
+#
+
+_type_registry = {_Row: _weakref.WeakValueDictionary(),
+                  _Relation: _weakref.WeakValueDictionary()}
+def _get_type(typetype, baseclass, header, dct=None):
+    hsig = '_'.join(n+'-'+v.__name__+str(id(v))
+                    for n, v in sorted(header.items()))
+    cls = _type_registry[baseclass].get(hsig)
+    if cls is None:
+        dct = {} if dct is None else dct
+        name = '{}({{{}}})'.format(
+            typetype,
+            ', '.join(repr(n)+': '+v.__name__
+                      for n, v in sorted(header.items())))
+        cls = type(name, (baseclass,), dct)
+        _type_registry[baseclass][hsig] = cls
+    return cls
 
 
 
 #
 # Relational Operators
 #
+
+
+Dum = rel()
+Dee = rel(row())
 
 
 def join(*relations):
@@ -487,7 +509,7 @@ def _binary_join(first, second):
     # Create an initially empty new relation of the new type, and then extend
     # it with the joined data.  Because the body is a set we don't have to
     # worry about duplicates.
-    new_rel = _rel('join', combined_attrs)()
+    new_rel = _rel(combined_attrs)()
     for row in first._rows_:
         key = getter(row)
         for row2 in matches(key):
@@ -532,7 +554,7 @@ def rename(relation, **renames):
     for old, new in renames.items():
         holder[new] = new_attrs.pop(old)
     new_attrs.update(holder)
-    new_rel = _rel('renamed', new_attrs)()
+    new_rel = _rel(new_attrs)()
     for row in relation._rows_:
         row_data = row._as_dict_()
         holder = {}
@@ -570,7 +592,7 @@ def project(relation, attr_names):
         raise TypeError("Attribute list included invalid attributes: "
                         "{}".format(attr_names - reduced_attrs.keys()))
     reduced_attr_names = reduced_attrs.keys()
-    new_rel = _rel('project', reduced_attrs)()
+    new_rel = _rel(reduced_attrs)()
     for row in relation._rows_:
         new_row_data = {n: v for n, v in row._as_dict_().items()
                              if n in reduced_attr_names}
@@ -599,7 +621,7 @@ def extend(relation, **new_attrs):
     attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
-    new_rel = _rel('extend', attrs)()
+    new_rel = _rel(attrs)()
     for row in relation:
         new_values = row._as_dict_()
         new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
@@ -815,7 +837,7 @@ def ungroup(relation, attrname):
     row1 = next(iter(relation))
     del attrs[attrname]
     attrs.update(getattr(row1, attrname).header)
-    new_rel = _rel('ungroup', attrs)()
+    new_rel = _rel(attrs)()
     for row in relation:
         new_values = row._as_dict_()
         subrel = new_values.pop(attrname)
@@ -843,7 +865,7 @@ def unwrap(relation, attrname):
     row1 = next(iter(relation))
     del attrs[attrname]
     attrs.update(getattr(row1, attrname)._header_)
-    new_rel = _rel('unwrap', attrs)()
+    new_rel = _rel(attrs)()
     for row in relation:
         new_values = row._as_dict_()
         subrow = new_values.pop(attrname)

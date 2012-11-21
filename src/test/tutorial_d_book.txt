@@ -362,9 +362,11 @@ as its result:
 
 In Python, dictionaries are unordered, and the keys of a dictionary are a set
 (that is, no two keys may be equal), so this declaration fully satisfies
-the *TTM* requirement that the header of a relation be a set of pairs:
+the *TTM* requirement that the header of a relation be a set of pairs, in
+which order does not matter:
 
-    >>> x == rel({'student_id': SID, 'course_id': CID, 'name': str})
+    >>> y = rel({'student_id': SID, 'course_id': CID, 'name': str})
+    >>> x is y
     True
 
 However, rather than indicating a syntax error if a key is repeated, Python
@@ -597,10 +599,18 @@ stored.
 
 Rows have a type, just like relations have a type:
 
-    >>> type(row(student_id=SID('S1')))
-    <class 'dinsd.row({'student_id': SID})'>
+    >>> x = type(row(student_id=SID('S1'), name='Anne'))
+    >>> x
+    <class 'dinsd.row({'name': str, 'student_id': SID})'>
 
-You hardly ever need to think about that fact, though.
+And, like relation types, only one type object is created for each distinct
+type:
+
+    >>> y = type(row(name='Anne', student_id=SID('S1')))
+    >>> x is y
+    True
+
+You hardly ever need to think about row types, though.
 
 
 Relation Literals
@@ -825,8 +835,10 @@ one row with no attributes (cardinality 1):
     >>> rel(row())
     rel({row({})})
 
-XXX: START HERE  Before proceeding, need tests for row sorting and for the
-remaining rel relation literal error cases.
+
+XXX
+Text refactoring not complete beyond this point.
+XXX
 
 
 Extending Relation Types Into Relations
