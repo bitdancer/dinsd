@@ -1,3 +1,5 @@
+#Copyright 2012 R. David Murray (see end comment for terms).
+
 import collections as _collections
 import contextlib as _contextlib
 import itertools as _itertools
@@ -873,3 +875,16 @@ def ns(*args, **kw):
 # "import *" support: use this only when playing with relational algebra in the
 # Python shell.
 __all__ = list(_names) + ['ns', 'expression_namespace']
+
+
+#Licensed under the Apache License, Version 2.0 (the "License");
+#you may not use this file except in compliance with the License.
+#You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+#Unless required by applicable law or agreed to in writing, software
+#distributed under the License is distributed on an "AS IS" BASIS,
+#WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#See the License for the specific language governing permissions and
+#limitations under the License.
