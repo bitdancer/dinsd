@@ -437,6 +437,15 @@ identifiers:
         ...
     ValueError: Invalid relational attribute name '_foo'
 
+Passing something that is not a type as the value of a keyword argument is
+invalid:
+
+    >>> rel(course_id=CID('C1'))            # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid value for attribute 'course_id' in relation type
+        definition: "CID('C1')" is not a type
+
 Relation types (and therefore relation objects, but we'll get to those later)
 have an attribute ``degree``, which gives the number of attributes.
 
@@ -721,8 +730,8 @@ a generator:
     | 9 | 9 | 81     |
     +---+---+--------+
 
-It is possible to define a single row literal (this may seem obvious,
-but it needs to be tested since it is an edge case):
+It is possible to define a single row literal (this may seem obvious, but it
+needs to be tested since it is an edge case):
 
     >>> rel({'foo': 1, 'bar': CID('C1')})
     rel({row({'bar': CID('C1'), 'foo': 1})})

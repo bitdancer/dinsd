@@ -175,8 +175,15 @@ class _RelationMeta(type):
             _degree_ = len(header)
         dct['row'] = RowClass
         RowClass.__name__ = '.'.join((name, 'RowClass'))
-        name = "rel({{{}}})".format( ', '.join([repr(n)+': '+(v.__name__)
-                                    for n, v in sorted(header.items())]))
+        pairs = sorted(header.items())
+        strings = []
+        for (n, v) in pairs:
+            if not isinstance(v, type):
+                raise ValueError(
+                    'Invalid value for attribute {!r} in relation type '
+                    'definition: "{!r}" is not a type'.format(n, v))
+            strings.append(repr(n)+': '+v.__name__)
+        name = "rel({{{}}})".format(', '.join(strings))
         return type.__new__(cls, name, bases, dct)
 
     @property
