@@ -854,8 +854,9 @@ more formal one and is used for the repr.  This is because the "formal"
 notation indicates that the attributes *are* a set, and the body of the
 relation *is* a set, which is important information to convey.
 
-Any Python iterator can be used as the argument to ``rel``.  This includes
-a generator:
+Although it isn't technically a literal form, this is a good place to mention
+that any Python iterator can be used as the argument to ``rel``.  Here is
+an example using a generator:
 
     >>> def multiplication_table():
     ...     for a in range(10):
@@ -878,6 +879,9 @@ a generator:
     | 9 | 8 | 72     |
     | 9 | 9 | 81     |
     +---+---+--------+
+
+We could equally well have used a generator expression, or a list
+comprehension.
 
 It is possible to define a single row literal (this may seem obvious, but it
 needs to be tested since it is an edge case):
@@ -961,13 +965,68 @@ one row with no attributes (cardinality 1):
     rel({row({})})
 
 
-XXX
-Text refactoring not complete beyond this point.
-XXX
-
 
 Extending Relation Types Into Relations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Section 2.11 of AITDT talks about declaring variables.  In Python we don't
+really have variables, we just have names that are references to some object,
+and which object (and which type of object) they reference can change over
+time.  This is Python's dynamically typed nature.  As I've mentioned already,
+the objects themselves are strongly typed.
+
+The dinsd equivalent of example 2.5:
+
+    VAR SN SID INIT SID ( 'S1' ) ;
+
+is simply:
+
+    >>> sn = SID('S1')
+    >>> sn
+    SID('S1')
+
+There is no Python equivalent to an actual variable declaration, and therefore
+no equivalent to a variable *without* an initializer.
+
+The dinsd equivalent to example 2.6:
+
+    VAR ENROLLMENT BASE RELATION { StudentId SID,
+                                   Name NAME,
+                                   CourseId CID )
+                        KEY ( StudentId, CourseId ) ;
+
+is:
+
+    >>> enrollment = rel(student_id=SID, name=str, course_id=CID)()
+    >>> enrollment
+    rel({'course_id': CID, 'name': str, 'student_id': SID})()
+
+(We are deferring the discussion of the dinsd equivalent of the KEY phrase
+until the general discussion of database constraints.)
+
+Note carefully the ``()`` at the end of that expression.  What is happening
+here is that we are using the type declaration form of ``rel``, and
+then *calling the type* to obtain an actual relation.  Since we specify no rows
+for the relation, we get an empty instance of that relation type.  You can
+see that a bit more clearly in table form:
+
+    >>> print(enrollment)
+    +-----------+------+------------+
+    | course_id | name | student_id |
+    +-----------+------+------------+
+    +-----------+------+------------+
+
+We could equally well write the above as follows:
+
+    >>> IsEnrolledOn = rel(student_id=SID, name=str, course_id=CID)
+    >>> enrollment = IsEnrolledOn()
+
+That is, in Python we can have a name that points to the type object just as
+easily as we can have a name that points to an instance of that type.
+
+XXX
+Text refactoring not complete beyond this point.
+XXX
 
 The most verbose and most general way of creating such a relation instance is
 as follows:
