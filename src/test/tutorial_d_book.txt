@@ -527,6 +527,61 @@ its header:
     >>> x.name
     'Anne'
 
+Similar to ``rel``, there is a keyword form for ``row`` literals:
+
+    >>> y = row(student_id=SID('S1'), course_id=CID('C1'), name='Anne')
+    >>> x == y
+    True
+
+This is the preferred form for row literals, since unlike the dictionary
+form it will object to to multiply defined keywords:
+
+    >>> row(student_id=SID('S1'), student_id=SID('S2'))
+    Traceback (most recent call last):
+        ...
+    SyntaxError: keyword argument repeated
+
+All though rows are a collection of attribute/value pairs that have no
+intrinsic order, we do for convenience define a total ordering for rows of
+like type.  This is principally to provide a way to get default output in a
+predictable order, which improves the user experience when printing relations
+for debugging purposes.  (If the order might change on every print, comparing
+debugging output would be much more difficult).  It also makes it possible to
+test the output in doctests like this one.
+
+The default ordering for tuples is defined by first sorting the attributes in
+the row alphabetically, and then sorting the rows by comparing the values
+(which must themselves have a total ordering) of each attribute in turn from
+the first to the last alphabetically:
+
+    >>> y = row(student_id=SID('S2'), course_id=CID('C1'), name='Boris')
+    >>> x == y
+    False
+    >>> x < y
+    True
+    >>> x <= y
+    True
+    >>> x <= x
+    True
+    >>> x < x
+    False
+    >>> y > x
+    True
+    >>> y >= x
+    True
+    >>> y > y
+    False
+    >>> y >= y
+    True
+
+You can't order rows of unlike type, though:
+
+    >>> x < row(student_id=SID('S2'))         # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    TypeError: unorderable types: row({'course_id': CID, 'name': str,
+        'student_id': SID})() < row({'student_id': SID})()
+
 As we saw above, identifiers that start with an ``_`` are rejected by ``rel``.
 This is so that row objects can have Python attributes in addition to their
 relational-specific attributes.  In Python's standard programming conventions,
@@ -563,6 +618,13 @@ These attributes are read-only:
         ...
     AttributeError: can't set attribute
 
+The dictionary returned by ``_header_`` is a copy; modifying it does not
+modify the ``_header_`` dict:
+
+    >>> original = x._header_.copy()
+    >>> x._header_['foo'] = 2
+    >>> assert x._header_ == original
+
 As with ``rel``, any attribute names that start with an ``_`` are rejected:
 
     >>> row({'_foo': 10})
@@ -570,27 +632,14 @@ As with ``rel``, any attribute names that start with an ``_`` are rejected:
         ...
     ValueError: Invalid relational attribute name '_foo'
 
-Also as with ``rel``, there is a keyword form for ``row`` literals:
-
-    >>> y = row(student_id=SID('S1'), course_id=CID('C1'), name='Anne')
-    >>> x == y
-    True
-
-Which will object to multiply defined keywords:
-
-    >>> row(student_id=SID('S1'), student_id=SID('S2'))
-    Traceback (most recent call last):
-        ...
-    SyntaxError: keyword argument repeated
-
-Keyword arguments that start with ``_`` are disallowed:
+Likewise keyword arguments that start with ``_`` are disallowed:
 
     >>> row(student_id=SID('S1'), _foo=1)
     Traceback (most recent call last):
         ...
     ValueError: Invalid relational attribute name '_foo'
 
-And a dictionary and keywords can be mixed:
+As usual, dictionary and keywords can be mixed:
 
     >>> row({'name': 'Anne', 'student_id': SID('S3')}, student_id=SID('S1'))
     row({'name': 'Anne', 'student_id': SID('S1')})
@@ -615,7 +664,7 @@ Rows have a type, just like relations have a type:
     <class 'dinsd.row({'name': str, 'student_id': SID})'>
 
 And, like relation types, only one type object is created for each distinct
-type:
+row type:
 
     >>> yt = type(row(name='Anne', student_id=SID('S1')))
     >>> xt is yt
@@ -637,17 +686,14 @@ relation types:
         ...
     AttributeError: can't set attribute
 
-You hardly ever need to think about row types, though.
-
-Note that what is returned by both ``header`` and ``_header_`` is a copy of
-the attribute dict, so mutating it does not affect the original:
+The dict returned by ``header`` is a copy, so mutating it does not affect the
+original:
 
     >>> original = yt.header.copy()
     >>> yt.header['foo'] = 2
     >>> assert yt.header == original
-    >>> original = y._header_.copy()
-    >>> y._header_['foo'] = 2
-    >>> assert y._header_ == original
+
+You hardly ever need to interact with row types, though.
 
 
 Relation Literals
