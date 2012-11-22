@@ -121,8 +121,17 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
 
     _header = {}
 
-    def __init__(self, attrdict):
-        if isinstance(attrdict, _Row):
+    def __init__(self, *args, **kw):
+        if not args:
+            attrdict = kw
+        elif len(args) > 1:
+            raise TypeError("Unexpected arguments")
+        elif kw:
+            kw.update(args[0])
+            attrdict = kw
+        else:
+            attrdict = args[0]
+        if isinstance(attrdict, _Row) and not kw:
             # We are being called as a type function.
             if self._header_ != attrdict._header_:
                 raise TypeError("Invalid Row type: {!r}".format(attrdict))
@@ -135,8 +144,8 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
             try:
                 setattr(self, attr, self._header_[attr](value))
             except (TypeError, ValueError) as e:
-                raise type(e)(str(e) + "; {} invalid for attribute {}".format(
-                                repr(value), attr))
+                raise type(e)(str(e) + "; {!r} invalid for attribute {}".format(
+                                value, attr))
             except KeyError:
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None
