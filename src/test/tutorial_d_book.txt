@@ -728,8 +728,8 @@ most complete and formal specification of a relation literal:
     'student_id': SID('S1')}), row({'course_id': CID('C3'), 'name': 'Cindy',
     'student_id': SID('S3')})})
 
-Note that the rows are sorted.  This is so that we get a consistent repr for
-doctests and to make it easier to compare relations by their repr.  The
+As mentioned above, the rows are sorted.  This gives us a consistent repr for
+doctests, and makes it easier to compare relations by their repr.  The
 ``repr`` of a relation is exactly the most formal version of the literal that
 can be used to create that relation.
 
@@ -806,10 +806,26 @@ You might ask why we bother with a row object at all...one answer has to do
 with Python's strong typing.  If we didn't have a type for rows that was
 distinct from the base dictionary type, the implementation and the error
 messages would be much messier and more difficult to work with.  However,
-there is also a pedagogical reason: the keyword form of ``row`` will reject
+there is also the pedagogical reason: the keyword form of ``row`` will reject
 duplicate keys, whereas the dictionary form will silently use the last of a
-set of duplicates.  If you wish to hew as close as possible to ``D``, you must
-use the keyword form of ``row``:
+set of duplicates. 
+
+If you wish to hew as close as possible to the type-safety
+of ``D``, you should use the keyword form of ``row`` with either the
+multiple-argument or non-set iterator form of ``rel``:
+
+    >>> y = rel(
+    ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
+    ...     row(student_id=SID('S1'), course_id=CID('C2'), name='Anne'),
+    ...     row(student_id=SID('S2'), course_id=CID('C1'), name='Boris'),
+    ...     row(student_id=SID('S3'), course_id=CID('C3'), name='Cindy'),
+    ...     row(student_id=SID('S4'), course_id=CID('C1'), name='Devinder'),
+    ...     )
+    >>> y == x
+    True
+
+This is because, like the dict literal, the Python set literal will happily
+accept duplicate entries:
 
     >>> y = rel({
     ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
@@ -817,9 +833,26 @@ use the keyword form of ``row``:
     ...     row(student_id=SID('S2'), course_id=CID('C1'), name='Boris'),
     ...     row(student_id=SID('S3'), course_id=CID('C3'), name='Cindy'),
     ...     row(student_id=SID('S4'), course_id=CID('C1'), name='Devinder'),
+    ...     row(student_id=SID('S2'), course_id=CID('C1'), name='Boris'),
     ...     })
     >>> y == x
     True
+
+The non-set form, however, will produce an error if you try to specify two
+identical rows in a relation literal:
+
+    >>> rel(row(foo=1), row(foo=2), row(foo=1), row(foo=4))
+    Traceback (most recent call last):
+        ...
+    ValueError: Duplicate row: row({'foo': 1}) in row 2 of input
+
+(When looking at that error message, remember that Python list indexes
+start from zero.)
+
+At this point you might wonder why the set/dict notation is considered the
+more formal one and is used for the repr.  This is because the "formal"
+notation indicates that the attributes *are* a set, and the body of the
+relation *is* a set, which is important information to convey.
 
 Any Python iterator can be used as the argument to ``rel``.  This includes
 a generator:
@@ -854,31 +887,40 @@ needs to be tested since it is an edge case):
     >>> rel(row(student_id=SID('S1')))
     rel({row({'student_id': SID('S1')})})
 
-A relation may not contain two rows that are identical, and you will get
-an error if you try to specify two identical rows in a relation literal:
+It is an error to specify unlike types in a relation literal.  The type of the
+first row is assumed to be the "correct" type of the relation:
 
-    >>> rel({'foo': 1}, {'foo': 2}, {'foo': 1}, {'foo': 4})
+    >>> rel(row(foo=1), row(foo=1, bar=2))     # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    ValueError: Duplicate row: row({'foo': 1}) in row 2 of input
+    TypeError: Row header does not match relation header in row 1 (got
+        row({'bar': 2, 'foo': 1}) for <class 'dinsd.rel({'foo': int})'>)
 
-(Remember that Python lists are zero origined.)
-
-It is also an error to specify unlike types in a relation literal.  The type
-of the first row is assumed to be the "correct" type of the relation:
-
-    >>> rel({'foo': 1}, {'foo': 'bar'})        # doctest: +NORMALIZE_WHITESPACE
+    >>> rel(row(foo=1), row(foo='bar'))        # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    ValueError: invalid literal for int() with base 10: 'bar'; 'bar' invalid
-        for attribute foo in row 1
+    TypeError: Row header does not match relation header in row 1 (got
+        row({'foo': 'bar'}) for <class 'dinsd.rel({'foo': int})'>)
+
+The errors are a bit different if we use the dictionary form:
+
     >>> rel({'foo': 1}, {'foo': 1, 'bar': 2})
     Traceback (most recent call last):
         ...
     TypeError: Expected 1 attributes, got 2 ({...}) in row 1
+    >>> rel({'foo': 1}, {'foo': 'bar'})       # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: invalid literal for int() with base 10: 'bar'; 'bar' invalid
+        for attribute foo in row 1
+
+This is because a ``row`` has a header, so that is compared against the
+relation header, while in the dictionary case the values get passed to the
+type function for the attribute, and it is that type function that raises the
+type error.
 
 The restriction to names that do not start with ``_`` is of course enforced
-also in a relation literal:
+also in a relation literal even with the row in dict form:
 
     >>> rel({'foo': 1, '_bar': 2})
     Traceback (most recent call last):
