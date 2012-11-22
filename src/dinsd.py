@@ -77,6 +77,22 @@ class Scaler(_RichCompareMixin):
 
 
 #
+# Relation Type Metatype
+#
+
+class _RelationTypeMeta(type):
+
+    @property
+    def header(self):
+        return self._header.copy()
+
+    @property
+    def degree(self):
+        return len(self._header)
+
+
+
+#
 # Row _types (TTM/Tutorial D TUPLE Types)
 #
 
@@ -101,18 +117,7 @@ def _row_dct(header):
     return {'_header': header}
 
 
-class _RowMeta(type):
-
-    @property
-    def header(self):
-        return self._header.copy()
-
-    @property
-    def degree(self):
-        return len(self._header)
-
-
-class _Row(_RichCompareMixin, metaclass=_RowMeta):
+class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
 
     _header = {}
 
@@ -258,18 +263,7 @@ def _rel(attrdict):
     return _get_type('rel', attrdict.copy())
 
 
-class _RelationMeta(type):
-
-    @property
-    def header(self):
-        return self._header.copy()
-
-    @property
-    def degree(self):
-        return len(self._header)
-
-
-class _Relation(_RichCompareMixin, metaclass=_RelationMeta):
+class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
 
     _header = {}
 
