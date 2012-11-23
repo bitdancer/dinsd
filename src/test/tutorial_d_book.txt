@@ -582,6 +582,15 @@ You can't order rows of unlike type, though:
     TypeError: unorderable types: row({'course_id': CID, 'name': str,
         'student_id': SID})() < row({'student_id': SID})()
 
+This default ordering of the attribute names is also used in the repr as you
+can see above.  Rows also have a simpler string representation, that uses
+the string representation of both the attribute names and the values, with
+an ``=`` separating them.  The whole thing is enclosed in ``{}`` to indicate
+that it is a set rather than an ordered tuple:
+
+    >>> str(x)
+    '{course_id=C1, name=Anne, student_id=S1}'
+
 As we saw above, identifiers that start with an ``_`` are rejected by ``rel``.
 This is so that row objects can have Python attributes in addition to their
 relational-specific attributes.  In Python's standard programming conventions,
@@ -753,7 +762,23 @@ attributes will also produce an error:
     Traceback (most recent call last):
         ...
     TypeError: Expected 2 attributes, got 3 ({...})
+    >>> yt(student_id='C1')
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 2 attributes, got 1 ({...})
 
+There is no such thing as an "empty" row, so passing no arguments is als
+an error:
+
+    >>> yt()
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 2 attributes, got 0 ({})
+    >>> yt({})
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 2 attributes, got 0 ({})
+    
 
 Relation Literals
 ~~~~~~~~~~~~~~~~~
@@ -1091,8 +1116,6 @@ If we want to create an instance of the type now pointed to by
 ``IsEnrolledOn`` that does have content, we have a number of choices.  Here
 is one rather wordy way of doing it:
 
-
-    >>> IsEnrolledOn = rel(student_id=SID, course_id=CID, name=str)
     >>> is_enrolled_on = IsEnrolledOn(
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
     ...                       'name': 'Anne'}),
@@ -1105,23 +1128,89 @@ is one rather wordy way of doing it:
     ...     IsEnrolledOn.row({'student_id': SID('S4'), 'course_id': CID('C1'),
     ...                       'name': 'Devinder'}),
     ...     )
+    >>> print(is_enrolled_on)
+    +-----------+----------+------------+
+    | course_id | name     | student_id |
+    +-----------+----------+------------+
+    | C1        | Anne     | S1         |
+    | C1        | Boris    | S2         |
+    | C1        | Devinder | S4         |
+    | C2        | Anne     | S1         |
+    | C3        | Cindy    | S3         |
+    +-----------+----------+------------+
 
-Relation has an attribute ``row`` that is a reference
-to the type for the rows that may be present in that relation.  That is,
-``<relation>.row`` is the ``row`` type whose ``header`` is equal to the
-``header`` of the relation:
+A relation type has an attribute ``row`` that is a reference to the type for
+the rows that may be present in that relation.  That is, ``<relation>.row`` is
+the ``row`` type whose ``header`` is equal to the ``header`` of the relation:
 
     >>> IsEnrolledOn.header == IsEnrolledOn.row.header
     True
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
+As we saw above, the type for a row can convert appropriate standard literals into
+the appropriate type, so we can simplify the above:
 
-for rows of the type defined by the relation's header.  While it works fine
-to define rows just with the ``row`` function, using the ``row`` attribute
-of the relation gives the system opportunities to optimize the row creation
-process.  But the rows created by the two methods are entirely equivalent:
+    >>> x = IsEnrolledOn(
+    ...     IsEnrolledOn.row({'student_id': 'S1', 'course_id': 'C1',
+    ...                       'name': 'Anne'}),
+    ...     IsEnrolledOn.row({'student_id': 'S1', 'course_id': 'C2',
+    ...                       'name': 'Anne'}),
+    ...     IsEnrolledOn.row({'student_id': 'S2', 'course_id': 'C1',
+    ...                       'name': 'Boris'}),
+    ...     IsEnrolledOn.row({'student_id': 'S3', 'course_id': 'C3',
+    ...                       'name': 'Cindy'}),
+    ...     IsEnrolledOn.row({'student_id': 'S4', 'course_id': 'C1',
+    ...                       'name': 'Devinder'}),
+    ...     )
+    >>> x == is_enrolled_on
+    True
+
+We can save ourselves some typing by using a temporary name to refer to
+this row type function:
+
+    >>> r = IsEnrolledOn.row
+    >>> x = IsEnrolledOn(
+    ...     r({'student_id': 'S1', 'course_id': 'C1', 'name': 'Anne'}),
+    ...     r({'student_id': 'S1', 'course_id': 'C2', 'name': 'Anne'}),
+    ...     r({'student_id': 'S2', 'course_id': 'C1', 'name': 'Boris'}),
+    ...     r({'student_id': 'S3', 'course_id': 'C3', 'name': 'Cindy'}),
+    ...     r({'student_id': 'S4', 'course_id': 'C1', 'name': 'Devinder'}),
+    ...     )
+    >>> x == is_enrolled_on
+    True
+
+And we can get make sure we have no duplicate attributes in our literal
+rows by using the keyword version:
+
+    >>> r = IsEnrolledOn.row
+    >>> x = IsEnrolledOn(
+    ...     r(student_id='S1', course_id='C1', name='Anne'),
+    ...     r(student_id='S1', course_id='C2', name='Anne'),
+    ...     r(student_id='S2', course_id='C1', name='Boris'),
+    ...     r(student_id='S3', course_id='C3', name='Cindy'),
+    ...     r(student_id='S4', course_id='C1', name='Devinder'),
+    ...     )
+    >>> x == is_enrolled_on
+    True
+
+We can of course also just use the regular row function, although in that
+case we must provide values of the correct type, since the generic
+row function doesn't know what type of row we want and produces
+whatever we tell it to:
+
+    >>> x = IsEnrolledOn(
+    ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
+    ...     row(student_id=SID('S1'), course_id=CID('C2'), name='Anne'),
+    ...     row(student_id=SID('S2'), course_id=CID('C1'), name='Boris'),
+    ...     row(student_id=SID('S3'), course_id=CID('C3'), name='Cindy'),
+    ...     row(student_id=SID('S4'), course_id=CID('C1'), name='Devinder'),
+    ...     )
+    >>> x == is_enrolled_on
+    True
+
+While it works fine to define rows just with the ``row`` function, using the
+``row`` attribute of the relation gives the system opportunities to optimize
+the row creation process.  But the rows created by the two methods are
+entirely equivalent:
 
     >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'),
     ...           'name': 'Anne'})
@@ -1133,16 +1222,32 @@ process.  But the rows created by the two methods are entirely equivalent:
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
     >>> x == y
     True
-    >>> type(x) is type(y)
+    >>> type(x) is type(y) is IsEnrolledOn.row
     True
 
-Just like in *Tutorial D*, when you write a generic ``row`` declaration,
+Just like in *Tutorial D*, if you use a generic ``row`` declaration,
 you *must* use the exact type for the attribute values.  Otherwise you
 end up with a row with a different type:
 
     >>> z = row({'course_id': 'C1', 'name': 'Anne', 'student_id': 'S1'})
     >>> z == y
     False
+
+Trying to pass such a row into a relation of a different type will
+produce an error:
+
+    >>> x = IsEnrolledOn(               # doctest: +NORMALIZE_WHITESPACE
+    ...     row(student_id='S1', course_id='C1', name='Anne'),
+    ...     row(student_id='S1', course_id='C2', name='Anne'),
+    ...     row(student_id='S2', course_id='C1', name='Boris'),
+    ...     row(student_id='S3', course_id='C3', name='Cindy'),
+    ...     row(student_id='S4', course_id='C1', name='Devinder'),
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Row header does not match relation header in row 0 (got
+        row({'course_id': 'C1', 'name': 'Anne', 'student_id': 'S1'}) for <class
+        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>)
 
 We can see exactly why this is by inspecting the ``_header_`` attribute
 of the respective rows (the ``_header_`` is just a ``dict``, so we have
@@ -1159,57 +1264,122 @@ As you can see, if we don't use the specific type for the value, we get
 the actual type of the value in the _header_ (``str`` in this case) which
 means the two rows are not the same type, and are not equal.
 
-When we know the type of the relation we are creating, we can provide
-usefully simpler representations.
+Since the dictionary representation of a row is logically equivalent to
+the row representation, we also have the option of just passing a list
+of dictionaries into the relation constructor:
 
-First, we know that the body of the relation is a list of rows, so there is no
-need to pass in explicitly constructed rows.  Instead, if the init method is
-passed a simple Python dictionary, it can do the conversion-to-row itself:
-
-    >>> is_enrolled_on2 = IsEnrolledOn(
+    >>> x = IsEnrolledOn(
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
     ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
     ...     {'student_id': SID('S2'), 'course_id': CID('C1'), 'name': 'Boris'},
     ...     {'student_id': SID('S3'), 'course_id': CID('C3'), 'name': 'Cindy'},
     ...     {'student_id': SID('S4'), 'course_id': CID('C1'), 'name': 'Devinder'},
     ...     )
+    >>> x == is_enrolled_on
+    True
 
-Second, by relaxing from the purity of never using ordered tuples we can
-significantly reduce the typing required to enter a relation literal:
+In this case, too, since the relation knows the types of the attributes, it
+can automatically convert appropriate literals into the correct type for the
+attribute:
 
-    >>> is_enrolled_on3 = IsEnrolledOn(
-    ...     ('student_id', 'course_id', 'name'),
-    ...     (SID('S1'), CID('C1'), 'Anne'),
-    ...     (SID('S1'), CID('C2'), 'Anne'),
-    ...     (SID('S2'), CID('C1'), 'Boris'),
-    ...     (SID('S3'), CID('C3'), 'Cindy'),
-    ...     (SID('S4'), CID('C1'), 'Devinder'),
+    >>> x = IsEnrolledOn(
+    ...     {'student_id': 'S1', 'course_id': 'C1', 'name': 'Anne'},
+    ...     {'student_id': 'S1', 'course_id': 'C2', 'name': 'Anne'},
+    ...     {'student_id': 'S2', 'course_id': 'C1', 'name': 'Boris'},
+    ...     {'student_id': 'S3', 'course_id': 'C3', 'name': 'Cindy'},
+    ...     {'student_id': 'S4', 'course_id': 'C1', 'name': 'Devinder'},
     ...     )
+    >>> x == is_enrolled_on
+    True
 
-Here the ``__init__`` method sees that it is being passed (Python) tuples
-instead of dictionaries, and takes the first such tuple as the ordered list
-of attributes and each subsequent tuple as a correspondingly ordered list
-of attribute values.
+Trying to pass the wrong names, inappropriate literals, or wrong number of
+attributes will result in an error:
 
-Finally, by taking advantage of the fact that we know the type of the
-attributes and have access to the selector function for that type, we can
-produce a minimally simple representation by not requiring the type of the
-attribute value to explicitly specified in the literal:
-
-    >>> is_enrolled_on4 = IsEnrolledOn(
-    ...     ('student_id', 'course_id', 'name'),
-    ...     ('S1', 'C1', 'Anne'),
-    ...     ('S1', 'C2', 'Anne'),
-    ...     ('S2', 'C1', 'Boris'),
-    ...     ('S3', 'C3', 'Cindy'),
-    ...     ('S4', 'C1', 'Devinder'),
+    >>> IsEnrolledOn(
+    ...     {'student_id': 'S1', 'course_id': 'C1', 'foo': 'Anne'},
     ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Invalid attribute name foo in row 0
+    >>> IsEnrolledOn(                   # doctest: +NORMALIZE_WHITESPACE
+    ...     {'student_id': 'S1', 'course_id': 'S1', 'name': 'Anne'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'C' followed by one to three digits, got 'S1'; 'S1'
+        invalid for attribute course_id in row 0
+    >>> IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'name': 'Anne'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2 ({...}) in row 0
+    >>> IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
+    ...     {'student_id': SID('S1'), 'name': 'Anne'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 2 ({...}) in row 1
+    >>> IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
+    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne', 'foo': 'bar'},
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 4 ({...}) in row 1
 
-There is no loss of type-safety here, since each selector is passed through
-the type constructor, which will raise an error if the argument value does
-not conform to the selector.
+All of these examples require repeating the attribute names in every row,
+though.  dinsd provides an additional specialized shorthand for creating
+a relation instance that eliminates this duplication:
 
-You can see now why it is critical that the type constructor accept an
+    >>> x = IsEnrolledOn(
+    ...     ('student_id', 'course_id', 'name'),
+    ...     ('S1',          'C1',       'Anne'),
+    ...     ('S1',          'C2',       'Anne'),
+    ...     ('S2',          'C1',       'Boris'),
+    ...     ('S3',          'C3',       'Cindy'),
+    ...     ('S4',          'C1',       'Devinder'),
+    ...     )
+    >>> x == is_enrolled_on
+    True
+
+In this form, which is unique to the relation constructor and is intended only
+for use in providing the body of a relation in literal form, the input must be
+a sequence of arguments, the fist one providing an ordering for the
+attributes, and the remaining arguments providing lists of attribute values in
+that same order.
+
+There is no loss of type-safety here, since each tuple is checked for
+conformance to the relation's type, and each value  is passed through the
+corresponding attribute's type constructor:
+
+    >>> IsEnrolledOn(               # doctest: +NORMALIZE_WHITESPACE
+    ...     ('student_id', 'course_id', 'foo'),
+    ...     ('S1',          'C1',       'Anne'),
+    ...     )
+    Traceback (most recent call last):
+        ...
+    AttributeError: <class 'dinsd.rel({'course_id': CID, 'name': str,
+        'student_id': SID})'> has no attribute 'foo'
+    >>> IsEnrolledOn(               # doctest: +NORMALIZE_WHITESPACE
+    ...     ('student_id', 'course_id', 'name'),
+    ...     ('S1',          'C1',       'Anne', 'foo'),
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 3 attributes, got 4 in row 1 for <class
+        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
+    >>> IsEnrolledOn(               # doctest: +NORMALIZE_WHITESPACE
+    ...     ('student_id', 'course_id', 'name'),
+    ...     ('C1',          'C1',       'Anne'),
+    ...     )
+    Traceback (most recent call last):
+        ...
+    TypeError: Expected 'S' followed by one to three digits, got 'C1'; 'C1'
+        invalid for attribute student_id in row 1
+
+We can explain now why it is critical that the type constructor accept an
 instance of itself as valid:  the relation constructor will always pass the
 value of an attribute through the corresponding type function for validation,
 and an instance of that type must be reported as valid.
@@ -1225,195 +1395,30 @@ literal dependent on the order of definition of the attributes in the relation
 definition.  In contrast, the final simplification above is not dependent on
 the definition order, only on the types, which cannot change.
 
-So, in dinsd you can choose the level of correspondence to the *Tutorial D*
-literal notation that you prefer.  All of the above representations produce
-the same relation value:
+We could also choose to accept rows in the sorted order of the attributes, but
+the value (and usefulness) of specifying the order of the tuples in the
+literal representation is too valuable to give up for the small reduction in
+additional typing.
 
-    >>> is_enrolled_on == is_enrolled_on2 == is_enrolled_on3 == is_enrolled_on4
+By the way, as with ``rel``, ``Row``s and dictionaries can be mixed:
+
+    >>> x = IsEnrolledOn(
+    ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
+    ...          'name': 'Anne'}),
+    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
+    ...     )
+    >>> y = IsEnrolledOn(
+    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
+    ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
+    ...          'name': 'Anne'}),
+    ...     )
+    >>> x == y
     True
 
 
-Testing the Edges
-~~~~~~~~~~~~~~~~~
-
-So much for the basics and the simple initial example from AIRDT Chapter 2.
-Let's take a look at some edge cases to make sure the code handles them.
-
-First of all, we can create an empty Relation:
-
-    >>> is_enrolled_on = IsEnrolledOn()
-    >>> is_enrolled_on
-    rel({'course_id': CID, 'name': str, 'student_id': SID})()
-    >>> print(is_enrolled_on)
-    +-----------+------+------------+
-    | course_id | name | student_id |
-    +-----------+------+------------+
-    +-----------+------+------------+
-
-Note that because there are no rows to indicate the names and types of the
-attributes, the repr of an empty relation includes the header definition.
-
-The dictionary passed to the row constructor must have the right number of
-values:
-
-    >>> IsEnrolledOn.row({})
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 0 ({})
-    >>> IsEnrolledOn.row({'student_id': 'S1', 'name': 'foo'})
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 2 ({...})
-    >>> IsEnrolledOn.row({'student_id': 'S1', 'name': 'foo',
-    ...                         'course_id': 'C1', 'bar': 1})
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 4 ({...})
-
-The contents of the dictionary passed in is shown in the error message, but
-we can't put it into the doctest because the order the repr is printed is
-random.
-
-The attribute names must match those defined in the relation:
-
-    >>> IsEnrolledOn.row({'student_id': 'S1', 'name': 'foo', 'bad': 1})
-    Traceback (most recent call last):
-        ...
-    TypeError: Invalid attribute name bad
-
-The values must be valid:
-
-    >>> IsEnrolledOn.row({'student_id': 'S1', # doctest: +NORMALIZE_WHITESPACE
-    ...                      'name': 'foo', 'course_id': 1})
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected str but passed <class 'int'>; 1 invalid for attribute course_id
-    >>> IsEnrolledOn.row({'student_id': 'S1', # doctest: +NORMALIZE_WHITESPACE
-    ...                     'name': 'foo', 'course_id': 'S1'})
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 'C' followed by one to three digits, got 'S1';
-         'S1' invalid for attribute course_id
-
-But it is OK to use the selector form ('C1') rather than the full scaler
-value form (CID('C1')):
-
-    >>> r = IsEnrolledOn.row(
-    ...         {'student_id': 'S1', 'name': 'foo', 'course_id': 'C1'})
-
-A row also has a distinct ``repr`` and ``str``:
-
-    >>> r
-    row({'course_id': CID('C1'), 'name': 'foo', 'student_id': SID('S1')})
-    >>> print(r)
-    (course_id=C1, name=foo, student_id=S1)
-
-You will note that as with the ``repr``  and ``str`` of a ``Relation``, the
-``repr`` and ``str`` of a ``row`` is sorted by the attribute names.  The
-``str`` representation of a ``row`` is not nearly as useful as that of
-a ``Relation``, but is provided for completeness.
-
-The same type checking happens when instantiating a Relation using the
-shorthand, and additionally reports which row is in error:
-
-    >>> IsEnrolledOn(('course_id', 'name'),   # doctest: +NORMALIZE_WHITESPACE
-    ...               ('S1', 'Anne'))
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 2 (['course_id', 'name']) in header
-        row for <class 'dinsd.rel({'course_id': CID, 'name': str,
-        'student_id': SID})'>
-    >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
-    ...              ('course_id', 'name', 'student_id'),
-    ...              ('C1', 'Anne'))
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 2 in row 1 for <class
-        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
-    >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
-    ...               ('course_id', 'name', 'student_id'),
-    ...               ('C1', 'Anne', 'S1'),
-    ...               ('C2', 'Anne', 'S1', 'foo'),
-    ...               )
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 4 in row 2 for <class
-        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
-    >>> IsEnrolledOn(                         # doctest: +NORMALIZE_WHITESPACE
-    ...               ('course_id', 'name', 'foo'),
-    ...               ('C1', 'Anne', 'S1'),
-    ...               )
-    Traceback (most recent call last):
-        ...
-    AttributeError: <class 'dinsd.rel({'course_id': CID, 'name': str,
-        'student_id': SID})'> has no attribute 'foo'
-    >>> IsEnrolledOn(                   # doctest: +NORMALIZE_WHITESPACE
-    ...               ('course_id', 'name', 'student_id'),
-    ...               ('C1', 'Anne', 'S1'),
-    ...               ('C2', 'Anne', 'C1'),
-    ...               )
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 'S' followed by one to three digits, got 'C1';
-         'C1' invalid for attribute student_id in row 2
-
-Here are the errors we get if we pass the wrong number of values in the
-dictionary form:
-
-    >>> is_enrolled_on = IsEnrolledOn(
-    ...     {'student_id': SID('S1'), 'name': 'Anne'},
-    ...     )
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 2 ({...}) in row 0
-    >>> is_enrolled_on = IsEnrolledOn(
-    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
-    ...     {'student_id': SID('S1'), 'name': 'Anne'},
-    ...     )
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 2 ({...}) in row 1
-    >>> is_enrolled_on = IsEnrolledOn(
-    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
-    ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne', 'foo': 'bar'},
-    ...     )
-    Traceback (most recent call last):
-        ...
-    TypeError: Expected 3 attributes, got 4 ({...}) in row 1
-
-To test the errors in the row form, we need a second relation and its
-associated type.  We'll define a throwaway type for this:
-
-    >>> Foo = rel(student_id=SID, name=str)
-    >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
-    ...     Foo.row({'student_id': SID('S1'), 'name': 'Anne'}),
-    ...     )
-    Traceback (most recent call last):
-        ...
-    TypeError: Row header does not match relation header in row 0 (got
-        row({'name': 'Anne', 'student_id': SID('S1')}) for <class
-        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>)
-    >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
-    ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
-    ...     Foo.row({'student_id': SID('S1'), 'name': 'Anne'}),
-    ...     )
-    Traceback (most recent call last):
-        ...
-    TypeError: Row header does not match relation header in row 1 (got
-        row({'name': 'Anne', 'student_id': SID('S1')}) for <class
-        'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>)
-
-By the way, ``Row``s and dictionaries can be mixed:
-
-    >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
-    ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
-    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
-    ...     )
-    >>> is_enrolled_on = IsEnrolledOn(      # doctest: +NORMALIZE_WHITESPACE
-    ...     {'student_id': SID('S1'), 'course_id': CID('C2'), 'name': 'Anne'},
-    ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
-    ...     )
-
+XXX
+Text refactoring incomplete beyond this point
+XXX
 
 
 Relational Operators
@@ -3271,8 +3276,8 @@ write the dinsd equivalent of 5.14 as follows:
     +-------+---------------------------------------------------+
     | name  | address                                           |
     +-------+---------------------------------------------------+
-    | Anne  | (city=London, house=120, street=Peach, zip=00111) |
-    | Boris | (city=Kiev, house=5, street=Rose, zip=00112)      |
+    | Anne  | {city=London, house=120, street=Peach, zip=00111} |
+    | Boris | {city=Kiev, house=5, street=Rose, zip=00112}      |
     +-------+---------------------------------------------------+
 
 The shorthand operator ``wrap`` does the same thing more compactly:
@@ -3287,15 +3292,15 @@ Here are the edge cases and errors:
     +--------------------------------------------------------------+
     | all                                                          |
     +--------------------------------------------------------------+
-    | (city=Kiev, house=5, name=Boris, street=Rose, zip=00112)     |
-    | (city=London, house=120, name=Anne, street=Peach, zip=00111) |
+    | {city=Kiev, house=5, name=Boris, street=Rose, zip=00112}     |
+    | {city=London, house=120, name=Anne, street=Peach, zip=00111} |
     +--------------------------------------------------------------+
     >>> print(wrap(contact_info, none={}))
     +--------+-------+-------+------+--------+-------+
     | city   | house | name  | none | street | zip   |
     +--------+-------+-------+------+--------+-------+
-    | Kiev   | 5     | Boris | ()   | Rose   | 00112 |
-    | London | 120   | Anne  | ()   | Peach  | 00111 |
+    | Kiev   | 5     | Boris | {}   | Rose   | 00112 |
+    | London | 120   | Anne  | {}   | Peach  | 00111 |
     +--------+-------+-------+------+--------+-------+
     >>> wrap(contact_info, bad={'foo'})
     Traceback (most recent call last):

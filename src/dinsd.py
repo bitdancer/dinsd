@@ -192,7 +192,7 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
                         for k, v in sorted(self.__dict__.items())))
 
     def __str__(self):
-        return '({})'.format(
+        return '{{{}}}'.format(
             ', '.join('{}={}'.format(k, v)
                         for k, v in sorted(self.__dict__.items())))
 
