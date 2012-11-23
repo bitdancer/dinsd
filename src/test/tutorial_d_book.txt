@@ -1500,10 +1500,6 @@ A multi-row relational literal:
     ...             )
 
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
-
 
 Relational Operators
 --------------------
@@ -1571,15 +1567,15 @@ display
 ~~~~~~~
 
 ``display`` is not a relational algebra function, but we introduce it here
-because it is useful in the examples, and it is located in the ``op``
-namespace.
+because it is useful in the examples, and there is no corresponding
+concept in AIRDT.
 
     >>> from dinsd import display
 
 The value returned by ``display`` is very similar to the value returned
 by turning a relation in to a string, except that we can control the
 order of the columns in the resulting table display.  Using ``display``
-we can print the relations in the same column order that is used in AITDM:
+we can print the relations in the same column order that is used in AIRDT:
 
     >>> print(display(is_called, 'student_id', 'name'))
     +------------+----------+
@@ -1602,6 +1598,25 @@ we can print the relations in the same column order that is used in AITDM:
     | S4         | C1        |
     +------------+-----------+
 
+We can also choose a sort order that is different from sorting by the
+columns in the ordered displayed:
+
+    >>> print(display(is_called, 'student_id', 'name',
+    ...          sort=('name', 'student_id')))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S5         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    +------------+----------+
+
+
+XXX
+Text refactoring incomplete beyond this point
+XXX
 
 join
 ~~~~
