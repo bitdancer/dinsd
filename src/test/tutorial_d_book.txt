@@ -1400,7 +1400,7 @@ the value (and usefulness) of specifying the order of the tuples in the
 literal representation is too valuable to give up for the small reduction in
 additional typing.
 
-By the way, as with ``rel``, ``Row``s and dictionaries can be mixed:
+By the way, as with ``rel``, rows and dictionaries can be mixed:
 
     >>> x = IsEnrolledOn(
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
@@ -1414,6 +1414,90 @@ By the way, as with ``rel``, ``Row``s and dictionaries can be mixed:
     ...     )
     >>> x == y
     True
+
+
+One Obvious Way To Do It?
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Python language is designed around a set of philosophical principles.
+(Well, actually, the set of philosophical principles was derived from the
+original language design, but then it became a guide.)
+
+    >>> import this
+    The Zen of Python, by Tim Peters
+    <BLANKLINE>
+    Beautiful is better than ugly.
+    Explicit is better than implicit.
+    Simple is better than complex.
+    Complex is better than complicated.
+    Flat is better than nested.
+    Sparse is better than dense.
+    Readability counts.
+    Special cases aren't special enough to break the rules.
+    Although practicality beats purity.
+    Errors should never pass silently.
+    Unless explicitly silenced.
+    In the face of ambiguity, refuse the temptation to guess.
+    There should be one-- and preferably only one --obvious way to do it.
+    Although that way may not be obvious at first unless you're Dutch.
+    Now is better than never.
+    Although never is often better than *right* now.
+    If the implementation is hard to explain, it's a bad idea.
+    If the implementation is easy to explain, it may be a good idea.
+    Namespaces are one honking great idea -- let's do more of those!
+
+This is a Zen particularly because there are not right answers, and the "best"
+design is an aesthetic balance between the principles, many of which pull
+in opposite directions.
+
+There is also an additional principle that I was surprised not to find in
+the above list when I checked, the principle of least surprise.  This
+principle is covered in part in AIRTD, in its discussion of the fact
+that a programming language should be self consistent.  If something is
+surprising, it probably indicates a questionable design decision.
+
+You can see from the previous sections that in dinsd there are several ways
+to create row and relation definitions, and several ways to extend a
+relation definition into a relation instance.  So, is one of the ways
+to do each of these things the one obvious way?
+
+Perhaps.  The API resulted from following the consequences of the principle of
+least surprise/self consistency in regard to the decision that (a) the obvious
+representation of a row (*Tutorial D* tuple) in Python is a dictionary and the
+obvious representation of a relation body is a set and (b) it is desirable
+have a notation that can detect duplicate values.  Adding (b) is also
+motivated by the fact that the resulting notation is more compact, and the
+practicality/economy of expression principles lead us to also provide a
+further simplified notation for literal representation of relation instances.
+
+So: using dictionary/set notation is provided mostly because it would be
+surprising if it didn't work.  But the one (mostly obvious) way to do it
+should be the following:
+
+Defining a relation type:
+
+    >>> Foo = rel(foo=int, bar=SID)
+
+Row literals:
+
+    >>> r = row(foo=1, bar=SID('S1'))
+
+Extending a relation type into an instance:
+
+    >>> foo = Foo(('foo', 'bar'), (1, 'S1'), (2, 'S2'))
+
+A single row relational literal:
+
+    >>> baz = rel(row(baz='test', foobar=2))
+
+A multi-row relational literal:
+
+    >>> baz2 = rel(baz=str, foobar=int)(
+    ...             ('baz',  'foobar'),
+    ...             ('test',  1),
+    ...             ('test2', 7),
+    ...             ('test3', 42),
+    ...             )
 
 
 XXX
