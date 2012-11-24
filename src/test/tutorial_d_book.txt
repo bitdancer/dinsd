@@ -1614,18 +1614,29 @@ columns in the ordered displayed:
     +------------+----------+
 
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
-
 join
 ~~~~
 
     >>> from dinsd import join
 
-Here is the straightforward ``join`` of the two tables above:
+In *Tutorial D*, a join operation looks like this:
 
-    >>> enrollment = join(is_enrolled_on, is_called)
+    IS_CALLED JOIN IS_ENROLLED_ON
+
+In Python we can't define new infix operators, but we can overload existing
+ones.  Since ``JOIN`` is, at base, the logical ``and`` operator, it would make
+sense to override ``and`` for the infix version of join.  However, we can't do
+that in Python, because ``and`` is a short circuit operator, whereas both
+arguments to a function must be evaluated before the function can be called,
+and we can only override an operator by defining a function.
+
+What we can do, however, is override the arithmetic ``&`` operator.  So the
+dinsd equivalent of the *Tutorial D* expression above is:
+
+    >>> enrollment = is_enrolled_on & is_called
+
+and produces the table from figure 4.2 (page 89 in my copy of AIRDT):
+
     >>> print(display(enrollment, 'student_id', 'name', 'course_id'))
     +------------+----------+-----------+
     | student_id | name     | course_id |
@@ -1638,17 +1649,12 @@ Here is the straightforward ``join`` of the two tables above:
     +------------+----------+-----------+
 
 In *Tutorial D* the ``JOIN`` relational operator can be used both as a prefix
-function and as a infix operator.  In Python we can't define new infix
-operators, but we can override existing ones.  Since ``JOIN`` is, at base, the
-logical ``and`` operator, it would make sense to override ``and`` for the
-infix version of join.  However, we can't do that in Python, because ``and``
-is a short circuit operator, whereas both arguments to a function must be
-evaluated before the function can be called, and we can only override an
-operator by defining a function.
+function and as a infix operator.  In dinsd, there is always a prefix
+(functional) form, but only sometimes an infix form.
 
-What we can do, however, is override the arithmetic ``&`` operator:
+The prefix form of ``join`` in dinsd is:
 
-    >>> j2 = is_enrolled_on & is_called
+    >>> j2 = join(is_enrolled_on, is_called)
     >>> print(display(j2, 'student_id', 'name', 'course_id'))
     +------------+----------+-----------+
     | student_id | name     | course_id |
@@ -1662,15 +1668,11 @@ What we can do, however, is override the arithmetic ``&`` operator:
     >>> enrollment == j2
     True
 
-The above join discussion takes us up to figure 4.2 on page 89 of AITDM, for
-those following along in the book :).
-
 On page 93 there is a discussion of cases where we *can't* perform a join.  In
 particular, if two tables have columns with the same name but different types,
 we cannot join them:
 
-    >>> PermissiveIds = rel(student_id=str, name=str)
-    >>> permissive_is_called = PermissiveIds(
+    >>> permissive_is_called = rel(student_id=str, name=str)(
     ...     ('student_id', 'name'),
     ...     ('S1', 'Anne'),
     ...     ('S2', 'Boris'),
@@ -1683,8 +1685,20 @@ we cannot join them:
         relations with types <class 'dinsd.rel({'name': str, 'student_id':
         str})'> and <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
 
-An error like this in a multi-join also indicates in which argument the error
-was detected:
+The prefix form of ``join`` can take more than two arguments, joining all of
+the relations so specified:
+
+    >>> x = join(is_enrolled_on, is_called, rel(row(student_id=SID('S1'))))
+    >>> print(display(x, 'student_id', 'name', 'course_id'))
+    +------------+------+-----------+
+    | student_id | name | course_id |
+    +------------+------+-----------+
+    | S1         | Anne | C1        |
+    | S1         | Anne | C2        |
+    +------------+------+-----------+
+
+A mismatched header error in a multi-join also indicates in which argument the
+error was detected:
 
     >>> join(is_enrolled_on, is_called,
     ...         permissive_is_called)         # doctest: +NORMALIZE_WHITESPACE
@@ -1696,14 +1710,9 @@ was detected:
         'student_id': SID})'> and <class 'dinsd.rel({'name': str,
         'student_id': str})'> (error detected while processing argument 2)
 
-In this error message you also get a peak at the names that are used for the
-automatically generated ``Relation`` types used for the ``join`` result: a
-concatenation of ``join`` and the attribute names, separated by '_'s.
-
 If we join with an empty relation, we get an empty relation:
 
-    >>> no_student_names = IsCalled()
-    >>> print(no_student_names & is_enrolled_on)
+    >>> print(IsCalled() & is_enrolled_on)
     +-----------+------+------------+
     | course_id | name | student_id |
     +-----------+------+------------+
@@ -1736,10 +1745,17 @@ Join is associative:
     ...     is_enrolled_on & (is_called & last_year))
     True
 
-We also define a monadic join to simply return the argument:
+Given the above, a monadic join simply returns the argument
+relation:rel({row({})})
 
     >>> join(last_year) == last_year
     True
+
+While an empty join gets us an empty relation with no attributes and one row
+with no attributes:
+
+    >>> join()
+    rel({row({})})
 
 
 intersect
@@ -1773,6 +1789,10 @@ attributes:
         ...
     TypeError: Cannot take intersection of unlike relations
 
+
+XXX
+Text refactoring incomplete beyond this point
+XXX
 
 times
 ~~~~~
