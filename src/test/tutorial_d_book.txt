@@ -1649,8 +1649,13 @@ and produces the table from figure 4.2 (page 89 in my copy of AIRDT):
     +------------+----------+-----------+
 
 In *Tutorial D* the ``JOIN`` relational operator can be used both as a prefix
-function and as a infix operator.  In dinsd, there is always a prefix
-(functional) form, but only sometimes an infix form.
+function and as a infix operator:
+
+    JOIN { r1, r2, ... }
+
+(In dinsd, there is always a prefix (functional) form for every operator, but
+only sometimes an infix form...because there are a limited number of operators
+that we can overload.)
 
 The prefix form of ``join`` in dinsd is:
 
@@ -1763,9 +1768,9 @@ intersect
 
     >>> from dinsd import intersect
 
-This is really a special case of ``join``: the case where all of the
-attributes of the two relations being joined are the same.  It is
-equivalent to the set-intersection of the two relations:
+This is a special case of ``join``: the case where all of the attributes of
+the two relations being joined are the same.  It is equivalent to the
+set-intersection of the two relations:
 
     >>> repeat_enrollment = intersect(is_enrolled_on, last_year)
     >>> print(display(repeat_enrollment, 'student_id', 'course_id'))
@@ -1777,17 +1782,18 @@ equivalent to the set-intersection of the two relations:
     >>> repeat_enrollment == is_enrolled_on & last_year
     True
 
-There are two reasons to use ``intersect`` instead of ``join``.  The
-first is that because the domain of operation is constrained, the
-implementation may be faster.  The better reason to use it is that it
-declares your intention to join two sets with the same attributes,
-and will raise an error if the two sets do not have the same
-attributes:
+There are two reasons to use ``intersect`` instead of ``join``.  The first is
+that because the domain of operation is constrained, the implementation may be
+faster.  The better reason to use it is that it declares your intention to
+join two sets with the same attributes, and will raise an error if the two
+sets do not have the same attributes:
 
     >>> intersect(is_called, is_enrolled_on)
     Traceback (most recent call last):
         ...
     TypeError: Cannot take intersection of unlike relations
+
+Unlike *Tutorial D*, dinsd does not have an infix form of this operator.
 
 
 XXX
