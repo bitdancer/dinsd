@@ -1795,20 +1795,24 @@ sets do not have the same attributes:
 
 Unlike *Tutorial D*, dinsd does not have an infix form of this operator.
 
+Like ``join``, ``intersect`` may be called with more than two arguments:
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
+    >>> two_years_ago = IsEnrolledOn()
+    >>> print(intersect(is_enrolled_on, last_year, two_years_ago))
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    +-----------+------------+
+
 
 times
 ~~~~~
 
     >>> from dinsd import times
 
-Another special case of ``join``.  I'm not as fond of this operator name, but
-I can't think of a better one.  In this case, there are *no* attributes in
-common between the two relations, and the result of the join is the Cartesian
-product of the two sets of values.
+``times`` is another special case of ``join``.  In this case, there
+are *no* attributes in common between the two relations, and the result of the
+join is the Cartesian product of the two sets of values.
 
 Use cases for this are not common, so we won't even try to come up with a
 sensible example:
@@ -1828,25 +1832,21 @@ sensible example:
     +------+-----------+------------+
 
 Here there is not likely to be any performance gain by using ``times``, but
-the pedagogical value of getting an error if you try to ``times`` relations
-that share columns is probably even more valuable.
+the feature of getting an error if you try to ``times`` relations that share
+columns is probably even more valuable.
 
     >>> times(is_called, last_year)
     Traceback (most recent call last):
         ...
     TypeError: Cannot multiply relations that share attributes
 
-Like ``join``, ``intersect`` and ``times`` may be called with more than
-two relations:
+There is no infix form of ``times``, though we may choose to assign it to
+``*`` at some point.
 
-    >>> two_years_ago = IsEnrolledOn()
-    >>> print(intersect(is_enrolled_on, last_year, two_years_ago))
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    +-----------+------------+
-    >>> Bar = rel(foo=str)
-    >>> bar = Bar(('foo',), ('gin',), ('fiz',))
+Like ``join`` and ``intersect``, ``times`` may be called with more than two
+relations:
+
+    >>> bar = rel(foo=str)(('foo',), ('gin',), ('fiz',))
     >>> print(times(last_year, bar, foo))
     +------+-----------+-----+------------+
     | bar  | course_id | foo | student_id |
@@ -1865,6 +1865,9 @@ two relations:
     | gin  | C3        | gin | S5         |
     +------+-----------+-----+------------+
 
+XXX
+Text refactoring incomplete beyond this point
+XXX
 
 rename
 ~~~~~~
