@@ -1872,20 +1872,24 @@ XXX
 rename
 ~~~~~~
 
-    >>> from dinsd import rename
-
 This is operator is not one discussed in the original literature on the
-relational algebra (according to AITDM), but is needed for certain logical
+relational algebra (according to AIRDT), but is needed for certain logical
 operations.  It allows us to construct a new relation that is identical to an
 existing relation except that one or more of the attributes have different
 names.  This is required in order to perform logical operations on relations
 where we need to *not* treat the attributes as the same, even though they have
-the same data in them (we'll an example of this below).
+the same data in them (we'll see an example of this below).
 
-We can rename a single attribute:
+In *Tutorial D* (example 4.2) this is written:
 
-    >>> sid_is_called = rename(is_called, student_id='sid')
-    >>> print(display(sid_is_called, 'sid', 'name'))
+    IS_CALLED RENAME ( StudentId AS Sid )
+
+Unlike the ``join`` operators, ``rename`` is a function of a single relation.
+In Python, the natural notation for this is the postfix object method
+invocation syntax:
+
+    >>> r = is_called.rename(student_id='sid')
+    >>> print(display(r, 'sid', 'name'))
     +-----+----------+
     | sid | name     |
     +-----+----------+
@@ -1896,10 +1900,18 @@ We can rename a single attribute:
     | S5  | Boris    |
     +-----+----------+
 
-Or more than one attribute:
+This gives us the equivalent result as that shown in figure 4.4 in AIRDT.
 
-    >>> sid_is_called = rename(is_called, student_id='sid', name='called')
-    >>> print(display(sid_is_called, 'sid', 'called'))
+As is standard for dinsd, there is also a prefix form:
+
+    >>> from dinsd import rename
+    >>> r == rename(is_called, student_id='sid')
+    True
+
+We can also rename multiple attributes:
+
+    >>> r2 = is_called.rename(student_id='sid', name='called')
+    >>> print(display(r2, 'sid', 'called'))
     +-----+----------+
     | sid | called   |
     +-----+----------+
@@ -1910,19 +1922,11 @@ Or more than one attribute:
     | S5  | Boris    |
     +-----+----------+
 
-We can't rename a non-existent attribute;
-
-    >>> sid_is_called = rename(is_called, fred='called')
-    Traceback (most recent call last):
-        ...
-    KeyError: 'fred'
-
 We support the revised semantics of *Tutorial D* that allows attribute names
 to be swapped in one call:
 
-    >>> sid_is_called = rename(is_called, student_id='name',
-    ...                                   name='student_id')
-    >>> print(sid_is_called)
+    >>> rswap = is_called.rename(student_id='name', name='student_id')
+    >>> print(rswap)
     +------+------------+
     | name | student_id |
     +------+------------+
@@ -1933,9 +1937,20 @@ to be swapped in one call:
     | S5   | Boris      |
     +------+------------+
 
+This is the natural interpretation in Python: even though we don't use the
+``{}`` notation above to indicate that the renames are an unordered set, the
+Python keyword semantics are that of a set.  And in fact Python allows us to
+use the dictionary notation, which makes this explicit:
+
+    >>> rswap == rename(is_called, **{'student_id': 'name',
+    ...                               'name': 'student_id'})
+    True
+
 Rename is a read-only operation, it does not modify the source relation:
 
-    >>> sid_is_called == is_called
+    >>> r  == is_called
+    False
+    >>> r2 == is_called
     False
     >>> print(display(is_called, 'student_id', 'name'))
     +------------+----------+
@@ -1948,11 +1963,11 @@ Rename is a read-only operation, it does not modify the source relation:
     | S5         | Boris    |
     +------------+----------+
 
-Example 4.3 on page 98 of AITDM uses ``rename`` and ``join`` to discover all
+Example 4.3 on page 98 of AIRDT uses ``rename`` and ``join`` to discover all
 pairs of students that share the same name:
 
-    >>> shared_name = join(rename(is_called, student_id='sid1'),
-    ...                    rename(is_called, student_id='sid2'))
+    >>> shared_name = join(is_called.rename(student_id='sid1'),
+    ...                    is_called.rename(student_id='sid2'))
     >>> print(display(shared_name, 'sid1', 'name', 'sid2'))
     +------+----------+------+
     | sid1 | name     | sid2 |
@@ -1970,7 +1985,7 @@ This table doesn't quite look like the one on page 98.  We can fix that using
 the 'sort' keyword of ``display``:
 
     >>> print(display(shared_name, 'sid1', 'name', 'sid2',
-    ...                 sort=['name', 'sid1', 'sid2']))
+    ...                 sort=('name', 'sid1', 'sid2')))
     +------+----------+------+
     | sid1 | name     | sid2 |
     +------+----------+------+
@@ -1982,6 +1997,21 @@ the 'sort' keyword of ``display``:
     | S3   | Cindy    | S3   |
     | S4   | Devinder | S4   |
     +------+----------+------+
+
+We can't rename a non-existent attribute:
+
+    >>> is_called.rename(fred='called')
+    Traceback (most recent call last):
+        ...
+    KeyError: 'fred'
+
+Nor can we rename an attribute to a name that is not otherwise a valid
+attribute name:
+
+    >>> is_called.rename(name='_name')
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid relational attribute name '_name'
 
 
 project

@@ -418,6 +418,11 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def __sub__(self, other):                   # -
         return notmatching(self, other)
 
+    # Postfix relational operators.
+
+    def rename(self, **kw):
+        return rename(self, **kw)
+
     # Presentation operators.
 
     def __repr__(self):
@@ -557,6 +562,9 @@ def rename(relation, **renames):
     new_attrs = relation.header.copy()
     holder = {}
     for old, new in renames.items():
+        if new.startswith('_'):
+            raise ValueError("Invalid relational attribute name "
+                             "{!r}".format(new))
         holder[new] = new_attrs.pop(old)
     new_attrs.update(holder)
     new_rel = _rel(new_attrs)()
