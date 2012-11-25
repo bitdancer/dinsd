@@ -2013,6 +2013,20 @@ attribute name:
         ...
     ValueError: Invalid relational attribute name '_name'
 
+Specifying a name as the target of more than one attribute rename is also an
+error:
+
+    >>> is_called.rename(student_id='foo', name='foo')
+    Traceback (most recent call last):
+        ...
+    ValueError: Duplicate relational attribute name 'foo'
+
+Rename with no attributes renamed returns a relation equal to the relation on
+which rename is called:
+
+    >>> is_called.rename() == is_called
+    True
+
 
 project
 ~~~~~~~

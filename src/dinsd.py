@@ -565,6 +565,9 @@ def rename(relation, **renames):
         if new.startswith('_'):
             raise ValueError("Invalid relational attribute name "
                              "{!r}".format(new))
+        if new in holder:
+            raise ValueError("Duplicate relational attribute name "
+                             "{!r}".format(new))
         holder[new] = new_attrs.pop(old)
     new_attrs.update(holder)
     new_rel = _rel(new_attrs)()
