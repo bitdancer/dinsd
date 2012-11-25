@@ -2031,21 +2031,17 @@ which rename is called:
 project
 ~~~~~~~
 
-This is not an explicit named operator in *Tutorial D*, but an implicit one
-arising from a particular syntax.  We do a similar thing in dinsd by
-overriding the ``>>`` operator.  But we also provide the named operator,
-because we have to have a name for our implementation so we might as well
-expose it and thus allow it to be used in functional as well as operator
-style.
-
-    >>> from dinsd import project
-
 ``project`` takes as its argument a set of attribute names, and returns a
-relation containing just those attributes (and the corresponding values):
+relation containing just those attributes (and the corresponding values).
 
-    >>> sids = project(is_enrolled_on, {'student_id'})
-    >>> sids == is_enrolled_on >> {'student_id'}
-    True
+This is not an explicit named operator in *Tutorial D*, but an implicit one
+arising from a particular syntax.  From example 4.4:
+
+    IS_ENROLLED_ON { StudentId }
+
+For the dinsd version of this we use overload the ``>>`` operator:
+
+    >>> sids = is_enrolled_on >> {'student_id'}
     >>> print(sids)
     +------------+
     | student_id |
@@ -2056,15 +2052,50 @@ relation containing just those attributes (and the corresponding values):
     | S4         |
     +------------+
 
-dinsd's version of *Tutorial D*'s "ALL BUT" syntax is to mark the set of
-names as an inversion.  We do this with the ``all_but`` wrapper, and the
-``<<`` operator does this automatically.
+There is, as is standard for dinsd, a functional version of this:
 
-Following AIRDT, we can write the student_id matching matching expression on
-page 101 as follows, to get our equivalent of figure 4.7 from page 101:
+    >>> from dinsd import project
+    >>> sids == project(is_enrolled_on, {'student_id'})
+    True
 
-    >>> same_name = join(rename(is_called, student_id='sid1'),
-    ...                  rename(is_called, student_id='sid2')) << {'name'}
+It is often more convenient to list the attribute we want to drop instead
+of the attributes we want to keep.  *Tutorial D* does this by prefixing 
+the keyword ``ALL BUT`` to the list of attribute names:
+
+    IS_ENROLLED_ON { ALL BUT CourseId }
+
+Since ``is_enrolled_on`` only has two columns, the above is equivalent to the
+projection on to ``student_id``.
+
+dinsd's equivalent to ``ALL BUT`` is a functional wrapper (that is, a function
+that returns a lazy result that can later be used to compute the inverse of
+the specified set of attribute names):
+
+    >>> from dinsd import all_but
+    >>> sids == project(is_enrolled_on, all_but({'course_id'}))
+    True
+
+We could also write this as:
+
+    >>> sids == is_enrolled_on >> all_but({'course_id'})
+    True
+
+It is a common operation, though, so dinsd also overloads the ``<<`` operator
+to mean "all but":
+
+    >>> sids == is_enrolled_on << {'course_id'}
+    True
+
+Inverting an inversion is of questionable utility, but it is legal:
+
+    >>> sids == is_enrolled_on << all_but({'student_id'})
+    True
+
+Following AIRDT, we can write the ``student_id`` matching matching expression
+on page 101 as follows, to get our equivalent of figure 4.7 from page 101:
+
+    >>> same_name = join(is_called.rename(student_id='sid1'),
+    ...                  is_called.rename(student_id='sid2')) << {'name'}
     >>> print(same_name)
     +------+------+
     | sid1 | sid2 |
@@ -2081,12 +2112,6 @@ page 101 as follows, to get our equivalent of figure 4.7 from page 101:
 (There is no way to get that table to exactly match the one from the book,
 since the order from the book appears to be some artifact of the *Tutorial D*
 implementation.)
-
-Here is the same thing using the functional notation:
-
-    >>> from dinsd import all_but
-    >>> same_name == project(shared_name, all_but({'name'}))
-    True
 
 Observe that an ``all_but`` projection of the empty set produces an identical
 relation:
@@ -2105,9 +2130,19 @@ make this notation consistent.  This may or may not be a bad idea, but it
 does seem natural.  Technically, ``{}`` is an empty *dictionary* not an
 empty set.  Python's literal notation for an empty set is ``set()``.  But
 we can easily interpret an empty dictionary as an empty set *in this
-context*, and so we do.
+context*, and so we do.  Using ``set()`` will of course produce the same
+result, if you prefer to keep your data types straight:
 
-And of course there are the error cases:
+    >>> same_name << set() == same_name
+    True
+
+Obversely, projecting to the empty set yields a relation of no attributes
+having a single row with no attributes.
+
+    >>> same_name >> {}
+    rel({row({})})
+
+Trying to project using a name that is not a valid attribute is an error:
 
     >>> shared_name << {'foo'}
     Traceback (most recent call last):
@@ -2118,8 +2153,19 @@ And of course there are the error cases:
         ...
     TypeError: Attribute list included invalid attributes: {'foo'}
 
-The little exercise on page 102, splitting the joined enrollment table back
-into is_enrolled_on and is_called, looks like this in dinsd:
+On page 102 of AIRDT example 4.5 demonstrates using projection to split
+the original enrollment relation into ``is_enrolled_on`` and ``is_called``:
+in *Tutorial D*:
+
+    VAR IS_CALLED BASE
+    INIT (ENROLMENT { StudentId, Name })
+    KEY { StudentId } ;
+    VAR IS_ENROLLED_ON BASE
+    INIT (ENROLMENT { StudentId, CourseId })
+    KEY { StudentId, CourseId } ;
+    DROP VAR ENROLMENT ;
+
+in dinsd, that looks like this:
 
     >>> is_enrolled_on_split = enrollment >> {'student_id', 'course_id'}
     >>> is_called_split = enrollment >> {'student_id', 'name'}
@@ -2128,11 +2174,11 @@ into is_enrolled_on and is_called, looks like this in dinsd:
 That is, whereas in *Tutorial D* you must go through the process of declaring
 the variables and initializing them, in dinsd you just do the projection and
 keep a pointer to it in the name of your choice.  This comparison isn't fair,
-though because I'm ignoring the issue of persisting the database here, which
+though, because I'm ignoring the issue of persisting the database here, which
 will add a few characters and one additional statement when we get to it.  I
 think *Tutorial D* does the persistence automatically.  But more, we haven't
 dealt with constraints at all yet, and establishing those for a table is a bit
-more complicated than the above.
+more complicated.
 
     >>> print(display(is_enrolled_on_split, 'student_id', 'course_id'))
     +------------+-----------+
