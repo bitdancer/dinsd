@@ -2091,11 +2091,16 @@ Inverting an inversion is of questionable utility, but it is legal:
     >>> sids == is_enrolled_on << all_but({'student_id'})
     True
 
-Following AIRDT, we can write the ``student_id`` matching matching expression
-on page 101 as follows, to get our equivalent of figure 4.7 from page 101:
+In AIRDT, figure 4.7 on page 101, the name matching expression is improved
+using project as follows:
 
-    >>> same_name = join(is_called.rename(student_id='sid1'),
-    ...                  is_called.rename(student_id='sid2')) << {'name'}
+    ( ( IS_CALLED RENAME ( StudentId AS Sid1 ) ) JOIN
+      ( IS_CALLED RENAME ( StudentId AS Sid2 ) ) ) { ALL BUT Name }
+
+In dinsd, this becomes:
+
+    >>> same_name = (is_called.rename(student_id='sid1') &
+    ...              is_called.rename(student_id='sid2')) << {'name'}
     >>> print(same_name)
     +------+------+
     | sid1 | sid2 |
@@ -2113,8 +2118,14 @@ on page 101 as follows, to get our equivalent of figure 4.7 from page 101:
 since the order from the book appears to be some artifact of the *Tutorial D*
 implementation.)
 
-Observe that an ``all_but`` projection of the empty set produces an identical
-relation:
+Note the need for parenthesis round the join expression in both the *Tutorial
+D* version and the dinsd version: the projection operator (``>>``) has a
+higher precedence than the join operator (``&``), and since we want to project
+the result of the join, we need to enclose the join expression in parenthesis.
+(In dinsd this operator precedence is fortuitous, since although we can
+overload operators in Python we cannot change their relative precedence.)
+
+An ``all_but`` projection of the empty set produces an identical relation:
 
     >>> same_name << {} == same_name
     True
@@ -2291,49 +2302,20 @@ relation, not an identity at the object level:
     False
 
 
-rel
-~~~
 
-In contemplating the "use the tools introduced so far" solution to the
-question posed at the start of section 4.7 of AIRDT, I realized that there
-is a need for being able to easily create a temporary relation.  *Tutorial D*
-has syntax for doing this, but up to this point dinsd hasn't, though we
-could have used it in a few examples up above.
+where
+~~~~~
 
-So, the dinsd way of dynamically creating a relation definition and a single
-instance of that definition at the same time is ``rel``:
+Example 4.6 on page 105 at the start of section 4.7 shows how to select
+rows from a relation using join and projection:
 
-    >>> from dinsd import rel
-    >>> print(rel(name=str, sid=SID)(('name', 'sid'), ('Boris', 'S1')))
-    +-------+-----+
-    | name  | sid |
-    +-------+-----+
-    | Boris | S1  |
-    +-------+-----+
+    ( IS_CALLED JOIN RELATION { TUPLE { Name NAME ( 'Boris' ) } } )
+    { StudentId }
 
-``rel`` is essentially the ``lambda`` of relations:
+In dinsd we write this:
 
-    >>> namelist = rel(name=str)
-    >>> print(namelist(('name',), ('Boris',), ('Anne',)))
-    +-------+
-    | name  |
-    +-------+
-    | Anne  |
-    | Boris |
-    +-------+
-    >>> print(namelist(('name',), ('Anne',), ('George',)))
-    +--------+
-    | name   |
-    +--------+
-    | Anne   |
-    | George |
-    +--------+
-
-Now we can complete the "existing operators" version of the restriction
-query at the start of 4.7:
-
-    >>> print((is_called & rel(name=str)(dict(name='Boris')))
-    ...              >> {'student_id'})
+    >>> borises = (is_called & rel(row(name='Boris'))) >> {'student_id'}
+    >>> print(borises)
     +------------+
     | student_id |
     +------------+
@@ -2341,27 +2323,15 @@ query at the start of 4.7:
     | S5         |
     +------------+
 
-The ``repr`` of a ``rel`` is also interesting:
+Example 4.7 shows the same computation using the ``where`` operator:
 
-    >>> namelist()
-    rel({'name': str})()
+    ( IS_CALLED WHERE Name = NAME ( 'Boris' ) )
 
-Observe that the name is ``rel_`` followed by the '_' joined names of the
-attributes.  This is a general pattern followed by dinsd when dynamically
-creating relations.
+``where``, like projection, is a function of one relation, so in dinsd it
+is a method of relation objects:
 
-
-where
-~~~~~
-
-I'm don't quite understand how ``where`` is a part of the relational algebra,
-but there is no denying its usefulness.
-
-    >>> from dinsd import where
-
-Example 4.7 on page 105 looks like this:
-
-    >>> print(where(is_called, lambda row: row.name == 'Boris'))
+    >>> b2 = is_called.where(lambda row: row.name == 'Boris')
+    >>> print(b2)
     +-------+------------+
     | name  | student_id |
     +-------+------------+
@@ -2369,35 +2339,75 @@ Example 4.7 on page 105 looks like this:
     | Boris | S5         |
     +-------+------------+
 
-There is also a shorthand version for the function argument:
+Here we haven't projected away the ``name`` attribute, we're just looking
+at the join.
 
-    >>> print(where(is_called, "name == 'Boris'"))
-    +-------+------------+
-    | name  | student_id |
-    +-------+------------+
-    | Boris | S2         |
-    | Boris | S5         |
-    +-------+------------+
+The above expression is not shorter than the formulation using a simple join.
+However, ``where`` takes an arbitrary function of one argument as its
+parameter (called the condition), which means that for a more complex join it
+is much easier to express the join as a ``where`` expression than as a join.
+We'll see an example of that in a moment.
 
-In addition to the brevity advantage, string valued lambda expressions (and
-there will be a number of additional instances of them) are more likely to be
+The ``lambda`` expression we used as the condition in the example above is a
+Python facility for dynamically defining a function.  A condition function is
+passed a single argument consisting of a row object.  In this expression we
+access the ``name`` attribute of the row, and check if it is equal to the
+string ``Boris``.  Since our ``name`` attribute is string valued, this
+expression will be ``True`` if and only if the row in question has an ``name``
+attribute of ``Boris``.  All such rows are included in the returned relation,
+and no rows that fail the test are included in the returned relation.
+
+In addition to this fully general method for specifying a condition, dinsd
+provides a less general but also less wordy method:
+
+    >>> b2 == is_called.where("name == 'Boris'")
+    True
+
+This is just as compact as the join version.  What is happening here is that a
+string-valued condition is *evaluated* in a context in which all the
+attributes of the row are available as names in the evaluation namespace.
+Thus, as in *Tutorial D*, if we refer to ``name``, it automatically refers to
+the ``name`` attribute of the row currently being tested by the expression.
+
+In addition to the brevity advantage, string valued expressions (and there
+will be a number of additional instances of them) are more likely to be
 optimized by the back end.  So although it doesn't change the meaning of the
 program, it is better to use string valued expressions where possible.
 
-IMPORTANT CAVEAT: string expressions may be ``eval``ed.  This means that any
-outside input used to programmatically constructed string expression *must* be
-carefully sanitized.  This is a weakness in the system I eventually hope to
-eliminate.
+IMPORTANT CAVEAT: string expressions may be ``eval``ed.  This means that you
+should *never* construct a string-valued expression programmatically in order
+to get values (that might have come from outside input) into the expression.
+Later we'll see how to get such values into a string valued expression safely.
+
+There is also a prefix version of `where``, though there is seldom reason
+to use it:
+
+    >>> from dinsd import where
+    >>> b2 == where(is_called, "name == 'Boris'")
+    True
+
+The place where using ``join`` for restriction breaks down is when the
+number of values we'd have to put in the joined relation is too large
+to be practical, or may even be an infinite set.  The example from AIRDT
+of this is example 4.8:
+
+    IS_CALLED WHERE STARTS_WITH(THE_C(Name), 'B')
+
+Enumerating all possible names that start with 'B' is not possible, but
+a programmatic test is.
 
 Here is example 4.8 written in dinsd:
 
-    >>> print(where(is_called, "name.startswith('B')"))
+    >>> print(is_called.where("name.startswith('B')"))
     +-------+------------+
     | name  | student_id |
     +-------+------------+
     | Boris | S2         |
     | Boris | S5         |
     +-------+------------+
+
+Here we are using the Python ``startswith`` method of string objects,
+which is analogous to the ``Rel`` ``STARTS_WITH`` function.
 
 With Python, it is easy to make this a bit more interesting:
 
@@ -2412,17 +2422,25 @@ With Python, it is easy to make this a bit more interesting:
 
 Here are the edge cases from the bottom of page 106:
 
-    >>> where(is_called, "True") == is_called
+    >>> is_called.where("True") == is_called
     True
-    >>> where(is_called, "False") == type(is_called)()
+    >>> is_called.where("False") == type(is_called)()
     True
 
-And now we can further improve the problem of finding just those student_ids
+Using ``where`` we can further improve the problem of finding just those student_ids
 that designate students with the same name (figure 4.8 on page 107):
 
-    >>> x = join(rename(is_called, student_id='sid1'),
-    ...          rename(is_called, student_id='sid2')) >> {'sid1', 'sid2'}
-    >>> print(where(x, "sid1 != sid2"))
+    ( ( IS_CALLED RENAME ( StudentId AS Sid1 ) )
+      JOIN
+      ( IS_CALLED RENAME ( StudentId AS Sid2 ) )
+    WHERE NOT (Sid1 = Sid2) ) { Sid1, Sid2 }
+
+In dinsd:
+
+    >>> x = (is_called.rename(student_id='sid1') &
+    ...      is_called.rename(student_id='sid2')).where(
+    ...             "sid1 != sid2") >> {'sid1', 'sid2'}
+    >>> print(x)
     +------+------+
     | sid1 | sid2 |
     +------+------+
@@ -2430,20 +2448,26 @@ that designate students with the same name (figure 4.8 on page 107):
     | S5   | S2   |
     +------+------+
 
-And of course the final version has the obvious analog in dinsd:
+Our ``SID`` class is based on dinsd's ``Scaler`` class, it does
+indeed have a total ordering, and thus we can write our version
+of:
 
-    >>> print(where(x, "sid1 < sid2"))
+    ( ( IS_CALLED RENAME ( StudentId AS Sid1 ) )
+      JOIN
+      ( IS_CALLED RENAME ( StudentId AS Sid2 ) )
+    WHERE NOT (Sid1 < Sid2) ) { Sid1, Sid2 }
+
+as:
+    
+    >>> x = (is_called.rename(student_id='sid1') &
+    ...      is_called.rename(student_id='sid2')).where(
+    ...             "sid1 < sid2") >> {'sid1', 'sid2'}
+    >>> print(x)
     +------+------+
     | sid1 | sid2 |
     +------+------+
     | S2   | S5   |
     +------+------+
-
-I will observe here that I didn't just use the ``x`` intermediate variable to
-provide for less repetition in the examples, but also because I prefer that
-"coding" style.  Rather than a single grand expression, it seems clearer to me
-to break a computation up into pieces, somewhat in the way a mathematical
-paper will often say, "let x = <something>, then <expression involving x>".
 
 
 extend

@@ -423,6 +423,9 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def rename(self, **kw):
         return rename(self, **kw)
 
+    def where(self, condition):
+        return where(self, condition)
+
     # Presentation operators.
 
     def __repr__(self):
@@ -616,12 +619,12 @@ def project(relation, attr_names):
     return new_rel
 
 
-def where(relation, selector):
-    if isinstance(selector, str):
-        selector = lambda r, s=selector: eval(s, r._as_locals_(), _all)
+def where(relation, condition):
+    if isinstance(condition, str):
+        condition = lambda r, s=condition: eval(s, r._as_locals_(), _all)
     new_rel = type(relation)()
     for row in relation._rows_:
-        if selector(row):
+        if condition(row):
             new_rel._rows_.add(row)
     return new_rel
 
