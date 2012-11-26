@@ -2573,18 +2573,19 @@ union
 
 In the relational algebra, ``union`` corresponds to the ``or`` logical
 operator, but is restricted to being an operator on relations whose
-types are equal.  dinsd, like *Tutorial D*, provides ``union`` both
-as a function and as an operator.  In dinsd the operator is ``|``.
+types are equal.  Example 4.9 on page 111 shows a legal ``union``
+operation in *Tutorial D*:
 
-    >>> from dinsd import union
+    ( IS_CALLED WHERE Name = NAME ('Devinder') ) { StudentId }
+    UNION
+    ( IS_ENROLLED_ON WHERE CourseId = CID ('C1') ) { StudentId }
 
-We compute example 4.9 on page 111 thusly:
+dinsd, like *Tutorial D*, provides ``union`` both as a prefix function and as
+an infix operator.  In dinsd the operator is ``|``.  The dinsd version of
+example 4.9 is:
 
-    >>> x = where(is_called, "name == 'Devinder'")
-    >>> y = where(is_enrolled_on, "course_id == CID('C1')")
-    >>> ex49 = x >> {'student_id'} | y >> {'student_id'}
-    >>> ex49 == union(x >> {'student_id'}, y >> {'student_id'})
-    True
+    >>> ex49 = (is_called.where("name == 'Devinder'") >> {'student_id'} |
+    ...       is_enrolled_on.where("course_id == CID('C1')") >> {'student_id'})
     >>> print(ex49)
     +------------+
     | student_id |
@@ -2593,6 +2594,15 @@ We compute example 4.9 on page 111 thusly:
     | S2         |
     | S4         |
     +------------+
+
+This result matches that from figure 4.11.
+
+Using the prefix version of ``union`` it looks like this:
+
+    >>> from dinsd import union
+    >>> ex49 == union(is_called.where("name == 'Devinder'") >> {'student_id'},
+    ...       is_enrolled_on.where("course_id == CID('C1')") >> {'student_id'})
+    True
 
 It is an error to try to form the union of relations of disparate types:
 
@@ -2603,17 +2613,23 @@ It is an error to try to form the union of relations of disparate types:
 
 Union is commutative and associative:
 
-    >>> x = x >> {'student_id'}
-    >>> y = y >> {'student_id'}
+    >>> x = is_called >> {'student_id'}
+    >>> y = is_enrolled_on >> {'student_id'}
     >>> x | y == y | x
     True
-    >>> z = rel(student_id=SID)({'student_id': 'S5'})
+    >>> z = rel(row(student_id=SID('S5')))
     >>> (x | y) | z == x | (y | z) == union(x, y, z)
     True
 
-Union of a single relation, or a relation with itself, is that relation.
+The union of a single relation, or a relation with itself, is that relation.
 
-    >>> union(is_called) == union(is_called, is_called) == is_called
+    >>> union(is_called) == is_called | is_called == is_called
+    True
+
+The union of a relation with an empty relation is also equal to the original
+relation:
+
+    >>> is_called | type(is_called)() == is_called
     True
 
 The union of no relations is ``Dum``:
@@ -2631,7 +2647,7 @@ via ``rel``:
     +------+------------+
     +------+------------+
 
-This is just the union of a single empty union.
+This is just the union of a single empty relation.
 
 
 notmatching
