@@ -194,11 +194,20 @@ Scalars, Rows, and Relations
 Types, User Defined Types, and Scalars
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Defining new types in Python is very simple:  you define a class.  (Classes
-are, in fact, of type ``type`` in Python).  So, to define the type for an
-attribute, we need a class that is that type.  For standard types (``int``,
-``str``, etc), we can use the Python built in types.  For what TTM calls "user
-defined types", we define a new class.
+Defining new types in Python is very simple:  you define a class.  Classes
+are, in fact, of type ``type`` in Python.  The terms ``class`` and ``type``
+can be used pretty much interchangeably in Python, and we will use the word
+``type`` unless we are actually talking about defining a class using the
+``class`` keyword, or talking about a type that we defined in that way.
+You will see that Python's error messages generally use the world ``class`` to
+refer to type/class objects, but we prefer type in the context of dinsd
+because it matches more closely with the terminology used in the relational
+literature.
+
+To define the type for an attribute, we need a name that refers to the correct
+type object (class).  For standard types (``int``, ``str``, etc), we can use
+the Python built in types.  For what TTM calls "user defined types", we define
+a new class.
 
 In order to be usable in relation definitions, every user defined scaler type
 (ie: non-relation type) used with dinsd must conform to the common syntax and
@@ -601,7 +610,7 @@ and doing so is in any case in-line with Python's standard conventions.
 
 However, we have some attributes that we want as part of the *public* API, but
 we've just constrained ourselves to marking them as private.  In a similar
-situation (the "named tuple" class), Python just ignores this dichotomy and
+situation (the "named tuple" type), Python just ignores this dichotomy and
 uses names that start with ``_`` as part of the public API.  dinsd is a little
 more strict about its naming, by also *appending* a ``_`` to names that start
 with a ``_`` but are nonetheless intended to be part of the public API.
@@ -3864,9 +3873,9 @@ wrap
 ~~~~
 
 Example 5.14 shows how to turn attribute data into tuples as an attribute
-value.  dinsd's row objects aren't exposed as standalone classes, but they are
-readily available using the ``row`` attribute of a relation.  So we can
-write the dinsd equivalent of 5.14 as follows:
+value.  The types of dinsd's row objects aren't exposed as standalone types,
+but they are readily available using the ``row`` attribute of a relation.  So
+we can write the dinsd equivalent of 5.14 as follows:
 
     >>> contact_info = rel(name=str, house=str, street=str, city=str, zip=str)(
     ...                     ('name',  'house', 'street',  'city',   'zip'),
