@@ -3033,9 +3033,9 @@ Extended Relational Operators
 mtching
 ~~~~~~~
 
-Following along in Chapter 5 of AIRDT, for completeness.  We already defined
-the ``exam_marks`` relation instance in one of the problems above.  Now we'll
-add courses.
+Following along in Chapter 5 of AIRDT, we need to another couple of relations
+to use in the subsequent examples.  We already defined the ``exam_marks``
+relation instance in one of the problems above.  Now we'll add courses.
 
     >>> courses = rel(course_id=CID, title=str)(
     ...             ('course_id',   'title'),
@@ -3080,8 +3080,10 @@ becomes the dinsd expression:
     | C3        | Op systems |
     +-----------+------------+
 
-The ``matching`` relational operator encapsulates this (union plus
-projecting away any columns obtained from the second relation):
+giving us the table from figure 5.2.
+
+The ``matching`` relational operator encapsulates this (union plus projecting
+away any columns obtained from the second relation):
 
     >>> from dinsd import matching
     >>> print(matching(courses, exam_marks))
@@ -3111,6 +3113,26 @@ relation:
     >>> matching(courses, Dum)
     rel({'course_id': CID, 'title': str})()
     >>> matching(courses, Dee) == courses
+    True
+
+We can't match relations with attributes having the same name but different
+types:
+
+    >>> matching(courses,               # doctest: +NORMALIZE_WHITESPACE
+    ...          rel(row(course_id='S1')))
+    Traceback (most recent call last):
+        ...
+    TypeError: Duplicate attribute name ('course_id') with different type
+    (first: <class '__main__.CID'>, second: <class 'str'> found in match
+    relation (relation types are <class 'dinsd.rel({'course_id': CID,
+     'title': str})'> and <class 'dinsd.rel({'course_id': str})'>)
+
+For completeness, the definition of ``matching`` in terms of the existing
+operands (which is not how it is implemented) would be:
+
+    >>> def matching2(first, second):
+    ...     return (first & second) >> first.header.keys()
+    >>> matching2(courses, exam_marks) == matching(courses, exam_marks)
     True
 
 
