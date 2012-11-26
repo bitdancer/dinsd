@@ -3142,11 +3142,22 @@ compose
     >>> from dinsd import compose
 
 ``compose`` joins its operands and then projects away the attributes
-that the two relations have in common.
+that the two relations have in common, eg:
 
-    >>> course_marks = compose(courses, exam_marks)
-    >>> course_marks == (courses & exam_marks) << {'course_id'}
+    ( COURSE JOIN EXAM_MARK ) { ALL BUT CourseId }
+
+In *Tutorial D* this is written the ``COMPOSE`` operator as:
+
+    COURSE COMPOSE EXAM_MARK
+    
+It is equally straightforward in dinsd, but using a prefix operator:
+
+    >>> course_marks = (courses & exam_marks) << {'course_id'}
+    >>> compose(courses, exam_marks) == course_marks
     True
+
+which gives us our equivalent of the table from Figure 5.3:
+
     >>> print(display(course_marks, 'title', 'student_id', 'mark',
     ...                             sort=('student_id', 'title')))
     +------------+------------+------+
@@ -3162,9 +3173,15 @@ that the two relations have in common.
 
 If there are no common attributes, ``compose`` is the same as ``join``:
 
-    >>> r1 = rel(foo=int, bar=int)(('foo', 'bar'), (1, 2), (3, 4))
-    >>> r2 = rel(bing=int, bang=int)(('bing', 'bang'), (5, 6), (7, 8))
+    >>> r1 = rel(row(foo=1, bar=2), row(foo=3, bar=4))
+    >>> r2 = rel(row(bing=5, bang=6), row(bing=7, bang=8))
     >>> join(r1, r2) == compose(r1, r2)
+    True
+
+If all the attributes are in common, they all get projected away and we get
+``Dee``:
+
+    >>> compose(course_marks, course_marks) == Dee
     True
 
 Compose is commutative, but not associative:
@@ -3179,6 +3196,26 @@ Compose is commutative, but not associative:
     >>> c2 = compose(is_called, compose(r, exam_marks))
     >>> c1 == c2
     False
+    >>> print(c1)
+    +-----------+------+-------+------------+
+    | course_id | mark | marks | student_id |
+    +-----------+------+-------+------------+
+    | C1        | 49   | 30    | S2         |
+    | C1        | 85   | 30    | S1         |
+    | C1        | 93   | 30    | S4         |
+    | C2        | 49   | 30    | S1         |
+    | C3        | 66   | 30    | S3         |
+    | C3        | 85   | 30    | S1         |
+    +-----------+------+-------+------------+
+    >>> print(c2)
+    +-----------+------+-------+------------+
+    | course_id | mark | marks | student_id |
+    +-----------+------+-------+------------+
+    | C1        | 85   | 30    | S1         |
+    | C2        | 49   | 30    | S1         |
+    | C3        | 85   | 30    | S1         |
+    +-----------+------+-------+------------+
+
 
 
 Aggregate Operators
