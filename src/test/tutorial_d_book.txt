@@ -2814,6 +2814,16 @@ the rows match, and we get back the empty relation.
     >>> is_called - rel(row(foo='bar')) == type(is_called)()
     True
 
+Given this, we can see that subtracting ``Dum`` we'll get the original
+relation, and subtracting ``Dee`` we'll get an empty relation.  You can
+think of this as ``Dum`` (``False``) not matching any rows, whereas
+``Dee`` (``True``) matches all rows:
+
+    >>> is_called - Dum == is_called
+    True
+    >>> is_called - Dee == type(is_called)()
+    True
+
 It is an error for match columns with the same name to have different types.
 
     >>> is_called - rel(student_id=str)()  # doctest: +NORMALIZE_WHITESPACE
@@ -2996,6 +3006,25 @@ so we can use the result of calling the ``keys()`` method directly in the
 projection expression.
 
 
+A Note About Infix Operators
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In defining the infix operators for relations, we have followed already
+established Python precedent, both because it makes sense and to preserve
+internal consistency in Python-plus-dinsd.  (Remember that relation bodies are
+sets of rows.)
+
+Python defines the ``&`` operator as set intersection, which it is for
+relations as well, although our ``&`` operator also does more given that the
+domain is not *just* a set.  Python defines the ``|`` operator as equivalent
+to set union, as does dinsd...but our union has a constrained domain relative
+to a straightforward set union of the bodies of the relations.  Finally,
+Python defines ``-`` as set difference.  Set difference is pretty much exactly
+what the relational ``minus`` is, but it is reasonable to extend it to the
+attribute-aware ``notmatching`` operation in the same way that we extend set
+union to the attribute-aware ``join``.
+
+
 
 Extended Relational Operators
 -----------------------------
@@ -3004,12 +3033,11 @@ Extended Relational Operators
 mtching
 ~~~~~~~
 
-Following along in Chapter 5, for completeness.  We already defined the
-``exam_marks`` relation instance in one of the problems above.  Now we'll add
-courses.
+Following along in Chapter 5 of AIRDT, for completeness.  We already defined
+the ``exam_marks`` relation instance in one of the problems above.  Now we'll
+add courses.
 
-    >>> Course = rel(course_id=CID, title=str)
-    >>> courses = Course(
+    >>> courses = rel(course_id=CID, title=str)(
     ...             ('course_id',   'title'),
     ...             ('C1',          'Database'),
     ...             ('C2',          'HCI'),
@@ -3084,6 +3112,7 @@ relation:
     rel({'course_id': CID, 'title': str})()
     >>> matching(courses, Dee) == courses
     True
+
 
 compose
 ~~~~~~~
