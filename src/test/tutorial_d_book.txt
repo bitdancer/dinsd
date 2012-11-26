@@ -1865,9 +1865,6 @@ relations:
     | gin  | C3        | gin | S5         |
     +------+-----------+-----+------------+
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
 
 rename
 ~~~~~~
@@ -3223,31 +3220,68 @@ Aggregate Operators
 
 Aggregate operators map from relations to scalers.  The results of aggregate
 operators are well defined (and thus the operator is a true relational
-aggregate operator) only if the diadic form of the operation (the "base
+aggregate operator) only if the dyadic form of the operation (the "base
 operation") is commutative and associative.  That is, the order of evaluation
 must not matter, since the order in which the rows are accessed is arbitrary
 and may change.
 
-As an aside, although discussed earlier, ``display`` is technically an
-aggregate operator:  its input is a relation and its result is a scaler (a
-string).
+For aggregate operators dinsd departs a bit from *Tutorial D*, though the end
+result is the same functionality.  In *Tutorial D* an aggregate operator takes
+a relation as an argument, plus an expression over the rows of that relation
+that yield the values to be aggregated.  dinsd inverts this, providing a
+single operator (``compute``) that takes a relation and an expression and
+returns an arbitrarily ordered list of values that are the result of applying
+that expression to each row in turn.  The dinsd "aggregate" operators are then
+applied to this returned list, producing the ultimate aggregated value.
+
+In effect, dinsd *decomposes* aggregation into two steps: ``compute``, whose
+part of the operation is to turn the relation into a single list of values,
+and a specific "summarization" operator that reduces the list to another form,
+usually a single scaler value.  So, while we call the functions that we pass
+the ``compute`` results to "aggregate functions", in fact it is only the
+composition of the dinsd "aggregate" function with the dinsd ``compute``
+operator that really meets the definition of "aggregate operator" from AIRDT.
+
+We will see shortly that this provides both considerable flexibility, and
+better integration with the underlying Python language.
+
+dinsd does have a couple of aggregate operators in the AIRDT sense, operators
+that take relations as arguments and return an aggregated result: ``display``,
+which was discussed earlier, and ``len``, which we will encounter in the next
+section.  These exist as non-decomposed operators because they operate on
+the *entire* row (they take no expression argument).  This means that the
+corresponding ``compute`` function would trivially return the entire row as
+its result.  ``display`` and ``len``, then, are shorthand notations for
+aggregate operations that take no expression argument.
 
 
 len (count)
 ~~~~~~~~~~~
 
-*Tutorial D* calls this operator ``COUNT``, but Python already has a function
-for returning the number of rows in a relation: ``len``:
+The *Tutorial D* operator ``COUNT`` returns the number of rows in a relation
+(Example 5.1):
 
-    >>> len(is_called)
-    5
+    COUNT ( EXAM_MARK )
+
+Just as we can overload the meaning of (most of) the standard infix operators
+in Python, there are also certain prefix operators that we can overload.
+One of these is ``len``, which is the standard Python way to get the "count"
+of the number of elements in an object.  This is clearly analogous to
+``COUNT``, and so in dinsd we so overload ``len``:
+
     >>> len(exam_marks)
     6
+    >>> len(is_called)
+    5
 
-That last was example 5.1 on page 127.  Example 5.2, counting the number of
-students with marks above 50:
+Example 5.2 demonstrates using a relational expression as an argument
+to ``COUNT``:
 
-    >>> len(where(exam_marks, "mark > 50") >> {'student_id'})
+    COUNT ( ( EXAM_MARK WHERE Mark > 50 ) {StudentId} )
+
+In dinsd we write this:
+
+    >>> len(exam_marks.where("mark > 50") >> {'student_id'})
     3
 
 
@@ -3256,19 +3290,20 @@ compute
 
     >>> from dinsd import compute
 
-``compute`` has no analog in *Tutorial D*.  All of the aggregate functions
-in *Tutorial D* version 2 have the ability to use an arbitrary expression
-to compute a value over each row of the relation being aggregated.
-``compute`` is the dinsd function that performs this computation operation.
-It is an iterator (specifically a generator) that produces the computed
-values one by one, which the individual aggregate operators then consume.
-Since the corresponding Python functions can consume iterators, this means
-that most of dinsd's aggregation operators are vanilla Python functions
-applied to a ``compute`` value.
+As discussed in the introduction to this chapter, ``compute`` has no analog
+in *Tutorial D*.  All of the aggregate functions in *Tutorial D* version 2 have
+the ability to use an arbitrary expression to compute a value over each row of
+the relation being aggregated.  ``compute`` is the dinsd function that
+performs this computation operation.  It is an iterator (specifically a
+generator) that produces the computed values one by one, which the individual
+"aggregate" operators then consume.  Since the corresponding Python functions
+can consume iterators, this means that most of dinsd's "aggregation" operators
+are vanilla Python functions applied to a ``compute`` value.
 
-``compute`` takes a relation and a function.  The function is passed each row
-of the relation in turn, and the result of the function applied to that row is
-yielded as the next value of the iterator.
+``compute`` takes a relation and a function, which can be either a function of
+one argument or a string expression.  The function/expression is passed each
+row of the relation in turn, and the result of the function applied to that
+row is yielded as the next value of the iterator.
 
 For example, we can extract the scores from the ``mark`` column of the
 ``exam_marks`` table like this:
@@ -3281,7 +3316,13 @@ The call to ``sorted`` here does two things:  it consumes all of the values
 from the compute generator, and it gives the returned values a predictable
 order so that the result can be used as part of the doctest.
 
-As usual, we can also specify a full ``lambda`` function instead of a string:
+Since ``compute`` is a function of only one relation, it is also available
+as a relation method:
+
+    >>> sorted(exam_marks.compute("mark"))
+    [49, 49, 66, 85, 85, 93]
+
+We can alternatively specify a full ``lambda`` function instead of a string:
 
     >>> sorted(compute(exam_marks, lambda r: "{}%".format(r.mark)))
     ['49%', '49%', '66%', '85%', '85%', '93%']
@@ -3290,20 +3331,24 @@ As usual, we can also specify a full ``lambda`` function instead of a string:
 sum
 ~~~
 
+The way to write the sum of the values of an attribute in *Tutorial D*
+is shown in Example 5.3:
+
+    SUM ( EXAM_MARK WHERE StudentId = SID ( 'S1' ), Mark )
+
 The Python ``sum`` function can be used to "sum" any values that support
 addition.  The result will be a valid relational aggregation if and only if
-the addition operation is both associative and commutative.
+the addition operation is both associative and commutative.  Arithmetic
+addition satisfies this criteria.  Here is AIRDT's example 5.3 in dinsd:
 
-Arithmetic addition satisfies this criteria.  Here is AIRDT's example 5.3 in
-dinsd:
-
-    >>> sum(compute(where(exam_marks, "student_id == SID('S1')"), "mark"))
+    >>> sum(exam_marks.where("student_id == SID('S1')").compute("mark"))
     219
 
-Tuple concatenation does not, so while the expression:
+Tuple concatenation does not satisfy the criteria for an aggregate operator,
+so while the expression:
 
-    >>> t = sum(compute(course_marks, '(title,)'), ())
-    >>> sorted(list(t)) == sorted(compute(course_marks, 'title'))
+    >>> t = sum(course_marks.compute('(title,)'), ())
+    >>> sorted(list(t)) == sorted(course_marks.compute('title'))
     True
 
 produces a result, it is neither a useful result nor a valid relational
@@ -3314,13 +3359,18 @@ reference, here are two examples from different runs:
     ('HCI', 'Database', 'Database', 'Database', 'Op systems', 'Op systems')
     ('Database', 'Database', 'Op systems', 'Op systems', 'HCI', 'Database')
 
+These are *not* equivalent tuples.
+
 If we understand Python's ``sum`` operator as being by default an arithmetic
 operator, it produces the correct result when passed an attribute from an
 empty relation:
 
-    >>> sum(compute(rel(foo=int)(), 'foo'))
+    >>> sum(rel(foo=int)().compute('foo'))
     0
 
+XXX
+Text refactoring incomplete beyond this point
+XXX
 
 max and min
 ~~~~~~~~~~~

@@ -429,6 +429,9 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def extend(self, **kw):
         return extend(self, **kw)
 
+    def compute(self, expr):
+        return compute(self, expr)
+
     # Presentation operators.
 
     def __repr__(self):
@@ -806,11 +809,11 @@ def _tline(parts, widths):
 #
 
 
-def compute(relvar, func):
-    if isinstance(func, str):
-        func = lambda r, s=func: eval(s, r._as_locals_(), _all)
-    for row in relvar:
-        yield func(row)
+def compute(relation, expr):
+    if isinstance(expr, str):
+        expr = lambda r, s=expr: eval(s, r._as_locals_(), _all)
+    for row in relation:
+        yield expr(row)
 
 
 def avg(iterator):
