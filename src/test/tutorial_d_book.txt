@@ -2649,22 +2649,129 @@ via ``rel``:
 
 This is just the union of a single empty relation.
 
+On the other hand, calling ``union`` with no arguments does do the obvious
+thing, by returning ``Dum``:
+
+    >>> union()
+    rel({})()
+
+
+minus
+~~~~~
+
+The ``minus`` operator can (only) be applied to two relations have exactly the
+same columns, as was the case for ``union``.  The result is a new relation of
+the same type, whose body contains those rows from the first relation that
+do not occur in the second relation.
+
+Here is the *Tutorial D* example 4.10:
+
+    ( IS_CALLED WHERE Name = NAME ('Devinder') ) { StudentId }
+    MINUS
+    ( IS_ENROLLED_ON WHERE CourseId = CID ('C1') ) { StudentId }
+
+In dinsd we have no infix operator for ``minus`` (we'll see why in a moment), so
+this is written in dinsd using ``minus`` as a prefix operator:
+
+    >>> from dinsd import minus
+    >>> minus(is_called.where("name == 'Devinder'") >> {'student_id'},
+    ...       is_enrolled_on.where("course_id == CID('C1')") >> {'student_id'})
+    rel({'student_id': SID})()
+
+Hmm.  That wasn't very interesting (or a very good test).  How about this one:
+    
+    >>> anne = rel(row(student_id=SID('S1'), name='Anne'))
+    >>> print(minus(is_called, anne))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+
+As indicated, ``minus`` only works for relations of like type:
+
+    >>> minus(is_called, rel(student_id=SID)())
+    Traceback (most recent call last):
+        ...
+    TypeError: Relation types must match for minus operation
+
+Subtracting an empty relation yields a relation equivalent to the first
+relation:
+
+    >>> minus(is_called, type(is_called)()) == is_called
+    True
+
+Subtracting a relation from itself yields an empty relation of the same type:
+
+    >>> minus(is_called, is_called)
+    rel({'name': str, 'student_id': SID})()
+
+``minus`` is *only* a dyadic function, so there is no call form with no
+arguments or one argument or more than two arguments:
+
+    >>> minus()                             # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    TypeError: minus() missing 2 required positional arguments: 'first' and
+        'second'
+    >>> minus(is_called)
+    Traceback (most recent call last):
+        ...
+    TypeError: minus() missing 1 required positional argument: 'second'
+    >>> minus(is_called, is_called, is_called)
+    Traceback (most recent call last):
+        ...
+    TypeError: minus() takes 2 positional arguments but 3 were given
+
+``minus`` is not commutative:
+
+    >>> print(minus(anne, is_called))
+    +------+------------+
+    | name | student_id |
+    +------+------------+
+    +------+------------+
+
+Nor is it associative:
+
+    >>> boris = rel(row(student_id=SID('S5'), name='Boris'))
+    >>> print(minus(minus(is_called, anne), boris))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Boris    | S2         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+    >>> print(minus(is_called, minus(anne, boris)))
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+
 
 notmatching
 ~~~~~~~~~~~
+A more general "subtraction" type operator is called "semidifference" or,
+in *Tutorial D*, ``NOT MATCHING``.  Here we require only that all of the
+attributes that the two relations have in *common* be of the same type.  We
+return all rows from the first relation that do *not* have rows in the second
+relation with matching values for the common attributes.
 
-Although the name is a bit more awkward in dinsd than it is in *Tutorial D*,
-we approximately follow the *Tutorial D* naming for this function.  Since
-it is the more general of the two difference functions (``minus`` and
-``notmatching``), we also provide it as the operator ``-``.
+Example 4.11 from AIRDT:
 
-    >>> from dinsd import notmatching
+    IS_CALLED NOT MATCHING IS_ENROLLED_ON
 
-Here is example 4.11 from page 115:
+In dinsd we assign this operator (the more general of the two "subtraction"
+operators) to the ``-`` infix operator.  So in dinsd we write this:
 
-    >>> not_enrolled = notmatching(is_called, is_enrolled_on)
-    >>> not_enrolled == is_called - is_enrolled_on
-    True
+    >>> not_enrolled = is_called - is_enrolled_on
     >>> print(not_enrolled)
     +-------+------------+
     | name  | student_id |
@@ -2672,13 +2779,25 @@ Here is example 4.11 from page 115:
     | Boris | S5         |
     +-------+------------+
 
+This is our equivalent of Figure 4.12.  Here we have only those students who
+appear in ``is_called`` but do not appear in ``is_enrolled_on``...that is all
+students who are not enrolled on any class.
+ 
+There is of course also a prefix version.  Although the name is a bit more
+awkward in dinsd than *Tutorial D*, we prefer the name ``notmatching`` to
+``semidifference``:
+
+    >>> from dinsd import notmatching
+    >>> notmatching(is_called, is_enrolled_on) == not_enrolled
+    True
+
 Since we are using the '-' operator and the operation is also referred to as a
 "semidiffernce", we will use the imprecise but convenient terminology
 "subtract" for this operation.
 
-If we subtract from an empty relation we get an empty relation.  On the other
-hand, if we subtract an empty relation we get the original relation (we
-subtract nothing).
+If we subtract any relation from an empty relation we get an empty relation.
+On the other hand, if we subtract an empty relation we get the original
+relation (we subtract nothing).
 
     >>> type(is_called)() - is_enrolled_on == type(is_called)()
     True
@@ -2686,13 +2805,13 @@ subtract nothing).
     True
 
 If we subtract a relation that has no common attributes, then if that
-relation is empty (no matching rows) we get back the original relation.
-If, however, it is not empty, then by the relational rules *all* the
-rows match, and we get back the empty relation.
+dissimilar relation is empty (no matching rows) we get back the original
+relation.  If, however, it is not empty, then by the relational rules *all*
+the rows match, and we get back the empty relation.
 
     >>> is_called - rel(foo=str)() == is_called
     True
-    >>> is_called - rel(foo=str)(dict(foo='bar')) == type(is_called)()
+    >>> is_called - rel(row(foo='bar')) == type(is_called)()
     True
 
 It is an error for match columns with the same name to have different types.
@@ -2705,16 +2824,38 @@ It is an error for match columns with the same name to have different types.
          match relation (relation types are <class 'dinsd.rel({'name': str,
          'student_id': SID})'> and <class 'dinsd.rel({'student_id': str})'>)
 
-minus
-~~~~~
+Like ``minus``, ``notmatching`` is a dyadic-only operation:
 
-The ``minus`` operator is a subset of ``notmatching``, where the two
-relations must have exactly the same columns, meaning that only exact
-matches are removed.
+    >>> notmatching()                         # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    TypeError: notmatching() missing 2 required positional arguments: 'first'
+        and 'second'
+    >>> notmatching(is_called)
+    Traceback (most recent call last):
+        ...
+    TypeError: notmatching() missing 1 required positional argument: 'second'
+    >>> notmatching(is_called, is_called, is_called)
+    Traceback (most recent call last):
+        ...
+    TypeError: notmatching() takes 2 positional arguments but 3 were given
 
-    >>> from dinsd import minus
-    >>> anne = rel(student_id=SID, name=str)(dict(student_id='S1', name='Anne'))
-    >>> print(minus(is_called, anne))
+Also like ``minus``, ``notmatching`` is neither commutative nor associative:
+
+    >>> print(is_enrolled_on - is_called)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    +-----------+------------+
+    >>> print((is_called - anne) - boris)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Boris    | S2         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+    >>> print(is_called - (anne - boris))
     +----------+------------+
     | name     | student_id |
     +----------+------------+
@@ -2723,10 +2864,12 @@ matches are removed.
     | Cindy    | S3         |
     | Devinder | S4         |
     +----------+------------+
-    >>> minus(is_called, rel(student_id=SID)())
-    Traceback (most recent call last):
-        ...
-    TypeError: Relation types must match for minus operation
+
+From the last two examples you will observe that ``notmatching`` can be used
+in place of ``minus``, and in fact this is always the case.  We provide
+``minus`` only for completeness: it was defined in the original relational
+algebra by E.F. Codd, and so many people working with relational algebra will
+expect it to exist.
 
 
 Chapter 4 Exercises
