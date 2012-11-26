@@ -426,6 +426,9 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def where(self, condition):
         return where(self, condition)
 
+    def extend(self, **kw):
+        return extend(self, **kw)
+
     # Presentation operators.
 
     def __repr__(self):
@@ -635,9 +638,15 @@ def extend(relation, **new_attrs):
         # matter much in practice.
         raise TypeError("Cannot extend empty relation")
     for n, f in new_attrs.items():
+        if n.startswith('_'):
+            raise ValueError("Invalid relational attribute name "
+                             "{!r}".format(n))
+        if n in relation.header:
+            raise ValueError("Duplicate relational attribute name "
+                             "{!r}".format(n))
         if isinstance(f, str):
             new_attrs[n] = lambda r, s=f: eval(s, r._as_locals_(), _all)
-    attrs = relation.header.copy()
+    attrs = relation.header
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
     new_rel = _rel(attrs)()

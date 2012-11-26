@@ -2475,14 +2475,22 @@ extend
 
 This operator allows us to create a new relation that extends an existing
 relation by performing a computation on the attributes of the initial
-relation.
+relation, and creating a new attribute whose values are the computed values.
 
-    >>> from dinsd import extend
+Figure 4.10 of AIRDT shows the result of the following *Tutorial D*
+expression:
 
-Here is the expression that results in the example in figure 4.10 on pages
-109 and 109:
+    EXTEND IS_CALLED ADD ( FirstLetter ( Name ) AS Initial )
 
-    >>> x = extend(is_called, initial="name[0]")
+I'm not clear on whether or not ``FirstLetter`` is an actual ``Rel`` function,
+or just a theoretical function used in the example.  Python does have an
+equivalent to ``FirstLetter``: ``name[0]`` refers to the first letter of the
+string pointed to by ``name``.
+
+``extend`` is again a function of a single relation, and so in dinsd it is
+a method of relations:
+
+    >>> x = is_called.extend(initial="name[0]")
     >>> print(display(x, 'student_id', 'name', 'initial'))
     +------------+----------+---------+
     | student_id | name     | initial |
@@ -2494,17 +2502,21 @@ Here is the expression that results in the example in figure 4.10 on pages
     | S5         | Boris    | B       |
     +------------+----------+---------+
 
-A null extension is an identity operation:
+Here dinsd requires the keyword form, where the new column name is equated
+to the expression (``lambda`` or string) the evaluation of which yields
+the value for the new attribute.  There can be any number of new attributes,
+including none.  In the case of no attributes, we have an identity relation,
+and the resulting value is equivalent to the source relation:
 
-    >>> extend(is_called) == is_called
+    >>> is_called.extend() == is_called
     True
 
-More than one attribute may be computed in a single extend call (we'll also
-demonstrate mixing real functions and string expressions):
+Here is an example with more than one new attribute, and we also demonstrate
+here mixing ``lambda`` expressions and string expressions:
 
-    >>> x = extend(is_called, caps="name.upper()",
+    >>> x2 = is_called.extend(caps="name.upper()",
     ...                       hello=lambda row: "hello")
-    >>> print(display(x, 'student_id', 'name', 'caps', 'hello'))
+    >>> print(display(x2, 'student_id', 'name', 'caps', 'hello'))
     +------------+----------+----------+-------+
     | student_id | name     | caps     | hello |
     +------------+----------+----------+-------+
@@ -2522,7 +2534,38 @@ a minor restriction, since it is simple enough (and often clearer) to write
 multiple extension expressions in such a case.  It would also be possible to
 relax this restriction by using (name, func) tuples or some inspect trickery
 and doing the extension one attribute at a time, but this hardly seems worth
-the effort for what is probably an infrequent use case.
+the effort for what is probably a relatively infrequent use case.  It also has
+the advantage that it preserves internal consistency in dinsd: keywords
+arguments in Python are an unordered set, and to break that expectation would
+be surprising.
+
+There is, as usual, a prefix version of ``extend``:
+
+    >>> from dinsd import extend
+    >>> x == extend(is_called, initial="name[0]")
+    True
+
+``extend`` can not be used to add an invalid attribute:
+
+    >>> is_called.extend(_foo="'hello'")
+    Traceback (most recent call last):
+        ...
+    ValueError: Invalid relational attribute name '_foo'
+
+Nor can a duplicate attribute be added:
+
+    >>> is_called.extend(name="'hello'")
+    Traceback (most recent call last):
+        ...
+    ValueError: Duplicate relational attribute name 'name'
+
+Python's restriction on duplicate keywords keeps us from adding two new
+attributes with the same name:
+
+    >>> is_called.extend(foo="'hello'", foo="'foobar'")
+    Traceback (most recent call last):
+        ...
+    SyntaxError: keyword argument repeated
 
 
 union
