@@ -2889,38 +2889,34 @@ Exercise 2:
     ...         if isinstance(value, date):
     ...             return value
     ...         return super().__new__(cls, *value)
-    >>> Cust = rel(c_no=str, discount=float)
-    >>> Orders = rel(o_no=str, c_no=str, date=date_type)
-    >>> OrderItem = rel(o_no=str, p_no=str, qty=int)
-    >>> Product = rel(p_no=str, unit_price=float)
-    >>> cust = Cust(
+    >>> cust = rel(c_no=str, discount=float)(
     ...         ('c_no', 'discount'),
     ...         ('0012', 10.0),
     ...         ('1001', 5.0),
     ...         ('5', 20.0),
     ...         )
-    >>> orders = Orders(
+    >>> orders = rel(o_no=str, c_no=str, date=date_type)(
     ...         ('o_no', 'c_no', 'date'),
     ...         ('0001', '0012', date(2012, 11, 4)),
     ...         ('0002', '0012', (2012, 11, 5)),
     ...         ('0003', '5', date(2012, 11, 3)),
     ...         )
-    >>> order_items = OrderItem(
+    >>> order_items = rel(o_no=str, p_no=str, qty=int)(
     ...         ('o_no', 'p_no', 'qty'),
     ...         ('0001', '20001', 2),
     ...         ('0001', '20002', 3),
     ...         ('0002', '20001', 7),
     ...         ('0003', '2201', 20),
     ...         )
-    >>> products = Product(
+    >>> products = rel(p_no=str, unit_price=float)(
     ...         ('p_no', 'unit_price'),
     ...         ('20001', 120.50),
     ...         ('20002', 12.75),
     ...         ('2201', 1000.00),
     ...         )
-    >>> x = order_items & products & orders & cust
-    >>> x = extend(x, price="round(qty*unit_price*(1-discount/100), 2)")
-    >>> x = x >> {'o_no', 'p_no', 'price'}
+    >>> x = ((order_items & products & orders & cust).extend(
+    ...         price="round(qty*unit_price*(1-discount/100), 2)")
+    ...             >> {'o_no', 'p_no', 'price'})
     >>> print(display(x, 'o_no', 'p_no', 'price'))
     +------+-------+---------+
     | o_no | p_no  | price   |
@@ -2933,8 +2929,7 @@ Exercise 2:
 
 Exercise 3:
 
-    >>> ExamMark = rel(student_id=SID, course_id=CID, mark=int)
-    >>> exam_marks = ExamMark(
+    >>> exam_marks = rel(student_id=SID, course_id=CID, mark=int)(
     ...     ('student_id', 'course_id', 'mark'),
     ...     ('S1',         'C1',        85),
     ...     ('S1',         'C2',        49),
@@ -2943,10 +2938,10 @@ Exercise 3:
     ...     ('S3',         'C3',        66),
     ...     ('S4',         'C1',        93),
     ...     )
-    >>> x = rename(exam_marks, student_id='sid1', mark='mark1')
-    >>> y = rename(exam_marks, student_id='sid2', mark='mark2')
-    >>> pairs = where(x & y, "sid1 < sid2")
-    >>> diff = extend(pairs, gap="abs(mark1 - mark2)")
+    >>> x = exam_marks.rename(student_id='sid1', mark='mark1')
+    >>> y = exam_marks.rename(student_id='sid2', mark='mark2')
+    >>> pairs = (x & y).where("sid1 < sid2")
+    >>> diff = pairs.extend(gap="abs(mark1 - mark2)")
     >>> diff_only = diff << {'mark1', 'mark2'}
     >>> print(display(diff_only, 'course_id', 'sid1', 'sid2', 'gap'))
     +-----------+------+------+-----+
@@ -2971,9 +2966,6 @@ Exercise 4:
     >>> is_called - (is_called - is_called) == is_called
     True
 
-``notmatching`` is neither commutative nor associative, which makes
-using the ``-`` operator for it a bit dicey...but so very convenient.
-
 Oh, and for completeness: ``rename`` can be written in terms of
 ``extend``:
 
@@ -2981,6 +2973,28 @@ Oh, and for completeness: ``rename`` can be written in terms of
     >>> y = extend(is_called, sid="student_id") << {'student_id'}
     >>> x == y
     True
+
+Or, if we want to be more general:
+
+    >>> def rename2(relation, **kw):
+    ...     temps = {'XXtemp'+str(i): old for i, old in enumerate(kw)}
+    ...     relation = relation.extend(**temps) << kw.keys()
+    ...     new = {n: 'XXtemp'+str(i) for i, n in enumerate(kw.values())}
+    ...     relation = relation.extend(**new) << temps.keys()
+    ...     return relation
+    >>> x = rename(is_called, student_id='name', name='student_id')
+    >>> y = rename2(is_called, student_id='name', name='student_id')
+    >>> x == y
+    True
+
+The XXtemp dodge is required in order to satisfy the parallel evaluation
+definition of ``rename`` in *Tutorial D*.
+
+It is interesting to note the nice fallout of being internally consistent and
+having the projection arguments be a set: the keys of a dictionary are a set,
+so we can use the result of calling the ``keys()`` method directly in the
+projection expression.
+
 
 
 Extended Relational Operators
