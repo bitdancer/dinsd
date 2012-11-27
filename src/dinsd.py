@@ -828,7 +828,7 @@ def avg(iterator):
     for s, c in _itertools.accumulate(zip(iterator, _itertools.repeat(1)),
                                      lambda x, y: (x[0]+y[0], x[1]+y[1])):
         pass
-    return 0 if c==0 else s/c
+    return 0/0 if c==0 else s/c
 
 
 

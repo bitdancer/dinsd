@@ -3384,13 +3384,17 @@ XXX
 max and min
 ~~~~~~~~~~~
 
-Like ``sum``, the Python ``max`` and ``min`` functions accept iterators as
-input, so we can use them directly to compute the corresponding relational max
-and min:
+In *Tutorial D*, ``max`` and ``min`` look like this (from Example 5.4):
 
-    >>> max(compute(where(exam_marks, "student_id == SID('S1')"), 'mark'))
+    MAX ( EXAM_MARK WHERE StudentId = SID ( 'S1' ), Mark )
+    MIN ( EXAM_MARK WHERE StudentId = SID ( 'S1' ), Mark )
+
+Like ``sum``, the Python ``max`` and ``min`` functions accept iterators as
+input, so we can use them to compute the corresponding relational max and min:
+
+    >>> max(exam_marks.where("student_id == SID('S1')").compute('mark'))
     85
-    >>> min(compute(where(exam_marks, "student_id == SID('S1')"), 'mark'))
+    >>> min(exam_marks.where("student_id == SID('S1')").compute('mark'))
     49
 
 ``min`` and ``max`` do not have defined results on an empty relation:
@@ -3400,21 +3404,30 @@ and min:
         ...
     ValueError: min() arg is an empty sequence
 
+
 avg
 ~~~
 
 Python doesn't have a function that corresponds directly to the *Tutorial D*
-``AVG`` function, and it is a bit tricky to define it as a function that takes
-a single iterator that does not support ``len`` (which compute does not) as
-its argument, so dinsd provides the ``avg`` function in the ``op`` module.
+``AVG`` function.  It is a bit tricky to define it as a function that takes a
+single iterator as its argument if that iterator does not support ``len``, and
+``compute`` does not support ``len`` since it is a generator function.  So
+dinsd provides a suitable ``avg`` function:
 
     >>> from dinsd import avg
-    >>> round(avg(compute(exam_marks, 'mark')), 2)
+    >>> round(avg(exam_marks.compute('mark')), 2)
     71.17
-    >>> avg(compute(rel(foo=int)({'foo': 3}), 'foo'))
+    >>> avg(rel(row(foo=3)).compute('foo'))
     3.0
-    >>> avg(compute(rel(foo=int)(), 'foo'))
-    0
+
+The average of an empty relation involves division by zero, and that is
+exactly the result we get from trying it:
+
+    >>> avg(rel(foo=int)().compute('foo'))
+    Traceback (most recent call last):
+        ...
+    ZeroDivisionError: division by zero
+
 
 any and all
 ~~~~~~~~~~~
@@ -3422,26 +3435,27 @@ any and all
 The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
 named ``all`` and ``any``, respectively.  Because Python assigns a truth value
 to almost all data types, these functions can be applied to almost any
-attribute.  Whether that is useful or not depends on what's stored under
+attribute.  Whether that is useful or not depends on what is stored under
 that attribute, of course.
 
-    >>> any(compute(exam_marks, 'mark'))
+    >>> any(exam_marks.compute('mark'))
     True
-    >>> all(compute(exam_marks, 'mark'))
+    >>> all(exam_marks.compute('mark'))
     True
     >>> bools = rel(bar=int, foo=bool)(('bar', 'foo'), (1, True), (2, False),
     ...                                                (3, True), (4, True))
-    >>> any(compute(bools, 'foo'))
+    >>> any(bools.compute('foo'))
     True
-    >>> all(compute(bools, 'foo'))
+    >>> all(bools.compute('foo'))
     False
 
 ``any`` and ``all`` have the correct logical behavior on empty relations:
 
-    >>> any(compute(type(bools)(), 'foo'))
+    >>> any(type(bools)().compute('foo'))
     False
-    >>> all(compute(type(bools)(), 'foo'))
+    >>> all(type(bools)().compute('foo'))
     True
+
 
 
 Relations and Rows as Values
@@ -3560,23 +3574,16 @@ We can compute the average exam mark instead, as in example 5.8, as follows:
 The relation being extended changes to exam_marks here so that we only
 have rows for exams that had marks.  AIRDT notes that if we had continued
 to use courses we'd end up with a division by zero for the course with
-no marks.  The dinsd average function returns ``0`` for an empty list,
-so the dinsd version of this expression would not blow up:
+no marks, and indeed we do:
 
     >>> x = extend(courses >> {'course_id'},
     ...            avg_mark=lambda r:
     ...                round(avg(compute(where(exam_marks,
     ...                                   lambda x: x.course_id==r.course_id),
     ...                          'mark')), 2))
-    >>> print(display(x, 'course_id', 'avg_mark'))
-    +-----------+----------+
-    | course_id | avg_mark |
-    +-----------+----------+
-    | C1        | 75.67    |
-    | C2        | 49.0     |
-    | C3        | 75.5     |
-    | C4        | 0.0      |
-    +-----------+----------+
+    Traceback (most recent call last):
+        ...
+    ZeroDivisionError: division by zero
 
 Also take note that my convention of using intermediate variables to simplify
 complex expressions is exactly reason AIRDT uses the *Tutorial D* ``WITH``
