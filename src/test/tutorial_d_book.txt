@@ -3377,9 +3377,6 @@ empty relation:
     >>> sum(rel(foo=int)().compute('foo'))
     0
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
 
 max and min
 ~~~~~~~~~~~
@@ -3457,6 +3454,9 @@ that attribute, of course.
     True
 
 
+XXX
+Text refactoring incomplete beyond this point
+XXX
 
 Relations and Rows as Values
 -----------------------------
