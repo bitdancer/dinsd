@@ -3461,14 +3461,14 @@ XXX
 Relations and Rows as Values
 -----------------------------
 
-motivation
-~~~~~~~~~~
+with
+~~~~
 
 Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
 AIRDT, the number of students that have sat for an exam in each course:
 
-    >>> x = extend(courses >> {'course_id'},
-    ...            n=lambda r: len(where(exam_marks,
+    >>> x = (courses >> {'course_id'}).extend(
+    ...            n=lambda r: len(exam_marks.where(
     ...                                  lambda x: x.course_id==r.course_id
     ...                                 ) >> {'student_id'}))
     >>> print(x)
@@ -3487,12 +3487,11 @@ expressions instead of string expressions.  So this is clearly not optimal.
 In any case, that is getting ahead of the text.  Here is the dinsd expression
 I naively came up with to compute the table in figure 5.5:
 
-    >>> x = extend(courses, exam_result=lambda r:
-    ...         project(
-    ...             where(exam_marks,
-    ...                   lambda x: x.course_id==r.course_id),
-    ...              {'student_id', 'mark'})) << {'title'}
-    >>> print(x)
+    >>> c_er = courses.extend(exam_result=lambda r:
+    ...            exam_marks.where(
+    ...                  lambda x: x.course_id==r.course_id)
+    ...                      >> {'student_id', 'mark'}) << {'title'}
+    >>> print(c_er)
     +-----------+-----------------------+
     | course_id | exam_result           |
     +-----------+-----------------------+
@@ -3530,39 +3529,96 @@ display to support column and sort specifications for attributes of the main
 table, but the complexity is not warranted by the minimal use that such a
 facility would be likely to get.
 
-Here is the simpler, direct equivalent of the expression used for this table
-in the AIRDT example 5.6, using dinsd's ``with ns(...)`` support to make
-``exam_marks`` temporarily available in the expression namespace:
+AIRDT uses the following *Tutorial D* expression to compute the above
+table in Example 5.6:
+
+    EXTEND COURSE{CourseId} ADD
+    ( RELATION { TUPLE { CourseId CourseId } } COMPOSE EXAM_MARK
+      AS ExamResult )
+
+Here is the simpler, direct equivalent of that expression in dinsd.  Here we
+need to use a dinsd syntax that doesn't have a direct correspondent
+in *Tutorial D* (though there is something that looks almost like it), a ``with
+ns(...):`` block.  We use this to make the ``exam_marks`` relation temporarily
+available under that name in the expression name space:
 
     >>> from dinsd import ns
     >>> with ns(exam_marks=exam_marks):
-    ...     x == extend(courses >> {'course_id'}, exam_result=(
-    ...             "compose(rel(row(course_id=course_id)), exam_marks)"))
+    ...     c_er == extend(courses >> {'course_id'}, exam_result=
+    ...                "compose(rel(row(course_id=course_id)), exam_marks)"
+    ...                )
     True
 
-If ``exam_marks`` and ``courses`` were both part of the same database this
-would happen automatically, but we haven't covered creating database yet, so
-for now we need to use ``with``.
+If ``exam_marks`` and ``courses`` were both part of the same database, their
+names would automatically be part of the expression name space, but we haven't
+covered creating a database yet, so for now we need to use ``with``.  ``with``
+can be used to add arbitrary named values to the expression name space, and is
+the mechanism alluded to early that allows you to avoid creating expression
+strings programmatically when you want to introduce dynamic values from
+outside the database into an expression.  It is the dinsd equivalent of
+SQL parameters.
 
-Note that while dinsd's ``with ns(...)`` shares some similarities
-with *Tutorial D*'s ``WITH`` expression, its purpose is subtly different.  We can
-achieve the affect of *Tutorial D*'s ``WITH`` in Python simply by assigning an
-expression to a name.  But those names are only available in the full *Python*
-context...to *also* make them available in the special evaluation environment
-of a string-valued function expression, we use ``with ns(...)``.
+While dinsd's ``with ns(...)`` shares some similarities with *Tutorial D*'s
+``WITH`` expression, its purpose is subtly different.  We can achieve the
+affect of *Tutorial D*'s ``WITH`` in Python simply by assigning an expression
+to a name, as we have been doing all along.  But those names are only
+available in the full *Python* context...to *also* make them available in the
+special evaluation environment of a string-valued function expression, we use
+``with ns(...)``.
 
 Having successfully written first expression above, and successfully
 translated example 5.6, I have to admit that I had no clue what AIRDT's
-example 5.7 was doing.  After reading the explanation and thinking about it I
-believe he uses that more complicated expression because *Tutorial D* version
-one did not have a general expression facility for aggregate operators.
+Example 5.7 was doing:
 
-We can compute the average exam mark instead, as in example 5.8, as follows:
+    WITH
+        EXTEND COURSE{CourseId} ADD
+        ( RELATION { TUPLE { CourseId CourseId } } COMPOSE EXAM_MARK
+          AS ExamResult )
+        AS C_ER :
+    EXTEND C_ER ADD ( COUNT ( ExamResult ) AS n )
+    { ALL BUT ExamResult }
 
-    >>> av = extend(exam_marks >> {'course_id'}, avg_mark=lambda r:
-    ...         round(avg(compute(where(exam_marks,
-    ...             lambda x: x.course_id==r.course_id), 'mark')), 2))
-    >>> print(display(av, 'course_id', 'avg_mark'))
+After reading the explanation and thinking about it, I believe he uses that
+more complicated expression because *Tutorial D* version 1 did not have a
+general expression facility for aggregate operators.  Although we can do it in
+one step as shown above, for completeness we will translate this two step
+version into dinsd as well: 
+
+    >>> with ns(exam_marks=exam_marks):
+    ...     c_er = (courses >> {'course_id'}).extend(exam_result=
+    ...                 "compose(rel(row(course_id=course_id)), exam_marks)"
+    ...                 )
+    ...     counts = c_er.extend(n="len(exam_result)") << {'exam_result'}
+    ...     print(counts)
+    +-----------+---+
+    | course_id | n |
+    +-----------+---+
+    | C1        | 3 |
+    | C2        | 1 |
+    | C3        | 2 |
+    | C4        | 0 |
+    +-----------+---+
+
+Example 5.8 shows a similar computation for the average grade:
+
+    WITH
+        EXTEND EXAM_MARK{CourseId} ADD
+        ( RELATION { TUPLE { CourseId CourseId } } COMPOSE EXAM_MARK
+          AS ExamResult )
+     AS C_ER2 :
+    EXTEND C_ER2 ADD
+        ( AVG(ExamResult, Mark) AS AvgMark )
+    { ALL BUT ExamResult }
+
+Here we will translate this using the ``compose`` form, but taking advantage
+of dinsd's decomposed aggregation operators to do it in one step:
+
+    >>> with ns(exam_marks=exam_marks):
+    ...     av = (exam_marks >> {'course_id'}).extend(avg_mark=
+    ...               "round(avg(compose(rel(row(course_id=course_id)), "
+    ...                                 "exam_marks).compute('mark')), 2)"
+    ...               )
+    ...     print(display(av, 'course_id', 'avg_mark'))
     +-----------+----------+
     | course_id | avg_mark |
     +-----------+----------+
@@ -3571,40 +3627,22 @@ We can compute the average exam mark instead, as in example 5.8, as follows:
     | C3        | 75.5     |
     +-----------+----------+
 
-The relation being extended changes to exam_marks here so that we only
-have rows for exams that had marks.  AIRDT notes that if we had continued
-to use courses we'd end up with a division by zero for the course with
-no marks, and indeed we do:
+The relation being extended changes to exam_marks here so that we only have
+rows for exams that had marks.  AIRDT notes that if we had continued to use
+courses we'd end up with a division by zero for the course with no marks, and
+indeed we do:
 
-    >>> x = extend(courses >> {'course_id'},
-    ...            avg_mark=lambda r:
-    ...                round(avg(compute(where(exam_marks,
-    ...                                   lambda x: x.course_id==r.course_id),
-    ...                          'mark')), 2))
+    >>> with ns(exam_marks=exam_marks):
+    ...     av = (courses >> {'course_id'}).extend(avg_mark=
+    ...               "round(avg(compose(rel(row(course_id=course_id)), "
+    ...                                 "exam_marks).compute('mark')), 2)"
+    ...               )
     Traceback (most recent call last):
         ...
     ZeroDivisionError: division by zero
 
-Also take note that my convention of using intermediate variables to simplify
-complex expressions is exactly reason AIRDT uses the *Tutorial D* ``WITH``
-expression in these examples.  In this case I chose to only split it for
-printing, but if we follow the pattern from AIRDT more closely we end up
-with this (using our ``with`` to put ``exam_marks`` in the expression
-namespace and simple name assignment to do what the *Tutorial D* ``WITH``
-does in the example from the book):
-
-    >>> with ns(exam_marks=exam_marks):
-    ...     c_er2 = extend(exam_marks >> {'course_id'}, exam_result=(
-    ...               "compose(rel(row(course_id=course_id)), exam_marks)"))
-    >>> x = extend(c_er2,
-    ...            avg_mark="round(avg(compute(exam_result, 'mark')), 2)")
-    >>> x = x << {'exam_result'}
-    >>> x == av
-    True
-
-At least, I think that's what the AIRDT example is doing.  One benefit of
-computing an intermediate relation is that we are able to switch back
-to string expressions.
+The two step version is probably easier to parse visually, but as we will see
+in the next section, there is an even simpler way to do this operation.
 
 
 summarize
