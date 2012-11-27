@@ -2164,11 +2164,11 @@ Trying to project using a name that is not a valid attribute is an error:
     >>> shared_name << {'foo'}
     Traceback (most recent call last):
         ...
-    TypeError: Attribute list included invalid attributes: {'foo'}
+    TypeError: Attribute list included unknown attributes: {'foo'}
     >>> shared_name >> {'foo'}
     Traceback (most recent call last):
         ...
-    TypeError: Attribute list included invalid attributes: {'foo'}
+    TypeError: Attribute list included unknown attributes: {'foo'}
 
 On page 102 of AIRDT example 4.5 demonstrates using projection to split
 the original enrollment relation into ``is_enrolled_on`` and ``is_called``:
@@ -3647,17 +3647,30 @@ in the next section, there is an even simpler way to do this operation.
 
 summarize
 ~~~~~~~~~
-
-Now we finally get to ``summarize``, which is designed to make the above
-complex expressions simpler and easier to understand.  The basic idea is that
-the pattern of composing with a row containing data from one table to obtain a
-list of matching data from another table (which could be the same table) and
-then aggregating over that extracted data is very common.  So we have an
-operator that expresses that more compactly:
-
     >>> from dinsd import summarize
+
+``summarize`` is designed to make the above complex expressions simpler and
+easier to understand.  The basic idea is that the pattern of composing with a
+row containing data from one table to obtain a list of matching data from
+another table (which could be the same table) and then aggregating over that
+extracted data is very common.  So we have an operator that expresses that
+more compactly.  Here is the *Tutorial D* version from Example 5.9:
+
+    SUMMARIZE EXAM_MARK PER ( COURSE { CourseId } )
+               ADD ( COUNT ( ) AS n )
+
+In *Tutorial D*, this expression has its own special semantics: you omit the
+relation argument to the aggregation functions, as they automatically work on
+the relations provided, one by one, by ``SUMMARIZE``.  In dinsd, on the other
+hand, ``summarize`` works exactly as if it is a composition of ``compose`` and
+``extend`` with an automatic "project away" of the temporary column at the
+end.  The temporary column is named ``_summary_``, which is guaranteed not to
+collide with any real attributes since it would be an invalid attribute name.
+
+The dinsd version is:
+
     >>> x = summarize(exam_marks, courses >> {'course_id'},
-    ...               n=lambda r: len(r))
+    ...               n="len(_summary_)")
     >>> print(x)
     +-----------+---+
     | course_id | n |
@@ -3668,14 +3681,11 @@ operator that expresses that more compactly:
     | C4        | 0 |
     +-----------+---+
 
-The summarize lambda is being passed the *relation* that the summarize
-computes, not a row.  When we use string notation for the expression, we refer
-to the relation by the special variable ``summary`` (``summary`` is
-defined *only* for ``summarize`` expressions):
+``summarize`` will of course also take a real function as the value for a new
+attribute:
 
-    >>> from dinsd import summarize
     >>> x == summarize(exam_marks, courses >> {'course_id'},
-    ...               n="len(summary)")
+    ...               n=lambda r: len(r._summary_))
     True
 
 The above formulation corresponds to the *Tutorial D* ``SUMMARIZE PER``
@@ -3686,50 +3696,57 @@ relation for composition with itself.  We used that pattern in the average
 computation:
 
     >>> av == summarize(exam_marks, {'course_id'},
-    ...                 avg_mark="round(avg(compute(summary, 'mark')), 2)")
+    ...                 avg_mark="round(avg(_summary_.compute('mark')), 2)")
     True
 
 Definitely a worthwhile simplification.
+
+This ``BY`` form is a function of a single relation, and so can also be used
+in the form of a relation method:
+
+    >>> av == exam_marks.summarize({'course_id'},
+    ...                 avg_mark="round(avg(_summary_.compute('mark')), 2)")
+    True
 
 Because debugging a summarization can be tricky without being able to see the
 data computed by the compose, ``summarize`` supports a special boolean keyword
 argument ``_deubg``.  If set to ``True``, the intermediate table extended with
 the composed data is printed to stdout:
 
-    >>> x =summarize(exam_marks, {'course_id'}, _debug=True,
-    ...              avg_mark="round(avg(compute(summary, 'mark')), 2)")
-    +-----------+-----------------------+
-    | course_id | t_e_m_p               |
-    +-----------+-----------------------+
-    | C1        | +------+------------+ |
-    |           | | mark | student_id | |
-    |           | +------+------------+ |
-    |           | | 49   | S2         | |
-    |           | | 85   | S1         | |
-    |           | | 93   | S4         | |
-    |           | +------+------------+ |
-    |           |                       |
-    | C2        | +------+------------+ |
-    |           | | mark | student_id | |
-    |           | +------+------------+ |
-    |           | | 49   | S1         | |
-    |           | +------+------------+ |
-    |           |                       |
-    | C3        | +------+------------+ |
-    |           | | mark | student_id | |
-    |           | +------+------------+ |
-    |           | | 66   | S3         | |
-    |           | | 85   | S1         | |
-    |           | +------+------------+ |
-    |           |                       |
-    +-----------+-----------------------+
+    >>> x = exam_marks.summarize({'course_id'}, _debug_=True,
+    ...              avg_mark="round(avg(_summary_.compute('mark')), 2)")
+    +-----------------------+-----------+
+    | _summary_             | course_id |
+    +-----------------------+-----------+
+    | +------+------------+ | C2        |
+    | | mark | student_id | |           |
+    | +------+------------+ |           |
+    | | 49   | S1         | |           |
+    | +------+------------+ |           |
+    |                       |           |
+    | +------+------------+ | C1        |
+    | | mark | student_id | |           |
+    | +------+------------+ |           |
+    | | 49   | S2         | |           |
+    | | 85   | S1         | |           |
+    | | 93   | S4         | |           |
+    | +------+------------+ |           |
+    |                       |           |
+    | +------+------------+ | C3        |
+    | | mark | student_id | |           |
+    | +------+------------+ |           |
+    | | 66   | S3         | |           |
+    | | 85   | S1         | |           |
+    | +------+------------+ |           |
+    |                       |           |
+    +-----------------------+-----------+
 
-Summarize can take any number of new column computations functions, and
-they may be a mix of strings and lambda expressions:
+Summarize can take any number of new column computations functions, and they
+may be a mix of strings and lambda expressions:
 
-    >>> x = summarize(exam_marks, {'course_id'},
-    ...               attendees=lambda r: len(r),
-    ...               avg_mark="round(avg(compute(summary, 'mark')), 2)")
+    >>> x = exam_marks.summarize({'course_id'},
+    ...               attendees=lambda r: len(r._summary_),
+    ...               avg_mark="round(avg(_summary_.compute('mark')), 2)")
     >>> print(display(x, 'course_id', 'attendees', 'avg_mark'))
     +-----------+-----------+----------+
     | course_id | attendees | avg_mark |
@@ -3739,15 +3756,37 @@ they may be a mix of strings and lambda expressions:
     | C3        | 2         | 75.5     |
     +-----------+-----------+----------+
 
+If no additional attributes are specified, the result is equal to the
+projection:
+
+    >>> exam_marks.summarize({'course_id'}) == exam_marks >> {'course_id'}
+    True
+    >>> (summarize(exam_marks, courses >> {'course_id'}) ==
+    ...     courses >> {'course_id'})
+    True
+
 
 group
 ~~~~~
 
-    >>> from dinsd import group
+``group`` encapsulates the ``extend``/``compose`` sub-operation of summarize.
+In Example 5.8 we had the subexpression:
 
-``group`` encapsulates the ``extend``/``compose`` sub-operation of summarize:
+    EXTEND EXAM_MARK{CourseId} ADD
+    ( RELATION { TUPLE { CourseId CourseId } } COMPOSE EXAM_MARK
+      AS ExamResult )
 
-    >>> results = group(exam_marks, exam_results={'student_id', 'mark'})
+Example 5.12 shows an alternative *Tutorial D* formulation that produces the
+same result for this case:
+
+    EXAM_MARK GROUP ( { StudentId, Mark } AS ExamResult )
+
+In dinsd we write this:
+
+    >>> results = exam_marks.group(exam_results={'student_id', 'mark'})
+
+Which gives us our version of Figure 5.6:
+
     >>> print(results)
     +-----------+-----------------------+
     | course_id | exam_results          |
@@ -3775,10 +3814,16 @@ group
     |           |                       |
     +-----------+-----------------------+
 
-Since the grouping specification is a attribute name set, we can also use
+There is also a prefix version of ``group``:
+
+    >>> from dinsd import group
+    >>> results == group(exam_marks, exam_results={'student_id', 'mark'})
+    True
+
+Since the grouping specification is an attribute name set, we can also use
 the ``all_but`` wrapper with it:
 
-    >>> results == group(exam_marks, exam_results=all_but({'course_id'}))
+    >>> results == exam_marks.group(exam_results=all_but({'course_id'}))
     True
 
 The grouping refers implicitly to both the set of columns being grouped and
@@ -3800,7 +3845,7 @@ It is an error to try to group on a non-existent column:
     >>> group(exam_marks, foo={'bar'})
     Traceback (most recent call last):
         ...
-    TypeError: Attribute list included invalid attributes: {'bar'}
+    TypeError: Attribute list included unknown attributes: {'bar'}
 
 Grouping on no attributes produces a column consisting of instances of
 ``Dee``:
@@ -3871,19 +3916,41 @@ with a single attribute, whose single value is the original relation:
 ungroup
 ~~~~~~~
 
+Example 5.13 shows the *Tutorial D* ``UNGROUP`` operator:
+
+    C_ER2 UNGROUP ( ExamResult )
+
+``ungroup`` effectively undoes what ``group`` does.  Here is the
+dinsd version:
+
+    >>> results.ungroup('exam_results') == exam_marks
+    True
+
+There is also a prefix version:
+
     >>> from dinsd import ungroup
-
-``ungroup`` effectively undoes what ``group`` does:
-
     >>> ungroup(results, 'exam_results') == exam_marks
     True
 
-dinsd also supports doing ``ungroup`` via its formal definition (see
-page 141 of AIRDT):
+AIRDT gives a formal definition for ``ungroup`` in terms of the
+operators already introduced (see page 141):
 
-    >>> t_func = lambda r: times(r.exam_results,
-    ...                          type(results)(r) << {'exam_results'})
-    >>> exam_marks == union(compute(extend(results, t=t_func), 't'))
+    r UNGROUP ( a ):
+        UNION (
+        EXTEND r ADD ( RELATION { t } TIMES a AS x ),
+        x)
+
+    where x is an attribute name arbitrarily chosen and
+    t = TUPLE { b1 b1, …, bn bn }, where b1, …, bn
+    are the attributes of r{ALL BUT a}.
+
+We can implement this recipe in dinsd:
+
+    >>> def ungroup2(r, a):
+    ...     return union(r.extend(x=lambda z, typ=type(r):
+    ...                                times(typ(z) << {a},
+    ...                                      getattr(z, a))).compute("x"))
+    >>> exam_marks == ungroup2(results, 'exam_results')
     True
 
 This works because if ``union`` is passed a single argument consisting of a
@@ -3892,12 +3959,19 @@ that iterator.  That is, it acts as an aggregation function.  The built-in
 ``ungroup`` is more efficient, though.
 
 We can also do this using a string valued expression, by using the special
-variable ``r`` to access the entire row:
+variable ``_row_`` to access the entire row:
 
-    >>> with ns(results=results):
-    ...     t_func = "times(exam_results, type(results)(r) << {'exam_results'})"
-    ...     exam_marks == union(compute(extend(results, t=t_func), 't'))
+    >>> def ungroup3(r, a):
+    ...     with ns(typ=type(r), a=a):
+    ...         return union(r.extend(x=
+    ...             "times(typ(_row_) << {a}, locals()[a])").compute("x"))
+    >>> exam_marks == ungroup3(results, 'exam_results')
     True
+
+The ``locals()[a]`` is a dodge to get around the fact that what we have in
+``a`` is the name that we want to *look up* in the expression namespace.  The
+``_row_`` special variable is always defined when a string expression is
+evaluated, but it is seldom needed.
 
 It is an error to pass ``ungroup`` a column not in the relation:
 
@@ -3964,7 +4038,7 @@ Here are the edge cases and errors:
     >>> wrap(contact_info, bad={'foo'})
     Traceback (most recent call last):
         ...
-    TypeError: Attribute list included invalid attributes: {'foo'}
+    TypeError: Attribute list included unknown attributes: {'foo'}
     >>> wrap(contact_info, one={'home'}, two={'zip'})
     Traceback (most recent call last):
         ...

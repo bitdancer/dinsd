@@ -201,7 +201,7 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
 
     def _as_locals_(self):
         l = self.__dict__.copy()
-        l['r'] = self
+        l['_row_'] = self
         l.update(_locals[_threading.current_thread].__dict__)
         return l
 
@@ -432,6 +432,17 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def compute(self, expr):
         return compute(self, expr)
 
+    def summarize(self, attrs, **kw):
+        # If attrs is a relation this will work, but doing that is not part of
+        # the official API and should not be depended on.
+        return summarize(self, attrs, **kw)
+
+    def group(self, **kw):
+        return group(self, **kw)
+
+    def ungroup(self, attrname):
+        return ungroup(self, attrname)
+
     # Presentation operators.
 
     def __repr__(self):
@@ -603,7 +614,7 @@ class all_but:
             return self.names.names
         all_names = relation.header.keys()
         if self.names and all_names & self.names != self.names:
-            raise TypeError("Attribute list included invalid attributes: "
+            raise TypeError("Attribute list included unknown attributes: "
                             "{}".format(self.names - all_names))
         return all_names - self.names
 
@@ -614,7 +625,7 @@ def project(relation, attr_names):
     reduced_attrs = {n: t for n, t in relation.header.items()
                           if n in attr_names}
     if not len(reduced_attrs) == len(attr_names):
-        raise TypeError("Attribute list included invalid attributes: "
+        raise TypeError("Attribute list included unknown attributes: "
                         "{}".format(attr_names - reduced_attrs.keys()))
     reduced_attr_names = reduced_attrs.keys()
     new_rel = _rel(reduced_attrs)()
@@ -627,7 +638,7 @@ def project(relation, attr_names):
 
 def where(relation, condition):
     if isinstance(condition, str):
-        condition = lambda r, s=condition: eval(s, r._as_locals_(), _all)
+        condition = lambda r, s=condition: eval(s, _all, r._as_locals_())
     new_rel = type(relation)()
     for row in relation._rows_:
         if condition(row):
@@ -635,20 +646,20 @@ def where(relation, condition):
     return new_rel
 
 
-def extend(relation, **new_attrs):
+def extend(relation, _name_check=True, **new_attrs):
     if len(relation) == 0:
         # Tutorial D can do this, but the fact that we can't probably doesn't
         # matter much in practice.
         raise TypeError("Cannot extend empty relation")
     for n, f in new_attrs.items():
-        if n.startswith('_'):
+        if _name_check and n.startswith('_'):
             raise ValueError("Invalid relational attribute name "
                              "{!r}".format(n))
         if n in relation.header:
             raise ValueError("Duplicate relational attribute name "
                              "{!r}".format(n))
         if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, r._as_locals_(), _all)
+            new_attrs[n] = lambda r, s=f: eval(s, _all, r._as_locals_())
     attrs = relation.header
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
@@ -811,7 +822,7 @@ def _tline(parts, widths):
 
 def compute(relation, expr):
     if isinstance(expr, str):
-        expr = lambda r, s=expr: eval(s, r._as_locals_(), _all)
+        expr = lambda r, s=expr: eval(s, _all, r._as_locals_())
     for row in relation:
         yield expr(row)
 
@@ -837,19 +848,15 @@ def avg(iterator):
 #
 
 
-def summarize(relvar, compvar, _debug=False, **new_attrs):
-    if not isinstance(compvar, _Relation):
+def summarize(relation, comprel, _debug_=False, **new_attrs):
+    if not isinstance(comprel, _Relation):
         # Assume it is an attribute name list
-        compvar = relvar >> compvar
-    x = extend(compvar, t_e_m_p=lambda r: compose(relvar, type(compvar)(r)))
-    if _debug:
+        comprel = relation >> comprel
+    x = extend(comprel, _name_check=False,
+               _summary_=lambda r, t=type(comprel): compose(relation, t(r)))
+    if _debug_:
         print(x)
-    for n, f in new_attrs.items():
-        if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, {'summary': r.t_e_m_p}, _all)
-        else:
-            new_attrs[n] = lambda r, f=f: f(r.t_e_m_p)
-    return extend(x, **new_attrs) << {'t_e_m_p'}
+    return extend(x, **new_attrs) << {'_summary_'}
 
 
 def group(relation, **kw):
