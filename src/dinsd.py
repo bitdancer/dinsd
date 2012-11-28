@@ -443,6 +443,12 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def ungroup(self, attrname):
         return ungroup(self, attrname)
 
+    def wrap(self, **kw):
+        return wrap(self, **kw)
+
+    def unwrap(self, attrname):
+        return unwrap(self, attrname)
+
     # Presentation operators.
 
     def __repr__(self):

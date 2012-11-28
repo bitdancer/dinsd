@@ -3454,9 +3454,6 @@ that attribute, of course.
     True
 
 
-XXX
-Text refactoring incomplete beyond this point
-XXX
 
 Relations and Rows as Values
 -----------------------------
@@ -3991,20 +3988,25 @@ The column specified must of course be a relation valued attribute:
 wrap
 ~~~~
 
-Example 5.14 shows how to turn attribute data into tuples as an attribute
-value.  The types of dinsd's row objects aren't exposed as standalone types,
-but they are readily available using the ``row`` attribute of a relation.  So
-we can write the dinsd equivalent of 5.14 as follows:
+Example 5.14 shows how to turn attribute data into rows as an attribute value:
+
+    ( EXTEND CONTACT_INFO ADD
+        ( TUPLE{ House House, Street Street, City City , Zip Zip }
+          AS Address ) )
+        { ALL BUT House, Street, City, Zip }
+
+Given a suitable relation instance:
 
     >>> contact_info = rel(name=str, house=str, street=str, city=str, zip=str)(
     ...                     ('name',  'house', 'street',  'city',   'zip'),
     ...                     ('Anne',  '120',   'Peach',   'London', '00111'),
     ...                     ('Boris', '5',     'Rose',    'Kiev',   '00112'))
-    >>> expression_namespace['sub_rel'] = type(contact_info << {'name'})
-    >>> row_func = ("sub_rel.row(dict(house=house, street=street,"
-    ...                              "city=city, zip=zip))")
-    >>> addrs = extend(contact_info, address=row_func) << {'house', 'street',
-    ...                                                    'city', 'zip'}
+
+So we can write the dinsd equivalent of 5.14 as follows:
+
+    >>> addrs = contact_info.extend(address=
+    ...             "row(dict(house=house, street=street, city=city, zip=zip))"
+    ...             ) << {'house', 'street', 'city', 'zip'}
     >>> print(display(addrs, 'name', 'address'))
     +-------+---------------------------------------------------+
     | name  | address                                           |
@@ -4013,33 +4015,55 @@ we can write the dinsd equivalent of 5.14 as follows:
     | Boris | {city=Kiev, house=5, street=Rose, zip=00112}      |
     +-------+---------------------------------------------------+
 
-The shorthand operator ``wrap`` does the same thing more compactly:
+Example 5.5 shows how the *Tutorial D* ``WRAP`` operator does the same thing
+more compactly:
+
+    CONTACT_INFO WRAP ( { House, Street, City, Zip } AS Address )
+
+``wrap`` is a function of a single relation, and so is available as a method
+in dinsd:
+
+    >>> addrs == contact_info.wrap(address={'house', 'street', 'city', 'zip'})
+    True
+
+as well as a prefix function:
 
     >>> from dinsd import wrap
     >>> addrs == wrap(contact_info, address={'house', 'street', 'city', 'zip'})
     True
 
-Here are the edge cases and errors:
+It is possible (though usually pointless) to wrap all the attributes:
 
-    >>> print(wrap(contact_info, all=all_but({})))
+    >>> print(contact_info.wrap(all=all_but({})))
     +--------------------------------------------------------------+
     | all                                                          |
     +--------------------------------------------------------------+
     | {city=Kiev, house=5, name=Boris, street=Rose, zip=00112}     |
     | {city=London, house=120, name=Anne, street=Peach, zip=00111} |
     +--------------------------------------------------------------+
-    >>> print(wrap(contact_info, none={}))
+
+Wrapping no attributes results in the new attribute having empty rows as its
+values:
+
+    >>> print(contact_info.wrap(none={}))
     +--------+-------+-------+------+--------+-------+
     | city   | house | name  | none | street | zip   |
     +--------+-------+-------+------+--------+-------+
     | Kiev   | 5     | Boris | {}   | Rose   | 00112 |
     | London | 120   | Anne  | {}   | Peach  | 00111 |
     +--------+-------+-------+------+--------+-------+
-    >>> wrap(contact_info, bad={'foo'})
+
+You can't wrap a non-existent attribute:
+
+    >>> contact_info.wrap(bad={'foo'})
     Traceback (most recent call last):
         ...
     TypeError: Attribute list included unknown attributes: {'foo'}
-    >>> wrap(contact_info, one={'home'}, two={'zip'})
+
+And for the same reasons that applied in the ``compose`` case, you can only
+specify a single new attribute in a ``wrap``:
+
+    >>> contact_info.wrap(one={'home'}, two={'zip'})
     Traceback (most recent call last):
         ...
     TypeError: Only one new attribute may be specified for wrap
@@ -4049,8 +4073,16 @@ unwrap
 ~~~~~~
 
 ``unwrap`` is the opposite of ``wrap``.  Expressing this in *Tutorial D*
-requires a new expression (``FROM``).  Because dinsd is embedded in a general
-purpose programming language, we don't need to add new any facilities:
+introduces a new expression (``FROM``):
+
+    r UNWRAP ( a )
+
+    ( EXTEND r ADD ( b1 FROM a AS b1, …, bn FROM a AS bn ) )
+    { ALL BUT a }
+
+    where b1, …, bn are the attributes of a.
+
+The dinsd equivalent of ``FROM`` is Python's attribute access syntax:
 
     >>> contact_info == extend(addrs,
     ...                        house="address.house",
@@ -4059,7 +4091,16 @@ purpose programming language, we don't need to add new any facilities:
     ...                        zip="address.zip") << {'address'}
     True
 
-``unrwap`` is of course much simpler to use:
+``unrwap`` is of course much simpler:
+
+    CONTACT_INFO_WRAPPED UNWRAP ( Address )
+
+and, in dinsd:
+
+    >>> contact_info == addrs.unwrap('address')
+    True
+
+or, in prefix form:
 
     >>> from dinsd import unwrap
     >>> contact_info == unwrap(addrs, 'address')
@@ -4079,23 +4120,23 @@ And here are the errors and edge cases:
     Traceback (most recent call last):
         ...
     ValueError: Cannot unwrap an empty relation
-    >>> unwrap(wrap(contact_info, none={}), 'none') == contact_info
+    >>> contact_info.wrap(none={}).unwrap('none') == contact_info
     True
-    >>> unwrap(wrap(contact_info, all=all_but({})), 'all') == contact_info
+    >>> contact_info.wrap(all=all_but({})).unwrap('all') == contact_info
     True
 
 
 Aside: join operators as aggregators
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-We already saw an example of ``union`` being used as an aggregator (that is,
-taking an iterator as input).  This also works for the join-type operators,
-which we will now prove for testing completeness.
+We already saw an example of ``union`` being used as an aggregator (which
+means, in dinsd, taking an iterator as input).  This also works for the
+join-type operators, which we will now prove for testing completeness.
 
     >>> R = rel(a=int, b=int)
     >>> a = R(('a', 'b'), (1, 2), (3, 4))
     >>> b = R(('a', 'b'), (1, 2), (7, 8))
-    >>> c = rel(c=int, d=int)(('c', 'd'), (5, 6))
+    >>> c = rel(row(c=5, d=6))
     >>> join((a, b))
     rel({row({'a': 1, 'b': 2})})
     >>> intersect((a, b))
@@ -4104,10 +4145,6 @@ which we will now prove for testing completeness.
     rel({row({'a': 1, 'b': 2, 'c': 5, 'd': 6}),
          row({'a': 3, 'b': 4, 'c': 5, 'd': 6})})
 
-Sharp eyes will note that while ``join`` and ``times`` result in computed
-relation names beginning with ``join_``, ``intersect`` does not.  This is
-because ``intersect`` operations on relations of the same type, so there is no
-need to compute a new type.
 
 
 Comparison
