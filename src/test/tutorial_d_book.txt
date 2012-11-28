@@ -4147,11 +4147,32 @@ join-type operators, which we will now prove for testing completeness.
 
 
 
-Comparison
-----------
+Relation Comparison
+-------------------
 
-Like ``rel``, Python uses ``<=`` and ``>=`` for subset and superset,
-respectively.  These operators work with relations of like type:
+Python meets the requirements on the equality relation expounded upon in
+section 5.9 or AIRDT.  In particular, string equality is a strict test:
+
+    >>> 'this ' == 'this'
+    False
+
+It is possible to define Python types that do not support equality testing,
+but you have to go out of your way to do it.  Instances of objects are
+compared by identity if no other equality test is defined:
+
+    >>> object() == object()
+    False
+
+A large part of the purpose of the dinsd ``Scalar`` class is to provide an
+easy way to support both a sensible equality function and a total ordering for
+user defined types.
+
+dinsd supports equality and total ordering for all relations.  These operators
+work with relations of like type, and except for equality do not work with
+relations of unlike type.
+
+Like ``Rel``, Python uses ``<=`` and ``>=`` for the subset and superset
+(respectively) comparisons on relations.
 
     >>> R = rel(foo=int, bar=int)
     >>> r1 = R(('foo', 'bar'), (1, 2), (3, 4), (5, 6))
@@ -4199,8 +4220,19 @@ Python also supports proper subset and proper superset via ``<`` and ``>``:
     >>> r3 > r4
     False
 
-I'm not sure why *Tutorial D* defines IS_EMPTY.  dinsd doesn't but you can
-define it for yourself if you want it:
+dinsd does not define an equivalent for the *Tutorial D* ``IS_EMPTY``,
+because it would be redundant, as we'll see in a moment.
+
+We could define ``IS_EMTPY`` using the ``TABLE_DUM`` test from AIRDT:
+
+    >>> def is_empty(r):
+    ...     return r >> {} == Dum
+    >>> is_empty(R())
+    True
+    >>> is_empty(r1)
+    False
+
+Or using the dinsd equivalent of the ``COUNT`` test:
 
     >>> def is_empty(r):
     ...     return len(r)==0
@@ -4209,26 +4241,27 @@ define it for yourself if you want it:
     >>> is_empty(r1)
     False
 
-Even that is more complicated than is needed, though.  If you want to know if
-a dinsd relation is empty, you can just test it's truth value:
+However, python objects usually have a boolean value (all the built in types
+do).  For relations, dinsd makes the boolean value ``True`` if the relation
+has at least one row, and ``False`` if it has no rows:
 
     >>> bool(R())
     False
     >>> bool(r1)
     True
 
-This means you can use a relation in an ``if`` statement directly to
-check if it is empty:
+This means you can use a relation in an ``if`` statement directly to check if
+it is empty:
 
     >>> if r1:
-    ...     print("full")
-    full
+    ...     print("not empty")
+    not empty
     >>> if not R():
     ...     print("empty")
     empty
 
 Relations of different types can be tested for equality (if they are different
-types they are by Python definition unequal), but are otherwise not
+types they are by Python convention unequal), but are otherwise not
 comparable:
 
     >>> r1 == is_enrolled_on
@@ -4254,23 +4287,27 @@ comparable:
     TypeError: unorderable types: rel({'bar': int, 'foo': int})() >=
         rel({'course_id': CID, 'student_id': SID})()
 
-In preparation for our next example, we'll add a course for a student that
-does not have a corresponding mark in ``exam_marks``:
+Example 5.16 in AIRDT demonstrates computing a relation listing the names of
+all the students that have taken an exam for every course in which they are
+enrolled.  To make this interesting, we need at least one student enrolled on
+a course where they do not have an exam mark, so let's update
+``is_enrolled_on`` with an entry for which that is true:
 
     >>> is_enrolled_on = union(is_enrolled_on,
-    ...     type(is_enrolled_on)(dict(student_id=SID('S2'),
-    ...                               course_id=CID('C3'))))
+    ...                        rel(row(student_id=SID('S2'),
+    ...                              course_id=CID('C3'))))
 
-And here is my take on example 5.16 from AIRDT, computing a relation listing
-the names of all the students that have taken an exam for every course in
-which they are enrolled, without having looked at the "right" answer:
+I tried working the "problem", using relational comparison somehow, without
+looking at the solution, and came up with:
 
-    >>> m = group(join(is_enrolled_on, is_called), courses={'course_id', 'name'})
-    >>> c = group(join(is_enrolled_on, exam_marks), marks={'course_id', 'mark'})
+    >>> m = join(is_enrolled_on, is_called).group(courses={'course_id', 'name'})
+    >>> c = join(is_enrolled_on, exam_marks).group(marks={'course_id', 'mark'})
     >>> j = join(m, c)
-    >>> c_completed = "courses >> {'course_id'} == marks >> {'course_id'}"
-    >>> r = extend(j, completed=c_completed) >> {'student_id', 'completed'}
-    >>> print(display(join(r, is_called), 'name', 'student_id', 'completed'))
+    >>> r = extend(j, completed=
+    ...                 "courses >> {'course_id'} == marks >> {'course_id'}"
+    ...           ) >> {'student_id', 'completed'}
+    >>> done = join(r, is_called)
+    >>> print(display(done, 'name', 'student_id', 'completed'))
     +----------+------------+-----------+
     | name     | student_id | completed |
     +----------+------------+-----------+
@@ -4281,7 +4318,12 @@ which they are enrolled, without having looked at the "right" answer:
     +----------+------------+-----------+
 
 Well, that was much more complicated than AIRDT's solution...and I seem to
-have misread the problem statement:
+have misread the problem statement.  In *Tutorial D* he solved this via:
+
+    IS_CALLED NOT MATCHING ( ENROLMENT NOT MATCHING EXAM_MARK )
+
+On the other hand, this solution doesn't use relational comparison.  In dinsd
+translates to:
 
     >>> print(is_called - ((is_enrolled_on & is_called) - exam_marks))
     +----------+------------+
@@ -4293,17 +4335,17 @@ have misread the problem statement:
     | Devinder | S4         |
     +----------+------------+
 
-(His book obviously isn't doctested, since both he and we earlier deleted
-the ``enrollment`` variable :)
+His book obviously isn't doctested, since both he and we earlier deleted the
+``enrollment`` variable, which I discovered when trying to use it, so
+I recreated it via the join above.
 
 My misunderstanding is revealed by the presence of ``S5`` in this table: he is
 enrolled on no courses and therefore has trivially sat all his exams.  Mine
 lost him because of the joins, making mine the answer to the different
-question "which students who have sat at least one exam have sat the exams for
-all of the courses on which they are enrolled?".
+question: "which students who have sat at least one exam have sat the exams
+for all of the courses on which they are enrolled?".
 
-Something I find even more interesting, though, is that this gives the same
-result:
+Then I noticed that this gives the same result:
 
     >>> print(is_called - (is_enrolled_on - exam_marks))
     +----------+------------+
@@ -4315,19 +4357,30 @@ result:
     | Devinder | S4         |
     +----------+------------+
 
-I wonder why he didn't use that formulation?
+I wondered why he didn't use that formulation, but in fact I think he intended
+to, as we'll see below.
 
-And here is the dinsd formulation based on example 5.17, using a slightly
-different form of the ``ns`` context manager:
+Example 5.17 shows how to do this computation with logic that is easier to
+derive from the problem statement, by using relational comparision:
 
-    >>> with ns() as ns:
-    ...     ns.exam_marks = exam_marks
-    ...     ns.enrollment = is_called & is_enrolled_on
-    ...     ns.r_sid = type(is_called >> {'student_id'})
-    ...     print(where(is_called, (           # doctest: +NORMALIZE_WHITESPACE
-    ...            "compose(enrollment, r_sid(dict(student_id=student_id))) <= "
-    ...            "compose(exam_marks, r_sid(dict(student_id=student_id))) "
-    ...                "<< {'mark'}")))
+    IS_CALLED WHERE
+    ENROLMENT COMPOSE RELATION {TUPLE {StudentId StudentId}}
+    ⊆
+    ( EXAM_MARK COMPOSE RELATION {TUPLE {StudentId StudentId}} )
+     {ALL BUT Mark}
+
+Here is the dinsd equivalent, in which we use a slightly different form of the
+``ns`` context manager to get our two component relations into the expression
+namespace:
+
+    >>> with ns() as n:
+    ...     n.exam_marks = exam_marks
+    ...     n.enrollment = is_called & is_enrolled_on
+    ...     print(is_called.where(           # doctest: +NORMALIZE_WHITESPACE
+    ...            "compose(enrollment, rel(row(student_id=student_id))) <= "
+    ...            "compose(exam_marks, rel(row(student_id=student_id))) "
+    ...                "<< {'mark'}"
+    ...          ))
     Traceback (most recent call last):
         ...
     TypeError: unorderable types: rel({'course_id': CID, 'name': str})() <=
@@ -4339,11 +4392,12 @@ rid of ``marks``, leaving us with ``course_id`` (as we can see from the
 projection relation names in the error message).  So, no, those two
 aren't comparable.  We can do:
 
-    >>> print(where(is_called, (
-    ...         "compose(enrollment, r_sid(dict(student_id=student_id))) "
+    >>> print(is_called.where(
+    ...         "compose(enrollment, rel(row(student_id=student_id))) "
     ...             "<< {'name'}  <= "
-    ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
-    ...             "<< {'mark'}")))
+    ...         "compose(exam_marks, rel(row(student_id=student_id))) "
+    ...             "<< {'mark'}"
+    ...      ))
     +----------+------------+
     | name     | student_id |
     +----------+------------+
@@ -4352,14 +4406,18 @@ aren't comparable.  We can do:
     | Cindy    | S3         |
     | Devinder | S4         |
     +----------+------------+
+
+    XXX: The above is a bug in ns...the names aren't supposed to remain in
+         the expression namespace.
 
 Which gets us the expected result.  So does:
 
-    >>> expression_namespace['is_enrolled_on'] = is_enrolled_on
-    >>> print(where(is_called, (
-    ...         "compose(is_enrolled_on, r_sid(dict(student_id=student_id))) <= "
-    ...         "compose(exam_marks, r_sid(dict(student_id=student_id))) "
-    ...             "<< {'mark'}")))
+    >>> with ns(exam_marks=exam_marks, is_enrolled_on=is_enrolled_on):
+    ...    print(is_called.where(
+    ...         "compose(is_enrolled_on, rel(row(student_id=student_id))) <= "
+    ...         "compose(exam_marks, rel(row(student_id=student_id))) "
+    ...             "<< {'mark'}"
+    ...         ))
     +----------+------------+
     | name     | student_id |
     +----------+------------+
@@ -4369,4 +4427,5 @@ Which gets us the expected result.  So does:
     | Devinder | S4         |
     +----------+------------+
 
-So, I think in both of these examples he just had the wrong table name.
+And this clears up the mystery about ``enrollment`` in the AIRDT examples:
+he's using ``enrollment`` in those examples to refer to ``is_enrolled_on``.
