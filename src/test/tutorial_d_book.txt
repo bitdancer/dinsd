@@ -3145,8 +3145,6 @@ operands (which is not how it is implemented) would be:
 compose
 ~~~~~~~
 
-    >>> from dinsd import compose
-
 ``compose`` joins its operands and then projects away the attributes
 that the two relations have in common, eg:
 
@@ -3156,10 +3154,16 @@ In *Tutorial D* this is written the ``COMPOSE`` operator as:
 
     COURSE COMPOSE EXAM_MARK
     
-It is equally straightforward in dinsd, but using a prefix operator:
+We can view the compose operation as adding together the two component
+relations.  The fact that this operation elides the common attributes makes it
+not directly analogous to arithmetic or set addition, but it is close enough
+that it seems to make sense to overload the Python ``+`` operator as the
+relational compose.  The other justification for this is that there is not
+another relational operator (other than join, for which we already have ``&``)
+whose meaning is anywhere near as close.
 
     >>> course_marks = (courses & exam_marks) << {'course_id'}
-    >>> compose(courses, exam_marks) == course_marks
+    >>> courses + exam_marks == course_marks
     True
 
 which gives us our equivalent of the table from Figure 5.3:
@@ -3177,29 +3181,36 @@ which gives us our equivalent of the table from Figure 5.3:
     | Database   | S4         | 93   |
     +------------+------------+------+
 
+There is also a prefix functional version:
+
+    >>> from dinsd import compose
+    >>> compose(courses, exam_marks) == course_marks
+    True
+
 If there are no common attributes, ``compose`` is the same as ``join``:
 
     >>> r1 = rel(row(foo=1, bar=2), row(foo=3, bar=4))
     >>> r2 = rel(row(bing=5, bang=6), row(bing=7, bang=8))
-    >>> join(r1, r2) == compose(r1, r2)
+    >>> r1 & r2 == r1 + r2
     True
 
 If all the attributes are in common, they all get projected away and we get
 ``Dee``:
 
-    >>> compose(course_marks, course_marks) == Dee
+    >>> course_marks + course_marks == Dee
     True
 
-Compose is commutative, but not associative:
+Compose is commutative, but not associative (which is an argument
+against using ``+``, but we're ignoring that):
 
-    >>> compose(courses, exam_marks) == compose(exam_marks, courses)
+    >>> courses + exam_marks == exam_marks + courses
     True
     >>> r = rel(student_id=SID, marks=int, name=str)(
     ...             ('student_id', 'marks', 'name'),
     ...             ('S1',         30,      'Anne'),
     ...             ('S2',         20,      'Borris'))
-    >>> c1 = compose(compose(is_called, r), exam_marks)
-    >>> c2 = compose(is_called, compose(r, exam_marks))
+    >>> c1 = (is_called + r) + exam_marks
+    >>> c2 = is_called + (r + exam_marks)
     >>> c1 == c2
     False
     >>> print(c1)
@@ -3542,7 +3553,7 @@ available under that name in the expression name space:
     >>> from dinsd import ns
     >>> with ns(exam_marks=exam_marks):
     ...     c_er == extend(courses >> {'course_id'}, exam_result=
-    ...                "compose(rel(row(course_id=course_id)), exam_marks)"
+    ...                "rel(row(course_id=course_id)) + exam_marks"
     ...                )
     True
 
@@ -3583,7 +3594,7 @@ version into dinsd as well:
 
     >>> with ns(exam_marks=exam_marks):
     ...     c_er = (courses >> {'course_id'}).extend(exam_result=
-    ...                 "compose(rel(row(course_id=course_id)), exam_marks)"
+    ...                 "rel(row(course_id=course_id)) + exam_marks"
     ...                 )
     ...     counts = c_er.extend(n="len(exam_result)") << {'exam_result'}
     ...     print(counts)
@@ -3612,8 +3623,8 @@ of dinsd's decomposed aggregation operators to do it in one step:
 
     >>> with ns(exam_marks=exam_marks):
     ...     av = (exam_marks >> {'course_id'}).extend(avg_mark=
-    ...               "round(avg(compose(rel(row(course_id=course_id)), "
-    ...                                 "exam_marks).compute('mark')), 2)"
+    ...               "round(avg((rel(row(course_id=course_id)) + "
+    ...                          "exam_marks).compute('mark')), 2)"
     ...               )
     ...     print(display(av, 'course_id', 'avg_mark'))
     +-----------+----------+
@@ -3631,8 +3642,8 @@ indeed we do:
 
     >>> with ns(exam_marks=exam_marks):
     ...     av = (courses >> {'course_id'}).extend(avg_mark=
-    ...               "round(avg(compose(rel(row(course_id=course_id)), "
-    ...                                 "exam_marks).compute('mark')), 2)"
+    ...               "round(avg((rel(row(course_id=course_id)) + "
+    ...                          "exam_marks).compute('mark')), 2)"
     ...               )
     Traceback (most recent call last):
         ...
@@ -4377,8 +4388,8 @@ namespace:
     ...     n.exam_marks = exam_marks
     ...     n.enrollment = is_called & is_enrolled_on
     ...     print(is_called.where(           # doctest: +NORMALIZE_WHITESPACE
-    ...            "compose(enrollment, rel(row(student_id=student_id))) <= "
-    ...            "compose(exam_marks, rel(row(student_id=student_id))) "
+    ...            "enrollment + rel(row(student_id=student_id)) <= "
+    ...            "exam_marks + rel(row(student_id=student_id)) "
     ...                "<< {'mark'}"
     ...          ))
     Traceback (most recent call last):
@@ -4393,9 +4404,9 @@ projection relation names in the error message).  So, no, those two
 aren't comparable.  We can do:
 
     >>> print(is_called.where(
-    ...         "compose(enrollment, rel(row(student_id=student_id))) "
+    ...         "(enrollment + rel(row(student_id=student_id))) "
     ...             "<< {'name'}  <= "
-    ...         "compose(exam_marks, rel(row(student_id=student_id))) "
+    ...         "(exam_marks + rel(row(student_id=student_id))) "
     ...             "<< {'mark'}"
     ...      ))
     +----------+------------+
@@ -4414,8 +4425,8 @@ Which gets us the expected result.  So does:
 
     >>> with ns(exam_marks=exam_marks, is_enrolled_on=is_enrolled_on):
     ...    print(is_called.where(
-    ...         "compose(is_enrolled_on, rel(row(student_id=student_id))) <= "
-    ...         "compose(exam_marks, rel(row(student_id=student_id))) "
+    ...         "is_enrolled_on + rel(row(student_id=student_id)) <= "
+    ...         "(exam_marks + rel(row(student_id=student_id))) "
     ...             "<< {'mark'}"
     ...         ))
     +----------+------------+
@@ -4436,8 +4447,8 @@ Other Operators on Relations and Rows
 -------------------------------------
 
 
-in
-~~
+in and ~ (extract_only_row)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In section 5.10, AIRDT talks about the tuple membership test:
 
@@ -4456,10 +4467,6 @@ is a standard Python operator):
 The membership test depends on the equality test, and so in dinsd it is
 defined for unlike types.  (It is categorically true that a row of type ``t1``
 type is not an element of a relation of type ``t2``.)
-
-
-extract_only_row
-~~~~~~~~~~~~~~~~
 
 We've already mentioned the dinsd equivalent of the *Tutorial D* ``FROM``
 operation in the context of extracting attributes from tuples.  *Tutorial D*
@@ -4507,3 +4514,65 @@ is written in dinsd as follows:
 
     >>> (~courses.where("course_id == CID('C1')")).title
     'Database'
+
+
+relational operations on rows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+All of these operations are easily defined in terms of the relational concepts
+we already have: turn the row or rows into a single row relation with the same
+header, perform the operation, and extract the single row from the result
+relation.
+
+And in fact, in the pure-Python version of dinsd they are implemented exactly
+that way, which is why there aren't tests for the edge cases (we've already
+tested them above).
+
+In dinsd these operations on rows are only available as infix operators.
+Otherwise we'd have to have functions with names like ``row_join``, which
+doesn't really seem worthwhile.  This means we don't have an n-adic version of
+row join, but if you need it you can use the Python ``accumulate`` function
+from ``itertools``.
+
+We'll use the following rows in the test examples:
+
+    >>> rw1 = row(student_id=SID('S1'), name='Anne')
+    >>> rw2 = row(student_id=SID('S1'), course_id=CID('C1'))
+
+row rename:
+
+    >>> rw1.rename(student_id='SID')
+    row({'SID': SID('S1'), 'name': 'Anne'})
+
+row projection:
+
+    >>> rw1 >> {'name'}
+    row({'name': 'Anne'})
+    >>> rw1 << {'name'}
+    row({'student_id': SID('S1')})
+
+row extension:
+
+    >>> rw1.extend(capname="name.upper()")
+    row({'capname': 'ANNE', 'name': 'Anne', 'student_id': SID('S1')})
+
+Extending by a constant expression is much more useful with rows, but
+keep in mind that the value is a *string* expression or *function*, not
+a Python expression:
+
+    >>> rw1.extend(foo=1)
+    Traceback (most recent call last):
+        ...
+    TypeError: 'int' object is not callable
+    >>> rw1.extend(foo="1")
+    row({'foo': 1, 'name': 'Anne', 'student_id': SID('S1')})
+
+row join:
+
+    >>> rw1 & rw2
+    row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
+
+row compose:
+
+    >>> rw1 + rw2
+    row({'course_id': CID('C1'), 'name': 'Anne'})

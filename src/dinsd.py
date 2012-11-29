@@ -150,6 +150,8 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None
 
+    # Access to class properties
+
     @property
     def _header_(self):
         return self.__class__.header
@@ -158,14 +160,20 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def _degree_(self):
         return self.__class__.degree
 
+    # Access relation attributes as Python attributes.
+
     def __getitem__(self, key):
         return getattr(self, key)
+
+    # Miscellaneous operators.
+
+    def __iter__(self):
+        return iter(self.__dict__)
 
     def __len__(self):
         return len(self.__dict__)
 
-    def __iter__(self):
-        return iter(self.__dict__)
+    # Comparison operators (see RichCompareMixin).
 
     def _cmpkey(self):
         return tuple(sorted(self.__dict__.items()))
@@ -186,6 +194,33 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def __hash__(self):
         return hash(self._cmpkey())
 
+    # Infix relational operators.
+
+    def __and__(self, other):                   # &
+        return ~(rel(self) & rel(other))
+
+    def __add__(self, other):                   # +
+        return ~(rel(self) + rel(other))
+
+    def __rshift__(self, attrnames):            # >>
+        return ~(rel(self) >> attrnames)
+
+    def __lshift__(self, attrnames):            # <<
+        return ~(rel(self) << attrnames)
+
+    def __invert__(self):                       # ~
+        return rel(self)
+
+    # Postfix relational operators.
+
+    def rename(self, **kw):
+        return ~(rel(self).rename(**kw))
+
+    def extend(self, **kw):
+        return ~(rel(self).extend(**kw))
+
+    # Presentation operators.
+
     def __repr__(self):
         return "row({{{}}})".format(
             ', '.join("{!r}: {!r}".format(k, v)
@@ -195,6 +230,8 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
         return '{{{}}}'.format(
             ', '.join('{}={}'.format(k, v)
                         for k, v in sorted(self.__dict__.items())))
+
+    # Type conversion operators.
 
     def _as_dict_(self):
         return self.__dict__.copy()
@@ -406,14 +443,17 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def __and__(self, other):                   # &
         return _binary_join(self, other)
 
-    def __rshift__(self, other):                # >>
-        return project(self, other)
+    def __rshift__(self, attrnames):            # >>
+        return project(self, attrnames)
 
-    def __lshift__(self, other):                # <<
-        return project(self, all_but(other))
+    def __lshift__(self, attrnames):            # <<
+        return project(self, all_but(attrnames))
 
     def __or__(self, other):                    # |
         return union(self, other)
+
+    def __add__(self, other):                   # +
+        return compose(self, other)
 
     def __sub__(self, other):                   # -
         return notmatching(self, other)
