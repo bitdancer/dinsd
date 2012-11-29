@@ -418,6 +418,9 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def __sub__(self, other):                   # -
         return notmatching(self, other)
 
+    def __invert__(self):
+        return extract_only_row(self)           # ~
+
     # Postfix relational operators.
 
     def rename(self, **kw):
@@ -916,6 +919,13 @@ def unwrap(relation, attrname):
         new_values.update(subrow._as_dict_())
         new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
+
+
+def extract_only_row(relation):
+    if len(relation) > 1:
+        raise ValueError(
+            "{} object has more than one row".format(type(relation)))
+    return next(iter(relation))
 
 
 

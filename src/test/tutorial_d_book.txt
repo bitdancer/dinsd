@@ -4429,3 +4429,81 @@ Which gets us the expected result.  So does:
 
 And this clears up the mystery about ``enrollment`` in the AIRDT examples:
 he's using ``enrollment`` in those examples to refer to ``is_enrolled_on``.
+
+
+
+Other Operators on Relations and Rows
+-------------------------------------
+
+
+in
+~~
+
+In section 5.10, AIRDT talks about the tuple membership test:
+
+    t ∈ r
+
+In ``Rel`` this is spelled ``IN``, and in dinsd it is spelled ``in`` (which
+is a standard Python operator):
+
+    >>> row(student_id=SID('S1'), name='Anne') in is_called
+    True
+    >>> row(student_id=SID('S2'), name='Anne') in is_called
+    False
+    >>> row(name='Anne') in is_called
+    False
+
+The membership test depends on the equality test, and so in dinsd it is
+defined for unlike types.  (It is categorically true that a row of type ``t1``
+type is not an element of a relation of type ``t2``.)
+
+
+extract_only_row
+~~~~~~~~~~~~~~~~
+
+We've already mentioned the dinsd equivalent of the *Tutorial D* ``FROM``
+operation in the context of extracting attributes from tuples.  *Tutorial D*
+also has a ``TUPLE FROM`` operation it uses to extra the row from a relation
+that only contains one row:
+
+    TUPLE FROM COURSE WHERE CourseId = CID('C1')
+
+For the dinsd equivalent we follow a convention that exists in other Python's
+database libraries, and use the operator ``~``:
+
+    >>> c1 = ~courses.where("course_id == CID('C1')")
+    >>> print(c1)
+    {course_id=C1, title=Database}
+
+``~`` is Python's "binary not" operation.  There is no strong connection
+between that fact and dinsd use of it, but since it is a unary prefix operator
+it isn't useful for anything else in the relational algebra context.  We can
+rationalize its use a small bit by noting that the name of the Python operator
+is "invert", and there is a (colloquial) sense in which the inversion of a
+relation of a single row is the row.
+
+It is also available as a prefix function, if using the operator bothers you:
+
+    >>> from dinsd import extract_only_row
+    >>> extract_only_row(courses.where("course_id == CID('C1')")) == c1
+    True
+
+The name is explicit, if not very convenient to type.
+
+As you might gather from the function name, it is an error to use this
+operator on a relation that has more than one row:
+
+    >>> ~rel(courses)                       # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: <class 'dinsd.rel({'course_id': CID, 'title': str})'> object
+        has more than one row
+
+For completeness, the example of compound use of ``FROM``:
+
+    Title FROM TUPLE FROM COURSE WHERE CourseId = CID('C1')
+
+is written in dinsd as follows:
+
+    >>> (~courses.where("course_id == CID('C1')")).title
+    'Database'
