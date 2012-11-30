@@ -4516,7 +4516,7 @@ is written in dinsd as follows:
     'Database'
 
 
-relational operations on rows
+Relational Operations on Rows
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 All of these operations are easily defined in terms of the relational concepts
@@ -4576,3 +4576,160 @@ row compose:
 
     >>> rw1 + rw2
     row({'course_id': CID('C1'), 'name': 'Anne'})
+
+
+
+Extended Example
+----------------
+
+
+Now that we've got all the basics under out belts, let's take a look at an
+extended example of actually using the relational algebra in dinsd, by
+working the exercises from the end of chapter 5 of AIRDT.  To do this
+we'll need the relations described in figure 4.13:
+
+    >>> S = rel(sn=str, sname=str, status=str, city=str)(
+    ...        ('sn',  'sname',    'status',   'city'),
+    ...        ('S1',  'Smith',     20,        'London'),
+    ...        ('S2',  'Jones',     10,        'Paris'),
+    ...        ('S3',  'Blake',     30,        'Paris'),
+    ...        ('S4',  'Clark',     20,        'London'),
+    ...        ('S5',  'Adams',     30,        'Athens'),
+    ...        )
+    >>> print(display(S, 'sn', 'sname', 'status', 'city'))
+    +----+-------+--------+--------+
+    | sn | sname | status | city   |
+    +----+-------+--------+--------+
+    | S1 | Smith | 20     | London |
+    | S2 | Jones | 10     | Paris  |
+    | S3 | Blake | 30     | Paris  |
+    | S4 | Clark | 20     | London |
+    | S5 | Adams | 30     | Athens |
+    +----+-------+--------+--------+
+    >>> SP = rel(sn= str, pn=str, qty=int)(
+    ...          ('sn', 'pn', 'qty'),
+    ...          ('S1', 'P1', 300),
+    ...          ('S1', 'P2', 200),
+    ...          ('S1', 'P3', 400),
+    ...          ('S1', 'P4', 200),
+    ...          ('S1', 'P5', 100),
+    ...          ('S1', 'P6', 100),
+    ...          ('S2', 'P1', 300),
+    ...          ('S2', 'P2', 400),
+    ...          ('S3', 'P2', 200),
+    ...          ('S4', 'P2', 200),
+    ...          ('S4', 'P4', 300),
+    ...          ('S4', 'P5', 400),
+    ...          ('S5', 'P2', 100),
+    ...          )
+    >>> print(display(SP, 'sn', 'pn', 'qty'))
+    +----+----+-----+
+    | sn | pn | qty |
+    +----+----+-----+
+    | S1 | P1 | 300 |
+    | S1 | P2 | 200 |
+    | S1 | P3 | 400 |
+    | S1 | P4 | 200 |
+    | S1 | P5 | 100 |
+    | S1 | P6 | 100 |
+    | S2 | P1 | 300 |
+    | S2 | P2 | 400 |
+    | S3 | P2 | 200 |
+    | S4 | P2 | 200 |
+    | S4 | P4 | 300 |
+    | S4 | P5 | 400 |
+    | S5 | P2 | 100 |
+    +----+----+-----+
+    >>> P = rel(pn=str, pname=str, color=str, weight=float, city=str)(
+    ...         ('pn', 'pname',   'color',    'weight',   'city'),
+    ...         ('P1', 'Nut',     'Red',       12.0,      'London'),
+    ...         ('P2', 'Bolt',    'Green',     17.0,      'Paris'),
+    ...         ('P3', 'Screw',   'Blue',      17.0,      'Oslo',),
+    ...         ('P4', 'Screw',   'Red',       14.0,      'London'),
+    ...         ('P5', 'Cam',     'Blue',      12.0,      'Paris'),
+    ...         ('P6', 'Cog',     'Red',       19.0,      'London'),
+    ...         )
+    >>> print(display(P, 'pn', 'pname', 'color', 'weight', 'city'))
+    +----+-------+-------+--------+--------+
+    | pn | pname | color | weight | city   |
+    +----+-------+-------+--------+--------+
+    | P1 | Nut   | Red   | 12.0   | London |
+    | P2 | Bolt  | Green | 17.0   | Paris  |
+    | P3 | Screw | Blue  | 17.0   | Oslo   |
+    | P4 | Screw | Red   | 14.0   | London |
+    | P5 | Cam   | Blue  | 12.0   | Paris  |
+    | P6 | Cog   | Red   | 19.0   | London |
+    +----+-------+-------+--------+--------+
+
+I added ('S5', 'P2') in the SP table so that exercise (e) below would have at
+least one row in the result.
+
+(a) Get the total number of parts supplied by supplier S1:
+
+    >>> sum(SP.where("sn == 'S1'").compute('qty'))
+    1300
+
+(b) Get supplier numbers for suppliers whose city is first in the alphabetic
+list of such cities:
+
+    >>> with ns(S=S):
+    ...     r = S.where("city == min(S.compute('city'))") >> {'sn'}
+    >>> print(r)
+    +----+
+    | sn |
+    +----+
+    | S5 |
+    +----+
+
+(c) Get part numbers for parts supplied by all suppliers in London:
+
+    >>> print((S.where("city == 'London'") & SP) >> {'pn'})
+    +----+
+    | pn |
+    +----+
+    | P1 |
+    | P2 |
+    | P3 |
+    | P4 |
+    | P5 |
+    | P6 |
+    +----+
+
+(d) Get supplier numbers and names for suppliers who supply all the Red parts
+(I made it Red instead of purple so there would be some results):
+
+    >>> print((P.where("color=='Red'") >> {'pn'} & SP & S) >> {'sn', 'sname'})
+    +----+-------+
+    | sn | sname |
+    +----+-------+
+    | S1 | Smith |
+    | S2 | Jones |
+    | S4 | Clark |
+    +----+-------+
+
+(e) Get all pairs of supplier numbers Sx and Sy such that Sx and Sy supply
+exactly the same set of parts each.
+
+    >>> sns = S >> {'sn'}
+    >>> with ns() as names:
+    ...     names.pSP = SP >> {'sn', 'pn'}
+    ...     pairs = (sns & sns.rename(sn='sn2')).where(
+    ...                 "pSP + ~row(sn=sn) == pSP + ~row(sn=sn2) and sn < sn2")
+    >>> print(pairs)
+    +----+-----+
+    | sn | sn2 |
+    +----+-----+
+    | S3 | S5  |
+    +----+-----+
+
+(f) Write a truth-valued expression to determine whether all supplier names
+are unique in S.
+
+    >>> len(S) == len(S >> {'sname'})
+    True
+
+(g) Write a truth-valued expression to determine whether all part numbers
+appearing in SP also appear in P.
+
+    >>> SP >> {'pn'} == P >> {'pn'}
+    True
