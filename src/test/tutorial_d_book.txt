@@ -3342,10 +3342,37 @@ as a relation method:
     >>> sorted(exam_marks.compute("mark"))
     [49, 49, 66, 85, 85, 93]
 
+Although it is often used just to extract a column, it is named ``compute``
+because it's expression argument is an arbitrary computation:
+
+    >>> sorted(exam_marks.compute("'{}%'.format(mark)"))
+    ['49%', '49%', '66%', '85%', '85%', '93%']
+
 We can alternatively specify a full ``lambda`` function instead of a string:
 
-    >>> sorted(compute(exam_marks, lambda r: "{}%".format(r.mark)))
+    >>> sorted(exam_marks.compute(lambda r: "{}%".format(r.mark)))
     ['49%', '49%', '66%', '85%', '85%', '93%']
+
+Although this works, ``compute``'s value is the access it gives to the
+expression name space.  Anything you can do by passing a ``lambda`` function
+to ``compute`` you can do more easily using a normal Python generator
+expression (or list comprehension):
+
+    >>> sorted("{}%".format(r.mark) for r in exam_marks)
+    ['49%', '49%', '66%', '85%', '85%', '93%']
+
+This works because when a relation is iterated, it yields its rows.
+
+The other reason for using ``compute`` instead of a generator or list
+comprehension is that it may give the back end opportunities for optimization,
+but again that works only if you use string expressions.  On the other hand,
+if you have a computation that is too complex to express as a string
+expression, it is probably too complex for the back end to optimize, and you
+you may as well express it as a for loop:
+
+    >>> for rw in exam_marks:
+    ...     # Do something complicated here
+    ...     pass
 
 
 sum
