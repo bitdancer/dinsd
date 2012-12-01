@@ -4577,6 +4577,19 @@ row compose:
     >>> rw1 + rw2
     row({'course_id': CID('C1'), 'name': 'Anne'})
 
+We also have one function that *Tutorial D* does not.  The ``invert``
+operator, ``~``, can also be applied to a row, producing a single
+relation with the same header:
+
+    >>> ~rw1
+    rel({row({'name': 'Anne', 'student_id': SID('S1')})})
+
+This gives a little more strength to the operator choice, since the operation
+is functionally an inverse:
+
+    >>> ~~rw1 == rw1
+    True
+
 
 
 Extended Example
