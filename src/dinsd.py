@@ -4,6 +4,8 @@ import collections as _collections
 import contextlib as _contextlib
 import itertools as _itertools
 import operator as _operator
+import pickle as _pickle
+import sqlite3 as _sqlite
 import threading as _threading
 import types as _types
 import weakref as _weakref
@@ -994,9 +996,138 @@ def ns(*args, **kw):
     del _locals[_threading.current_thread]
 
 
+
+#
+# Databases
+#
+
+
+class Database:
+
+    def __init__(self, fn):
+        self._db = _db_connection(fn)
+        for attrname, val in _db_relations(self._db):
+            super().__setattr__(attrname, val)
+
+    def _iter_rels(self):
+        return [(n, r) for n, r in self.__dict__.items()
+                       if not n.startswith('_')]
+
+    def __repr__(self):
+        return "{}({{{}}})".format(
+            self.__class__.__name__,
+            ', '.join("{!r}: {!r}".format(n, type(r))
+                      for n, r in sorted(self._iter_rels())))
+
+    def __setattr__(self, name, val):
+        if name.startswith('_'):
+            super().__setattr__(name, val)
+            return
+        attr = getattr(self, name, None)
+        if attr is not None:
+            if type(val) != type(attr):
+                raise ValueError("Cannot assign value of type {} to "
+                    "attribute of type {}".format(type(val), type(attr)))
+        else:
+            if isinstance(val, type):
+                val = val()
+            if not hasattr(val, 'header'):
+                raise ValueError("Database attributes must be relations, "
+                    "not {}".format(type(val)))
+            _db_add_reltype(self._db, name, type(val))
+        _db_update_relation(self._db, name, val)
+        super().__setattr__(name, val)
+
+    @property
+    def _relation_names_(self):
+        # Not sure about the name of this one.
+        return [n for n in self.__dict__ if not n.startswith('_')]
+
+    def _close_(self):
+        # Nullify all the relation attributes.  This does two things: makes
+        # them inaccessible, and breaks the reference cycle between the
+        # Database object and the relations.
+        for attrname in self._relation_names_:
+            del self.__dict__[attrname]
+
+
+#
+# Dumb persistence infrastructure using sqlite.
+#
+
+
+def _db_connection(fn):
+    con = _sqlite.connect(fn)
+    #c = con.cursor()
+    #c.execute("create table if not exists '_reldefs' ("
+    #            "relname varchar not null, "
+    #            "attrname varchar not null, "
+    #            "attrtype blob not null, "
+    #            "primary key ('rename', 'attrname') "
+    #            ") ")
+    return con
+
+
+def _db_add_reltype(db, name, reltype):
+    # This is a bizarre hack, but it works :)
+    # XXX: can a version 3 pickle contain unquoted '"' characters?
+    columns = ', '.join('{} "blob {}"'.format(n, _pickle.dumps(t))
+                        for n, t in sorted(reltype.header.items()))
+    db.cursor().execute("create table {} ({})".format(name, columns))
+    db.commit()
+
+def _db_update_relation(db, name, val):
+    c = db.cursor()
+    c.execute("delete from {}".format(name))
+    names = sorted(val.header.keys())
+    for rw in val:
+        c.execute("insert into {} ({}) values ({})".format(
+                        name,
+                        ' ,'.join(names),
+                        ' ,'.join(['?'] * len(names))), 
+                  [_pickle.dumps(getattr(rw, n)) for n in names])
+    db.commit()
+
+def _db_relations(db):
+    c1 = db.cursor()
+    c2 = db.cursor()
+    c1.execute("select tbl_name, sql from sqlite_master where type='table'")
+    rels = []
+    for name, reldef in c1:
+        reldef = _db_sqldef_to_reldef(reldef)
+        r = reldef()
+        c2.execute("select * from {}".format(name))
+        names = [t[0] for t in c2.description]
+        for rw in c2:
+            r._rows_.add(r.row({n: _pickle.loads(v) for n, v in zip(names, rw)}))
+        rels.append((name, r))
+    return rels
+
+def _db_sqldef_to_reldef(sqldef):
+    _, sqldef = sqldef.split('(', 1)
+    sqldef = sqldef[:-1]
+    coldefs = {}
+    while sqldef:
+        attrname, sqldef = sqldef.split(None, 1)
+        for i in range(1, len(sqldef)):
+            if sqldef[i] == '"' and sqldef[i-1] != '\\':
+                break
+        else:
+            raise ValueError("Could not find end of type in " + sqldef)
+        # "blob b'<pickle>'"
+        _, tstr = sqldef[1:i].split(None, 1)
+        sqldef = sqldef[i+1:].strip(', ')
+        # eval isn't any less safe than pickle here
+        typ = _pickle.loads(eval(tstr)) 
+        coldefs[attrname] = typ
+    return rel(**coldefs)
+
+        
+
+
 # "import *" support: use this only when playing with relational algebra in the
 # Python shell.
-__all__ = list(_names) + ['ns', 'expression_namespace']
+__all__ = list(_names) + ['ns', 'expression_namespace', 'Database']
 
 
 #Licensed under the Apache License, Version 2.0 (the "License");

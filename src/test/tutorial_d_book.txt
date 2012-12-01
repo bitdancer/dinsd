@@ -106,11 +106,11 @@ dinsd import *``.  We can't fully test this in this test document, but we can
 at least check that the set of names in ``__all__`` (which is what determines
 what ``import *`` imports) and the set of names in ``expression_namespace``
 are initially the same, except for ``expression_namespace`` itself and
-the ``ns`` context manager (more on that when we talk about expressions).
+a couple of other names we'll learn about later.
 
     >>> from dinsd import __all__, expression_namespace
     >>> ({n for n in __all__} - {n for n in expression_namespace} == 
-    ...     {'expression_namespace', 'ns'})
+    ...     {'expression_namespace', 'ns', 'Database'})
     True
 
 The ``expression_namespace`` is a global registry, so only truly global
@@ -767,11 +767,12 @@ attributes will also produce an error:
     Traceback (most recent call last):
         ...
     TypeError: Invalid attribute name foo
-    >>> yt(student_id='C1', name='Anne', course_id=CID('C1'))
+    >>> yt(student_id='C1', name='Anne',               #doctest: +ELLIPSIS
+    ...    course_id=CID('C1'))
     Traceback (most recent call last):
         ...
     TypeError: Expected 2 attributes, got 3 ({...})
-    >>> yt(student_id='C1')
+    >>> yt(student_id='C1')                            #doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
     TypeError: Expected 2 attributes, got 1 ({...})
@@ -955,7 +956,7 @@ an example using a generator:
     ...     for a in range(10):
     ...         for b in range(10):
     ...             yield row(a=a, b=b, result=a*b)
-    >>> print(rel(multiplication_table()))
+    >>> print(rel(multiplication_table()))              # doctest: +ELLIPSIS
     +---+---+--------+
     | a | b | result |
     +---+---+--------+
@@ -1001,7 +1002,7 @@ first row is assumed to be the "correct" type of the relation:
 
 The errors are a bit different if we use the dictionary form:
 
-    >>> rel({'foo': 1}, {'foo': 1, 'bar': 2})
+    >>> rel({'foo': 1}, {'foo': 1, 'bar': 2})       #doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
     TypeError: Expected 1 attributes, got 2 ({...}) in row 1
@@ -1317,20 +1318,20 @@ attributes will result in an error:
         ...
     TypeError: Expected 'C' followed by one to three digits, got 'S1'; 'S1'
         invalid for attribute course_id in row 0
-    >>> IsEnrolledOn(
+    >>> IsEnrolledOn(                               # doctest: +ELLIPSIS
     ...     {'student_id': SID('S1'), 'name': 'Anne'},
     ...     )
     Traceback (most recent call last):
         ...
     TypeError: Expected 3 attributes, got 2 ({...}) in row 0
-    >>> IsEnrolledOn(
+    >>> IsEnrolledOn(                               # doctest: +ELLIPSIS
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
     ...     {'student_id': SID('S1'), 'name': 'Anne'},
     ...     )
     Traceback (most recent call last):
         ...
     TypeError: Expected 3 attributes, got 2 ({...}) in row 1
-    >>> IsEnrolledOn(
+    >>> IsEnrolledOn(                               # doctest: +ELLIPSIS
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne', 'foo': 'bar'},
     ...     )
@@ -4773,3 +4774,148 @@ appearing in SP also appear in P.
 
     >>> SP >> {'pn'} == P >> {'pn'}
     True
+
+
+
+Databases, Updates, and Constraints
+-----------------------------------
+
+Now at last we get to the stuff that makes this relational algebra useful in
+the real world: data persistence and database consistency.
+
+
+Defining and Accessing a Database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A database object is functionally a connection to a persistent backing store.
+In this version of dinsd, only one backing store is supported, ``sqlite``, and
+it is used strictly for storing the data from the relations that are part of
+the persistent database.  Other than the basic update operations (which we
+will discuss in this chapter), none of the SQL features of ``sqlite`` are
+used.  (Of course, we do also use the table definition SQL.)
+
+You don't need to worry about any of that, though.  In this version of
+dinsd, we don't give you any choices.
+
+To create or access a database, you create a database connection object
+and tell it where the database backing file is located.
+
+Because this is a doctest document, there's a some bookkeeping we need to do
+to make this actually work.  First we need a file we can use to store
+the DB:
+
+    >>> import tempfile
+    >>> dbfile = tempfile.NamedTemporaryFile()
+    >>> dbfn = dbfile.name
+
+The ``NamedTemporaryFile`` will get deleted automatically by Python when the
+``dbfile`` name goes out of scope at the end of the doctest.
+
+Next, persistence involves Python pickles, so all the classes we use need
+to be defined in a module, not in the doctest.  We'll re-engineer our
+test classes using versions of the ``SID`` and ``CID`` classes from our
+test module:
+
+    >>> from test import SID, CID
+    >>> IsCalled = rel(name=str, student_id=SID)
+    >>> is_called = IsCalled({'name': r.name, 'student_id': r.student_id.value}
+    ...                       for r in is_called)
+    >>> IsEnrolledOn = rel(course_id=CID, student_id=SID)
+    >>> is_enrolled_on = IsEnrolledOn({'student_id': r.student_id.value,
+    ...                                'course_id': r.course_id.value}
+    ...                               for r in is_enrolled_on)
+
+With those preliminaries out of the way, we can create a database:
+
+    >>> from dinsd import Database
+    >>> db = Database(dbfn)
+
+Initially the database is empty:
+
+    >>> db
+    Database({})
+
+We persist a relation into the database by assigning it as an attribute of the
+``Database`` object:
+
+    >>> db.is_called = is_called
+    >>> db                                  # doctest: +NORMALIZE_WHITESPACE
+    Database({'is_called': <class 'dinsd.rel({'name': str,
+         'student_id': SID})'>})
+
+The ``repr`` of a ``Database`` indicates that it is a set of names mapped to
+relation types.  Using AIRDT's terminology, it is a TUPLE of relations, but in
+the ``repr`` we show only the types, not the content.
+
+We can also create a persistent relation by supplying just the type:
+
+    >>> db.is_enrolled_on = IsEnrolledOn
+    >>> db                                  # doctest: +NORMALIZE_WHITESPACE
+    Database({'is_called': <class 'dinsd.rel({'name': str,
+         'student_id': SID})'>, 'is_enrolled_on': <class
+         'dinsd.rel({'course_id': CID, 'student_id': SID})'>})
+
+
+At this point, ``db.is_called`` has content, but ``is_enrolled_on`` is an
+empty relation:
+
+    >>> len(db.is_called)
+    5
+    >>> len(db.is_enrolled_on)
+    0
+
+We can provide content for ``is_enrolled_on`` by assigning our relation that
+has content to the attribute:
+
+    >>> db.is_enrolled_on = is_enrolled_on
+    >>> len(db.is_enrolled_on)
+    6
+
+It is an error to try to assign a relation of the wrong type to a ``Database``
+attribute:
+
+    >>> db.is_enrolled_on = is_called       # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: Cannot assign value of type <class 'dinsd.rel({'name': str,
+        'student_id': SID})'> to attribute of type <class
+        'dinsd.rel({'course_id': CID, 'student_id': SID})'>
+
+Indeed, it is an error to try to anything that is not of the correct type:
+
+    >>> db.is_enrolled_on = 1               # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: Cannot assign value of type <class 'int'> to attribute of type
+         <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
+
+However, wholesale assignment is not the typical way to update a relation in a
+database.  We'll talk about the alternatives in the rest of the chapter.
+
+For now, we want to observe that we can close the database, reopen it, and
+the data will still be there.  Note that as with rows (and the database is,
+as we have noted, essentially a row of relations), regular names are reserved
+for the attributes used by an application, and we use names of the form
+``_<something>_`` for all other names.  This includes what would in another
+type of class be the ``close`` function:
+
+    >>> db._close_()
+    >>> db.is_called
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'Database' object has no attribute 'is_called'
+    >>> del db
+
+If we now reopen it, the data is still there:
+
+    >>> db = Database(dbfn)
+    >>> print(db.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
