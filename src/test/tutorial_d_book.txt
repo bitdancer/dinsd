@@ -1715,8 +1715,8 @@ the relations so specified:
 A mismatched header error in a multi-join also indicates in which argument the
 error was detected:
 
-    >>> join(is_enrolled_on, is_called,
-    ...         permissive_is_called)         # doctest: +NORMALIZE_WHITESPACE
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... join(is_enrolled_on, is_called, permissive_is_called)
     Traceback (most recent call last):
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
@@ -2833,7 +2833,7 @@ think of this as ``Dum`` (``False``) not matching any rows, whereas
 
 It is an error for match columns with the same name to have different types.
 
-    >>> is_called - rel(student_id=str)()  # doctest: +NORMALIZE_WHITESPACE
+    >>> is_called - rel(student_id=str)()     # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
@@ -3125,8 +3125,8 @@ relation:
 We can't match relations with attributes having the same name but different
 types:
 
-    >>> matching(courses,               # doctest: +NORMALIZE_WHITESPACE
-    ...          rel(row(course_id='S1')))
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... matching(courses, rel(row(course_id='S1')))
     Traceback (most recent call last):
         ...
     TypeError: Duplicate attribute name ('course_id') with different type
@@ -4412,10 +4412,10 @@ Here is the dinsd equivalent, in which we use a slightly different form of the
 ``ns`` context manager to get our two component relations into the expression
 namespace:
 
-    >>> with ns() as n:
+    >>> with ns() as n:                     # doctest: +NORMALIZE_WHITESPACE
     ...     n.exam_marks = exam_marks
     ...     n.enrollment = is_called & is_enrolled_on
-    ...     print(is_called.where(           # doctest: +NORMALIZE_WHITESPACE
+    ...     print(is_called.where(          
     ...            "enrollment + rel(row(student_id=student_id)) <= "
     ...            "exam_marks + rel(row(student_id=student_id)) "
     ...                "<< {'mark'}"
@@ -5016,8 +5016,8 @@ Conversely, if we attempt to define a constraint that the existing database
 relation does not satisfy, we will also get a constraint violation:
 
 
-    >>> db._constrain_rows_('exam_marks',     # doctest: +NORMALIZE_WHITESPACE
-    ...                     valid_mark="50 <= mark <= 100")
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... db._constrain_rows_('exam_marks', valid_mark="50 <= mark <= 100")
     Traceback (most recent call last):
         ...
     dinsd.RowConstraintError: exam_marks constraint valid_mark violated:
