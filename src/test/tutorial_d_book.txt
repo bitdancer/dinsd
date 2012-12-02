@@ -1715,8 +1715,9 @@ the relations so specified:
 A mismatched header error in a multi-join also indicates in which argument the
 error was detected:
 
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... join(is_enrolled_on, is_called, permissive_is_called)
+    >>> join(is_enrolled_on, is_called, permissive_is_called)
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     TypeError: Duplicate attribute name ('student_id') with different type
@@ -3125,8 +3126,9 @@ relation:
 We can't match relations with attributes having the same name but different
 types:
 
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... matching(courses, rel(row(course_id='S1')))
+    >>> matching(courses, rel(row(course_id='S1')))
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     TypeError: Duplicate attribute name ('course_id') with different type
@@ -4988,10 +4990,11 @@ With this constraint in place, we can no longer assign a relation that
 contains values outside of that range to the database's ``exam_marks``
 attribute:
 
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... db.exam_marks = ~row(student_id=SID('S1'),
+    >>> db.exam_marks = ~row(student_id=SID('S1'),
     ...                      course_id=CID('C1'),
     ...                      mark=102)
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     dinsd.RowConstraintError: exam_marks constraint valid_mark violated:
@@ -5016,8 +5019,9 @@ Conversely, if we attempt to define a constraint that the existing database
 relation does not satisfy, we will also get a constraint violation:
 
 
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... db._constrain_rows_('exam_marks', valid_mark="50 <= mark <= 100")
+    >>> db._constrain_rows_('exam_marks', valid_mark="50 <= mark <= 100")
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     dinsd.RowConstraintError: exam_marks constraint valid_mark violated:
@@ -5037,24 +5041,28 @@ can define more than one in a single call:
     >>> db._constrain_rows_('exam_marks', valid_sid="student_id!=SID('S0')",
     ...                                   valid_cid="course_id!=CID('C0')")
 
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... sorted(db._row_constraints_['exam_marks'].items())
+    >>> sorted(db._row_constraints_['exam_marks'].items())
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     [('valid_cid', "course_id!=CID('C0')"), ('valid_mark',
          '0 <= mark <= 100'), ('valid_sid', "student_id!=SID('S0')")]
 
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... db.exam_marks = ~row(student_id=SID('S1'),
+    >>> db.exam_marks = ~row(student_id=SID('S1'),
     ...                      course_id=CID('C0'),
     ...                      mark=99)
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     dinsd.RowConstraintError: exam_marks constraint valid_cid violated:
         "course_id!=CID('C0')" is not satisfied by row({'course_id': CID('C0'),
         'mark': 99, 'student_id': SID('S1')})
-    >>> # doctest: +NORMALIZE_WHITESPACE
-    ... db.exam_marks = ~row(student_id=SID('S0'),
+
+    >>> db.exam_marks = ~row(student_id=SID('S0'),
     ...                      course_id=CID('C1'),
     ...                      mark=99)
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     dinsd.RowConstraintError: exam_marks constraint valid_sid violated:
