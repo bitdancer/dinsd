@@ -11,18 +11,22 @@ Python can never be a D, because D requires static typing and Python is
 dynamically typed.  But Python plus the dinsd module does make the relational
 algebra a first class citizen, turning Python into Relational Python.
 
-At this early stage of the project *only* the relational algebra is
-implemented.  So right now it is mostly useful as a tool for playing with
-relational algebra at the Python shell prompt.  The goal, though, is to provide
-a persistence layer (as well as other currently-missing DBMS features) such
-that it will be practical to use it in at least the contexts where an SQL
-engine like SQLite is currently used.  (In point of fact, SQLite will probably
-*be* the persistence layer.)
+At this early stage of the project the persistence layer is just a backing
+store for what is otherwise an in-memory database.  That is, all data for
+all tables is held in memory at all times, and written to disk only when
+something is updated.
+
+Right now it is mostly useful as a tool for playing with relational algebra at
+the Python shell prompt.  The goal, though, is to provide a smarter persistence
+layer (as well as other currently-missing DBMS features) such that it will be
+practical to use it in at least the contexts where an SQL engine like SQLite is
+currently used.  Indeed, SQLite (which is used for the current persistence
+layer) will be the first smarter persistence layer, if everything goes well.
 
 Currently there is no project infrastructure other than for running the tests
 ('make test' in the root directory).  The entire library consists of one
 file, dinsd.py, and you can just copy that to wherever you want in order
-to play with it.
+to play with it.  The only external requirement is sqlite3.
 
 The documentation consists of the literate test document:
 
@@ -37,12 +41,12 @@ capabilities.
 
 dinsd currently requires Python 3.4 (as of this writing that means Python built
 from the head of the Python "default" branch in Mercurial).  Mostly it will run
-fine using Python 3.3, and I will probably officially support 3.3 at some
-point.
+fine using Python 3.3, and I will officially support the whatever the most
+recent Python release is at the point where other people start wanting to play
+with it.
 
 Note that there is another project with a similar goal:
 
     http://www.quicksort.co.uk/DeeDoc.html
 
-Dee is more feature complete, is a Python 2.7 project, and does not appear to
-be in current development.
+Dee is a Python 2.7 project, and does not appear to be in current development.
