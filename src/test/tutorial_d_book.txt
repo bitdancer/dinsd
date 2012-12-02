@@ -4824,6 +4824,12 @@ test module:
     >>> is_enrolled_on = IsEnrolledOn({'student_id': r.student_id.value,
     ...                                'course_id': r.course_id.value}
     ...                               for r in is_enrolled_on)
+    >>> ExamMarks = rel(course_id=CID, student_id=SID, mark=int)
+    >>> exam_marks = ExamMarks({'course_id': r.course_id.value,
+    ...                         'student_id': r.student_id.value,
+    ...                         'mark': r.mark} for r in exam_marks)
+    >>> expression_namespace['CID'] = CID
+    >>> expression_namespace['SID'] = SID
 
 With those preliminaries out of the way, we can create a database:
 
@@ -4890,7 +4896,7 @@ Indeed, it is an error to try to anything that is not of the correct type:
          <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
 
 However, wholesale assignment is not the typical way to update a relation in a
-database.  We'll talk about the alternatives in the rest of the chapter.
+database.  We'll talk about the alternatives later in the chapter.
 
 For now, we want to observe that we can close the database, reopen it, and
 the data will still be there.  Note that as with rows (and the database is,
@@ -4919,3 +4925,138 @@ If we now reopen it, the data is still there:
     | Cindy    | S3         |
     | Devinder | S4         |
     +----------+------------+
+
+And we can add another:
+
+    >>> db.exam_marks = exam_marks
+
+
+Constraints
+~~~~~~~~~~~
+
+It seems to me that defining anything other than value-level constraints on a
+computed relation doesn't make much sense.  Although AIRDT doesn't address
+this question directly, all of his examples that have constraints above the
+value level are relations defined in the database (``relvars`` in AIRDT
+parlance).
+
+So I've postponed any discussion of constraints until now, when we've
+introduced the mechanism for storing a relation in a database.
+
+I'm not going to go through any of the theoretical discussions or examples
+from AIRDT on the general topic of constraints.  I'm only going to talk about,
+and give examples of, defining constraints of various types.
+
+Unlike *Tutorial D*, we are hoping that this API will be useful in production
+code (though probably not this implementation of it), so unlike *Tutorial D*
+we do provide specific ways to define constraints at each of the four levels
+of interest: value level, row level, relation level, and database level.  As
+explained in Chapter 6 of AIRDT, all of these *can* be implemented as database
+level constraints.  But it is more efficient, and easier to do, if we define
+them at the appropriate level using level-specific mechanisms.
+
+
+Value Level Constraints
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Value level constraints are most efficiently defined by defining a custom
+type.  We did that with ``SID`` and ``CID``.  However, it can sometimes
+be more convenient to define them using row level constraints.  We
+give an example of doing that in the next section.
+
+
+Row Level Constraints
+^^^^^^^^^^^^^^^^^^^^^
+
+Following AIRDT, our example of using the row level constraint mechanism is
+actually a value level constraint.  We will constrain the integer values of
+the ``mark`` attribute in ``exam_marks`` to be between ``0`` and ``100``,
+inclusive:
+
+    >>> db._constrain_rows_('exam_marks', valid_mark="0 <= mark <= 100")
+
+Note that we pass the *name* of the database attribute, not a relation.  This
+is because the constraints are being set on the named attribute, not on a
+relation object.  The keyword assigns a name to a constraint expression; we'll
+see later how that can be used.  The constraint expression works just like the
+row expressions we've already seen.  It's value is treated as a boolean, and
+if that boolean value is ``True``, the row satisfies the constraint and all is
+well.  If that value is ``False``, the row does not satisfy the constraint,
+and is therefore not a valid row for the specified database relation.
+
+With this constraint in place, we can no longer assign a relation that
+contains values outside of that range to the database's ``exam_marks``
+attribute:
+
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... db.exam_marks = ~row(student_id=SID('S1'),
+    ...                      course_id=CID('C1'),
+    ...                      mark=102)
+    Traceback (most recent call last):
+        ...
+    dinsd.RowConstraintError: exam_marks constraint valid_mark violated:
+         '0 <= mark <= 100' is not satisfied by row({'course_id': CID('C1'),
+         'mark': 102, 'student_id': SID('S1')})
+
+When a constraint violation happens, the database relation is not updated:
+
+    >>> print(db.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    +-----------+------+------------+
+
+Conversely, if we attempt to define a constraint that the existing database
+relation does not satisfy, we will also get a constraint violation:
+
+
+    >>> db._constrain_rows_('exam_marks',     # doctest: +NORMALIZE_WHITESPACE
+    ...                     valid_mark="50 <= mark <= 100")
+    Traceback (most recent call last):
+        ...
+    dinsd.RowConstraintError: exam_marks constraint valid_mark violated:
+        '50 <= mark <= 100' is not satisfied by row({'course_id': CID('C1'),
+         'mark': 49, 'student_id': SID('S2')})
+
+In this case, it is the list of constraints that is not updated.  The database
+relation is again unchanged, and the database still conforms to all of the
+active constraints:
+
+    >>> db._row_constraints_['exam_marks']
+    {'valid_mark': '0 <= mark <= 100'}
+
+We can define more than one constraint for a database relation, and we
+can define more than one in a single call:
+
+    >>> db._constrain_rows_('exam_marks', valid_sid="student_id!=SID('S0')",
+    ...                                   valid_cid="course_id!=CID('C0')")
+
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... sorted(db._row_constraints_['exam_marks'].items())
+    [('valid_cid', "course_id!=CID('C0')"), ('valid_mark',
+         '0 <= mark <= 100'), ('valid_sid', "student_id!=SID('S0')")]
+
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... db.exam_marks = ~row(student_id=SID('S1'),
+    ...                      course_id=CID('C0'),
+    ...                      mark=99)
+    Traceback (most recent call last):
+        ...
+    dinsd.RowConstraintError: exam_marks constraint valid_cid violated:
+        "course_id!=CID('C0')" is not satisfied by row({'course_id': CID('C0'),
+        'mark': 99, 'student_id': SID('S1')})
+    >>> # doctest: +NORMALIZE_WHITESPACE
+    ... db.exam_marks = ~row(student_id=SID('S0'),
+    ...                      course_id=CID('C1'),
+    ...                      mark=99)
+    Traceback (most recent call last):
+        ...
+    dinsd.RowConstraintError: exam_marks constraint valid_sid violated:
+        "student_id!=SID('S0')" is not satisfied by row({'course_id': CID('C1'),
+        'mark': 99, 'student_id': SID('S0')})

@@ -1002,12 +1002,36 @@ def ns(*args, **kw):
 #
 
 
+class ConstraintError(Exception):
+    pass
+
+
+class RowConstraintError(ConstraintError):
+
+    def __init__(self, relname, cname, constraint, invalid):
+        self.relname = relname
+        self.cname = cname
+        self.constraint = constraint
+        self.invalid = invalid
+
+    def __str__(self):
+        return ("{} constraint {} violated: {!r} is not satisfied by "
+                "{!r}").format(self.relname,
+                               self.cname,
+                               self.constraint,
+                               self.invalid)
+
+
 class Database:
 
     def __init__(self, fn):
         self._db = _db_connection(fn)
+        self._init()
         for attrname, val in _db_relations(self._db):
             super().__setattr__(attrname, val)
+
+    def _init(self):
+        self._row_constraints_ = _collections.defaultdict(dict)
 
     def _iter_rels(self):
         return [(n, r) for n, r in self.__dict__.items()
@@ -1035,8 +1059,27 @@ class Database:
                 raise ValueError("Database attributes must be relations, "
                     "not {}".format(type(val)))
             _db_add_reltype(self._db, name, type(val))
+        self._check_constraints(name, val)
         _db_update_relation(self._db, name, val)
         super().__setattr__(name, val)
+
+    def _check_constraints(self, relname, r):
+        row_validator = ' and '.join(
+                           "({})".format(v)
+                           for v in self._row_constraints_[relname].values())
+        if not row_validator:
+            return
+        invalid = r.where("not ({})".format(row_validator))
+        if invalid:
+            # figure out one constraint and one row to put in error message,
+            # this is more useful than all the constraints and failures.
+            rw = sorted(invalid)[0]
+            for c, exp in sorted(self._row_constraints_[relname].items()):
+                if not eval(exp, rw._as_locals_(), _all):
+                    raise RowConstraintError(relname, c, exp, rw)
+            raise AssertionError("Expected failure did not happen")
+
+    # Public methods and properties.
 
     @property
     def _relation_names_(self):
@@ -1049,6 +1092,18 @@ class Database:
         # Database object and the relations.
         for attrname in self._relation_names_:
             del self.__dict__[attrname]
+        self._init()
+
+    def _constrain_rows_(self, relname, **kw):
+        r = getattr(self, relname)
+        existing = self._row_constraints_[relname].copy()
+        self._row_constraints_[relname].update(kw)
+        try:
+            self._check_constraints(relname, r)
+        except ConstraintError:
+            self._row_constraints_[relname] = existing
+            raise
+
 
 
 #
