@@ -1022,30 +1022,22 @@ class RowConstraintError(ConstraintError):
                                self.invalid)
 
 
-class Database:
+class _Rels:
 
-    def __init__(self, fn, debug_sql=False):
-        db = self._db = _dumb_sqlite_persistence(fn, debug_sql=False)
-        self._init()
-        for attrname, val in db.relations():
+    def __init__(self, db, storage):
+        self._db = db
+        self._storage = storage
+        for attrname, val in storage.relations():
             super().__setattr__(attrname, val)
-        self._row_constraints_.update(db.get_row_constraints())
-
-    def _init(self):
-        self._row_constraints_ = _collections.defaultdict(dict)
 
     def _iter_rels(self):
         return [(n, r) for n, r in self.__dict__.items()
                        if not n.startswith('_')]
 
-    def __repr__(self):
-        return "{}({{{}}})".format(
-            self.__class__.__name__,
-            ', '.join("{!r}: {!r}".format(n, type(r))
-                      for n, r in sorted(self._iter_rels())))
-
     def __setattr__(self, name, val):
         if name.startswith('_'):
+            if hasattr(val, 'header'):
+                raise ValueError("Relation names may not begin with '_'")
             super().__setattr__(name, val)
             return
         attr = getattr(self, name, None)
@@ -1059,15 +1051,33 @@ class Database:
             if not hasattr(val, 'header'):
                 raise ValueError("Database attributes must be relations, "
                     "not {}".format(type(val)))
-            self._db.add_reltype(name, type(val))
-        self._check_constraints(name, val)
-        self._db.update_relation(name, val)
+            self._storage.add_reltype(name, type(val))
+        self._db._check_constraints(name, val)
+        self._storage.update_relation(name, val)
         super().__setattr__(name, val)
+
+
+class Database:
+
+    def __init__(self, fn, debug_sql=False):
+        storage = self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
+        self._init()
+        self.r = _Rels(self, storage)
+        self.row_constraints.update(storage.get_row_constraints())
+
+    def _init(self):
+        self.row_constraints = _collections.defaultdict(dict)
+
+    def __repr__(self):
+        return "{}({{{}}})".format(
+            self.__class__.__name__,
+            ', '.join("{!r}: {!r}".format(n, type(r))
+                      for n, r in sorted(self.r._iter_rels())))
 
     def _check_constraints(self, relname, r):
         row_validator = ' and '.join(
                            "({})".format(v)
-                           for v in self._row_constraints_[relname].values())
+                           for v in self.row_constraints[relname].values())
         if not row_validator:
             return
         invalid = r.where("not ({})".format(row_validator))
@@ -1075,42 +1085,36 @@ class Database:
             # figure out one constraint and one row to put in error message,
             # this is more useful than all the constraints and failures.
             rw = sorted(invalid)[0]
-            for c, exp in sorted(self._row_constraints_[relname].items()):
+            for c, exp in sorted(self.row_constraints[relname].items()):
                 if not eval(exp, rw._as_locals_(), _all):
                     raise RowConstraintError(relname, c, exp, rw)
             raise AssertionError("Expected failure did not happen")
 
     # Public methods and properties.
 
-    @property
-    def _relation_names_(self):
-        # Not sure about the name of this one.
-        return [n for n in self.__dict__ if not n.startswith('_')]
-
-    def _close_(self):
+    def close(self):
         # Nullify all the relation attributes.  This does two things: makes
         # them inaccessible, and breaks the reference cycle between the
         # Database object and the relations.
-        for attrname in self._relation_names_:
-            del self.__dict__[attrname]
+        del self.r
         self._init()
 
-    def _constrain_rows_(self, relname, **kw):
-        r = getattr(self, relname)
-        existing = self._row_constraints_[relname].copy()
-        self._row_constraints_[relname].update(kw)
+    def constrain_rows(self, relname, **kw):
+        r = getattr(self.r, relname)
+        existing = self.row_constraints[relname].copy()
+        self.row_constraints[relname].update(kw)
         try:
             self._check_constraints(relname, r)
         except Exception:
-            self._row_constraints_[relname] = existing
+            self.row_constraints[relname] = existing
             raise
-        self._db.add_row_constraints(relname, kw)
+        self._storage.add_row_constraints(relname, kw)
 
-    def _remove_row_constraints_(self, relname, *args):
-        getattr(self, relname)          # Attribute Error if no such rel.
+    def remove_row_constraints(self, relname, *args):
+        getattr(self.r, relname)          # Attribute Error if no such rel.
         for arg in args:
-            del self._row_constraints_[relname][arg]
-        self._db.del_row_constraints(relname, args)
+            del self.row_constraints[relname][arg]
+        self._storage.del_row_constraints(relname, args)
 
 
 

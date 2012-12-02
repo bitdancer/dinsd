@@ -4850,46 +4850,57 @@ Initially the database is empty:
     >>> db
     Database({})
 
-We persist a relation into the database by assigning it as an attribute of the
-``Database`` object:
+The database object has a special attribute ``r`` that acts as a namespace
+container for the relations defined in the database.  This avoids any naming
+conflicts with the methods defined on the ``Database`` object.  We do this
+rather than use the ``_xxx_`` convention because it is much more common to
+access the methods of the database object than it is to access the
+non-relational-attribute attributes of a ``row``.  It is also helpful to think
+of the ``r`` attribute as the "``TUPLE`` of relations" discussed in AIRDT, and
+the rest of the attributes of the ``Database`` objects as the controls for the
+database management system.
 
-    >>> db.is_called = is_called
+We persist a relation into the database by assigning it to an attribute of the
+``Database``s ``r`` object:
+
+    >>> db.r.is_called = is_called
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
     Database({'is_called': <class 'dinsd.rel({'name': str,
          'student_id': SID})'>})
 
 The ``repr`` of a ``Database`` indicates that it is a set of names mapped to
-relation types.  Using AIRDT's terminology, it is a TUPLE of relations, but in
-the ``repr`` we show only the types, not the content.
+relation types.  Using AIRDT's terminology, it is a ``TUPLE`` of relations,
+but in the ``repr`` we show only the types, not the content.  Note that
+unlike other dinsd objects, this repr cannot be evaluated to obtain an
+equivalent object.
 
 We can also create a persistent relation by supplying just the type:
 
-    >>> db.is_enrolled_on = IsEnrolledOn
+    >>> db.r.is_enrolled_on = IsEnrolledOn
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
     Database({'is_called': <class 'dinsd.rel({'name': str,
          'student_id': SID})'>, 'is_enrolled_on': <class
          'dinsd.rel({'course_id': CID, 'student_id': SID})'>})
 
-
-At this point, ``db.is_called`` has content, but ``is_enrolled_on`` is an
+At this point, ``db.r.is_called`` has content, but ``is_enrolled_on`` is an
 empty relation:
 
-    >>> len(db.is_called)
+    >>> len(db.r.is_called)
     5
-    >>> len(db.is_enrolled_on)
+    >>> len(db.r.is_enrolled_on)
     0
 
 We can provide content for ``is_enrolled_on`` by assigning our relation that
 has content to the attribute:
 
-    >>> db.is_enrolled_on = is_enrolled_on
-    >>> len(db.is_enrolled_on)
+    >>> db.r.is_enrolled_on = is_enrolled_on
+    >>> len(db.r.is_enrolled_on)
     6
 
-It is an error to try to assign a relation of the wrong type to a ``Database``
+It is an error to try to assign a relation of the wrong type to a relation
 attribute:
 
-    >>> db.is_enrolled_on = is_called       # doctest: +NORMALIZE_WHITESPACE
+    >>> db.r.is_enrolled_on = is_called       # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     ValueError: Cannot assign value of type <class 'dinsd.rel({'name': str,
@@ -4898,7 +4909,7 @@ attribute:
 
 Indeed, it is an error to try to anything that is not of the correct type:
 
-    >>> db.is_enrolled_on = 1               # doctest: +NORMALIZE_WHITESPACE
+    >>> db.r.is_enrolled_on = 1               # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
     ValueError: Cannot assign value of type <class 'int'> to attribute of type
@@ -4907,24 +4918,26 @@ Indeed, it is an error to try to anything that is not of the correct type:
 However, wholesale assignment is not the typical way to update a relation in a
 database.  We'll talk about the alternatives later in the chapter.
 
-For now, we want to observe that we can close the database, reopen it, and
-the data will still be there.  Note that as with rows (and the database is,
-as we have noted, essentially a row of relations), regular names are reserved
-for the attributes used by an application, and we use names of the form
-``_<something>_`` for all other names.  This includes what would in another
-type of class be the ``close`` function:
+As is usual in dinsd names, relation attribute names are restricted to names
+that do not start with ``_``:
 
-    >>> db._close_()
-    >>> db.is_called
+    >>> db.r._foo = is_enrolled_on
     Traceback (most recent call last):
         ...
-    AttributeError: 'Database' object has no attribute 'is_called'
+    ValueError: Relation names may not begin with '_'
+
+We prove that the backing store works by closing the database, reopening it,
+and verifying that the data is still be there:
+
+    >>> db.close()
+    >>> db.r.is_called
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'Database' object has no attribute 'r'
     >>> del db
 
-If we now reopen it, the data is still there:
-
     >>> db = Database(dbfn)
-    >>> print(db.is_called)
+    >>> print(db.r.is_called)
     +----------+------------+
     | name     | student_id |
     +----------+------------+
@@ -4935,9 +4948,9 @@ If we now reopen it, the data is still there:
     | Devinder | S4         |
     +----------+------------+
 
-And we can add another:
+And we can add another relation to the database, which we'll need later:
 
-    >>> db.exam_marks = exam_marks
+    >>> db.r.exam_marks = exam_marks
 
 
 Constraints
@@ -4982,24 +4995,25 @@ actually a value level constraint.  We will constrain the integer values of
 the ``mark`` attribute in ``exam_marks`` to be between ``0`` and ``100``,
 inclusive:
 
-    >>> db._constrain_rows_('exam_marks', valid_mark="0 <= mark <= 100")
+    >>> db.constrain_rows('exam_marks', valid_mark="0 <= mark <= 100")
 
-Note that we pass the *name* of the database attribute, not a relation.  This
-is because the constraints are being set on the named attribute, not on a
-relation object.  The keyword assigns a name to a constraint expression; we'll
-see later how that can be used.  The constraint expression works just like the
-row expressions we've already seen.  It's value is treated as a boolean, and
-if that boolean value is ``True``, the row satisfies the constraint and all is
-well.  If that value is ``False``, the row does not satisfy the constraint,
-and is therefore not a valid row for the specified database relation.
+Note that we pass the *name* of the database relation attribute, not a
+relation.  This is because the constraints are being set on the named
+attribute, not on a relation object.  The keyword assigns a name to a
+constraint expression; we'll see later how that can be used.  The constraint
+expression works just like the row expressions we've already seen.  It's value
+is treated as a boolean, and if that boolean value is ``True``, the row
+satisfies the constraint and all is well.  If that value is ``False``, the row
+does not satisfy the constraint, and is therefore not a valid row for the
+specified database relation.
 
 With this constraint in place, we can no longer assign a relation that
 contains values outside of that range to the database's ``exam_marks``
-attribute:
+relation attribute:
 
-    >>> db.exam_marks = ~row(student_id=SID('S1'),
-    ...                      course_id=CID('C1'),
-    ...                      mark=102)
+    >>> db.r.exam_marks = ~row(student_id=SID('S1'),
+    ...                        course_id=CID('C1'),
+    ...                        mark=102)
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -5010,7 +5024,7 @@ attribute:
 
 When a constraint violation happens, the database relation is not updated:
 
-    >>> print(db.exam_marks)
+    >>> print(db.r.exam_marks)
     +-----------+------+------------+
     | course_id | mark | student_id |
     +-----------+------+------------+
@@ -5026,7 +5040,7 @@ Conversely, if we attempt to define a constraint that the existing database
 relation does not satisfy, we will also get a constraint violation:
 
 
-    >>> db._constrain_rows_('exam_marks', valid_mark="50 <= mark <= 100")
+    >>> db.constrain_rows('exam_marks', valid_mark="50 <= mark <= 100")
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -5039,24 +5053,24 @@ In this case, it is the list of constraints that is not updated.  The database
 relation is again unchanged, and the database still conforms to all of the
 active constraints:
 
-    >>> db._row_constraints_['exam_marks']
+    >>> db.row_constraints['exam_marks']
     {'valid_mark': '0 <= mark <= 100'}
 
 We can define more than one constraint for a database relation, and we
 can define more than one in a single call:
 
-    >>> db._constrain_rows_('exam_marks', valid_sid="student_id!=SID('S0')",
+    >>> db.constrain_rows('exam_marks', valid_sid="student_id!=SID('S0')",
     ...                                   valid_cid="course_id!=CID('C0')")
 
-    >>> sorted(db._row_constraints_['exam_marks'].items())
+    >>> sorted(db.row_constraints['exam_marks'].items())
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     [('valid_cid', "course_id!=CID('C0')"), ('valid_mark',
          '0 <= mark <= 100'), ('valid_sid', "student_id!=SID('S0')")]
 
-    >>> db.exam_marks = ~row(student_id=SID('S1'),
-    ...                      course_id=CID('C0'),
-    ...                      mark=99)
+    >>> db.r.exam_marks = ~row(student_id=SID('S1'),
+    ...                        course_id=CID('C0'),
+    ...                        mark=99)
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -5065,9 +5079,9 @@ can define more than one in a single call:
         "course_id!=CID('C0')" is not satisfied by row({'course_id': CID('C0'),
         'mark': 99, 'student_id': SID('S1')})
 
-    >>> db.exam_marks = ~row(student_id=SID('S0'),
-    ...                      course_id=CID('C1'),
-    ...                      mark=99)
+    >>> db.r.exam_marks = ~row(student_id=SID('S0'),
+    ...                        course_id=CID('C1'),
+    ...                        mark=99)
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -5079,7 +5093,7 @@ can define more than one in a single call:
 Unlike other dinsd functions that take expressions, it is *not* valid to use
 a function or lambda as a constraint:
 
-    >>> db._constrain_rows_('exam_marks', invalid=lambda r: r.mark < 100)
+    >>> db.constrain_rows('exam_marks', invalid=lambda r: r.mark < 100)
     ...
     ... # doctest: +ELLIPSIS
     Traceback (most recent call last):
@@ -5093,35 +5107,37 @@ This is because the constraints are stored in the persistent store, and it is
 not necessarily practical to store Python function definitions in the
 persistent store.
 
-    >>> x = db._row_constraints_.copy()
-    >>> db._close_()
-    >>> db._row_constraints_
+    >>> x = db.row_constraints.copy()
+    >>> db.close()
+    >>> db.row_constraints
     defaultdict(<class 'dict'>, {})
     >>> db = Database(dbfn)
-    >>> db._row_constraints_ == x
+    >>> db.row_constraints == x
     True
 
 You cannot define a row constraint on a relation that doesn't exist:
 
-    >>> db._constrain_rows_('foo', bar='True')
+    >>> db.constrain_rows('foo', bar='True')
     Traceback (most recent call last):
         ...
-    AttributeError: 'Database' object has no attribute 'foo'
+    AttributeError: '_Rels' object has no attribute 'foo'
 
 Unlike the case with relation and row headers, it is unlikely that an
 application will accidentally update the dictionary of row constraints.  dinsd
 therefore, in the Python consenting adults fashion, does not try to protect
-you from doing so.  If you modify the _row_constraints_ dictionary, the
+you from doing so.  If you modify the ``row_constraints`` dictionary, the
 in-memory database constraints will cease to match the constraints in the
 persistent store, which is likely to lead to undesirable results.  So don't do
-that unless you've thought of a really good reason :).
+that unless you've thought of a really good reason and are willing to
+risk shooting yourself in the foot and screwing up your data.
 
-Constraints exist in a different namespace from relation, row, and
-database attributes, so there is no restriction on the names other than
-that they be Python identifiers:
+Unlike other named dinsd objects, which exist as attributes and so are
+restricted from having names that start with ``_``, constraints are never
+accessed as attributes, and so there is no restriction on their names other
+than that they be Python identifiers:
 
-    >>> db._constrain_rows_('is_called', _no_foos_allowed="name!='foo'")
-    >>> db.is_called = ~row(name='foo', student_id=SID('S42'))
+    >>> db.constrain_rows('is_called', _no_foos_allowed="name!='foo'")
+    >>> db.r.is_called = ~row(name='foo', student_id=SID('S42'))
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -5132,31 +5148,31 @@ that they be Python identifiers:
 
 Constraints may also be deleted:
 
-    >>> db._remove_row_constraints_('is_called', '_no_foos_allowed')
-    >>> db._row_constraints_['is_called']
+    >>> db.remove_row_constraints('is_called', '_no_foos_allowed')
+    >>> db.row_constraints['is_called']
     {}
-    >>> db._close_()
+    >>> db.close()
     >>> db = Database(dbfn)
-    >>> db._row_constraints_['is_called']
+    >>> db.row_constraints['is_called']
     {}
 
 Just as more than one constraint can be added at a time, multiple
 constraints may be deleted in a single call:
 
-    >>> db._remove_row_constraints_('exam_marks', 'valid_sid', 'valid_cid')
-    >>> db._row_constraints_['exam_marks']
+    >>> db.remove_row_constraints('exam_marks', 'valid_sid', 'valid_cid')
+    >>> db.row_constraints['exam_marks']
     {'valid_mark': '0 <= mark <= 100'}
 
 Of course, you can't delete a constraint the doesn't exist:
 
-    >>> db._remove_row_constraints_('exam_marks', 'valid_sid')
+    >>> db.remove_row_constraints('exam_marks', 'valid_sid')
     Traceback (most recent call last):
         ...
     KeyError: 'valid_sid'
 
 Or from a relation that doesn't exist:
 
-    >>> db._remove_row_constraints_('foo', 'bar')
+    >>> db.remove_row_constraints('foo', 'bar')
     Traceback (most recent call last):
         ...
-    AttributeError: 'Database' object has no attribute 'foo'
+    AttributeError: '_Rels' object has no attribute 'foo'
