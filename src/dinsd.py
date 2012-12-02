@@ -1025,14 +1025,11 @@ class RowConstraintError(ConstraintError):
 class Database:
 
     def __init__(self, fn, debug_sql=False):
-        db = self._db = _db_connection(fn)
-        if debug_sql:
-            outfile = None if debug_sql is True else debug_sql
-            db.set_trace_callback(lambda x: print(x, file=outfile))
+        db = self._db = _dumb_sqlite_persistence(fn, debug_sql=False)
         self._init()
-        for attrname, val in _db_relations(db):
+        for attrname, val in db.relations():
             super().__setattr__(attrname, val)
-        self._row_constraints_.update(_db_get_row_constraints(db))
+        self._row_constraints_.update(db.get_row_constraints())
 
     def _init(self):
         self._row_constraints_ = _collections.defaultdict(dict)
@@ -1062,9 +1059,9 @@ class Database:
             if not hasattr(val, 'header'):
                 raise ValueError("Database attributes must be relations, "
                     "not {}".format(type(val)))
-            _db_add_reltype(self._db, name, type(val))
+            self._db.add_reltype(name, type(val))
         self._check_constraints(name, val)
-        _db_update_relation(self._db, name, val)
+        self._db.update_relation(name, val)
         super().__setattr__(name, val)
 
     def _check_constraints(self, relname, r):
@@ -1107,13 +1104,13 @@ class Database:
         except Exception:
             self._row_constraints_[relname] = existing
             raise
-        _db_add_row_constraints(self._db, relname, kw)
+        self._db.add_row_constraints(relname, kw)
 
     def _remove_row_constraints_(self, relname, *args):
         getattr(self, relname)          # Attribute Error if no such rel.
         for arg in args:
             del self._row_constraints_[relname][arg]
-        _db_del_row_constraints(self._db, relname, args)
+        self._db.del_row_constraints(relname, args)
 
 
 
@@ -1121,101 +1118,113 @@ class Database:
 # Dumb persistence infrastructure using sqlite.
 #
 
+class _dumb_sqlite_persistence:
 
-def _db_connection(fn):
-    con = _sqlite.connect(fn)
-    c = con.cursor()
-    c.execute('PRAGMA foreign_keys = ON')
-    c.execute('create table if not exists "_relnames" ('
-                '"relname" varchar unique not null)')
-    c.execute('create table if not exists "_reldefs" ('
-                '"relname" varchar not null '
-                    'constraint "_reldefs_fkey" '
+    def __init__(self, fn, debug_sql=False):
+        con = self.con = _sqlite.connect(fn)
+        if debug_sql:
+            outfile = None if debug_sql is True else debug_sql
+            con.set_trace_callback(lambda x: print(x, file=outfile))
+        c = con.cursor()
+        c.execute('PRAGMA foreign_keys = ON')
+        c.execute('create table if not exists "_relnames" ('
+                    '"relname" varchar unique not null)')
+        c.execute('create table if not exists "_reldefs" ('
+                    '"relname" varchar not null '
+                        'constraint "_reldefs_fkey" '
+                            'references _relnames ("relname") '
+                            'on delete cascade,'
+                    '"attrname" varchar not null, '
+                    '"attrtype" blob not null, '
+                    'primary key ("relname", "attrname") '
+                    ') ')
+        c.execute('create table if not exists "_row_constraints" ('
+                    '"relname" varchar not null '
+                        'constraint "_row_constraints_fkey" '
                         'references _relnames ("relname") '
                         'on delete cascade,'
-                '"attrname" varchar not null, '
-                '"attrtype" blob not null, '
-                'primary key ("relname", "attrname") '
-                ') ')
-    c.execute('create table if not exists "_row_constraints" ('
-                '"relname" varchar not null '
-                    'constraint "_row_constraints_fkey" '
-                    'references _relnames ("relname") '
-                    'on delete cascade,'
-                '"constraint_name" varchar, '
-                '"constraint" varchar,'
-                'primary key ("relname", "constraint_name")'
-                ') ')
-    c.execute('create index if not exists "_row_constraints_relname_index" '
-                'on "_row_constraints" ("relname")')
-    return con
+                    '"constraint_name" varchar, '
+                    '"constraint" varchar,'
+                    'primary key ("relname", "constraint_name")'
+                    ') ')
+        # This is a performance thing and not really required.
+        c.execute('create index if not exists "_row_constraints_relname_index" '
+                    'on "_row_constraints" ("relname")')
 
 
-def _db_add_reltype(db, name, reltype):
-    header = reltype.header
-    c = db.cursor()
-    columns = ', '.join('"{}" blob'.format(n) for n in header)
-    c.execute('create table "{}" ({})'.format(name, columns))
-    c.execute('insert into "_relnames" ("relname") values (?)', (name,))
-    for n, t in header.items():
-        c.execute('insert into "_reldefs" ("relname", "attrname", "attrtype") '
-                    'values (?, ?, ?)', (name, n, _pickle.dumps(t)))
-    db.commit()
+    def add_reltype(self, name, reltype):
+        db = self.con
+        header = reltype.header
+        c = db.cursor()
+        columns = ', '.join('"{}" blob'.format(n) for n in header)
+        c.execute('create table "{}" ({})'.format(name, columns))
+        c.execute('insert into "_relnames" ("relname") values (?)', (name,))
+        for n, t in header.items():
+            c.execute('insert into "_reldefs" ("relname", "attrname", "attrtype") '
+                        'values (?, ?, ?)', (name, n, _pickle.dumps(t)))
+        db.commit()
 
-def _db_update_relation(db, name, val):
-    c = db.cursor()
-    c.execute('delete from "{}"'.format(name))
-    names = sorted(val.header.keys())
-    for rw in val:
-        c.execute('insert into "{}" ({}) values ({})'.format(
-                        name,
-                        ' ,'.join('"{}"'.format(n) for n in names),
-                        ' ,'.join(['?'] * len(names))), 
-                  [_pickle.dumps(getattr(rw, n)) for n in names])
-    db.commit()
+    def update_relation(self, name, val):
+        db = self.con
+        c = db.cursor()
+        c.execute('delete from "{}"'.format(name))
+        names = sorted(val.header.keys())
+        for rw in val:
+            c.execute('insert into "{}" ({}) values ({})'.format(
+                            name,
+                            ' ,'.join('"{}"'.format(n) for n in names),
+                            ' ,'.join(['?'] * len(names))), 
+                      [_pickle.dumps(getattr(rw, n)) for n in names])
+        db.commit()
 
-def _db_relations(db):
-    c = db.cursor()
-    c.execute('select "relname", "attrname", "attrtype" from "_reldefs"')
-    headers = _collections.defaultdict(dict)
-    for relname, attrname, attrtype in c:
-        headers[relname][attrname] = _pickle.loads(attrtype)
-    rels = []
-    for relname, header in headers.items():
-        r = rel(**header)()
-        c.execute('select * from "{}"'.format(relname))
-        names = [t[0] for t in c.description]
-        for rwdata in c:
-            r._rows_.add(r.row({n: _pickle.loads(v)
-                                for n, v in zip(names, rwdata)}))
-        rels.append((relname, r))
-    return rels
+    def relations(self):
+        db = self.con
+        c = db.cursor()
+        c.execute('select "relname", "attrname", "attrtype" from "_reldefs"')
+        headers = _collections.defaultdict(dict)
+        for relname, attrname, attrtype in c:
+            headers[relname][attrname] = _pickle.loads(attrtype)
+        rels = []
+        for relname, header in headers.items():
+            r = rel(**header)()
+            c.execute('select * from "{}"'.format(relname))
+            names = [t[0] for t in c.description]
+            for rwdata in c:
+                r._rows_.add(r.row({n: _pickle.loads(v)
+                                    for n, v in zip(names, rwdata)}))
+            rels.append((relname, r))
+        return rels
 
-def _db_get_row_constraints(db):
-    constraints = _collections.defaultdict(dict)
-    c = db.cursor()
-    c.execute('select "relname", "constraint_name", "constraint" '
-                'from _row_constraints')
-    for relname, constraint_name, constraint in c:
-        constraints[relname][constraint_name] = constraint
-    return constraints
+    def get_row_constraints(self):
+        db = self.con
+        constraints = _collections.defaultdict(dict)
+        c = db.cursor()
+        c.execute('select "relname", "constraint_name", "constraint" '
+                    'from _row_constraints')
+        for relname, constraint_name, constraint in c:
+            constraints[relname][constraint_name] = constraint
+        return constraints
 
-def _db_add_row_constraints(db, relname, constraints):
-    c = db.cursor()
-    for constraint_name, constraint in constraints.items():
-        db.execute('insert into "_row_constraints" '
-                      '("relname", "constraint_name", "constraint") '
-                      'values (?, ?, ?)',
-                   (relname, constraint_name, constraint))
-    db.commit()
+    def add_row_constraints(self, relname, constraints):
+        db = self.con
+        c = db.cursor()
+        for constraint_name, constraint in constraints.items():
+            db.execute('insert into "_row_constraints" '
+                          '("relname", "constraint_name", "constraint") '
+                          'values (?, ?, ?)',
+                       (relname, constraint_name, constraint))
+        db.commit()
 
-def _db_del_row_constraints(db, relname, names):
-    c = db.cursor()
-    in_qs = ', '.join('?'*len(names))
-    c.execute('delete from "_row_constraints" '
-                'where "relname"=? and "constraint_name" in ({})'.format(in_qs),
-              (relname,) + names)
-    db.commit()
+    def del_row_constraints(self, relname, names):
+        db = self.con
+        c = db.cursor()
+        in_qs = ', '.join('?'*len(names))
+        c.execute('delete from "_row_constraints" '
+                    'where "relname"=? and '
+                    '"constraint_name" in ({})'.format(in_qs),
+                  (relname,) + names)
+        db.commit()
+
 
 
 
