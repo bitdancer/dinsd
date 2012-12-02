@@ -5089,8 +5089,9 @@ a function or lambda as a constraint:
 
 (Note: even more than some of the others, this error may well change.)
 
-This is because the constraints are stored in the database, and it is not
-practical to store Python function definitions in the database:
+This is because the constraints are stored in the persistent store, and it is
+not necessarily practical to store Python function definitions in the
+persistent store.
 
     >>> x = db._row_constraints_.copy()
     >>> db._close_()
@@ -5099,3 +5100,63 @@ practical to store Python function definitions in the database:
     >>> db = Database(dbfn)
     >>> db._row_constraints_ == x
     True
+
+You cannot define a row constraint on a relation that doesn't exist:
+
+    >>> db._constrain_rows_('foo', bar='True')
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'Database' object has no attribute 'foo'
+
+Unlike the case with relation and row headers, it is unlikely that an
+application will accidentally update the dictionary of row constraints.  dinsd
+therefore, in the Python consenting adults fashion, does not try to protect
+you from doing so.  If you modify the _row_constraints_ dictionary, the
+in-memory database constraints will cease to match the constraints in the
+persistent store, which is likely to lead to undesirable results.  So don't do
+that unless you've thought of a really good reason :).
+
+Constraints exist in a different namespace from relation, row, and
+database attributes, so there is no restriction on the names other than
+that they be Python identifiers:
+
+    >>> db._constrain_rows_('is_called', _no_foos_allowed="name!='foo'")
+    >>> db.is_called = ~row(name='foo', student_id=SID('S42'))
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    dinsd.RowConstraintError: is_called constraint _no_foos_allowed violated:
+        "name!='foo'" is not satisfied by row({'name': 'foo', 'student_id':
+        SID('S42')})
+
+Constraints may also be deleted:
+
+    >>> db._remove_row_constraints_('is_called', '_no_foos_allowed')
+    >>> db._row_constraints_['is_called']
+    {}
+    >>> db._close_()
+    >>> db = Database(dbfn)
+    >>> db._row_constraints_['is_called']
+    {}
+
+Just as more than one constraint can be added at a time, multiple
+constraints may be deleted in a single call:
+
+    >>> db._remove_row_constraints_('exam_marks', 'valid_sid', 'valid_cid')
+    >>> db._row_constraints_['exam_marks']
+    {'valid_mark': '0 <= mark <= 100'}
+
+Of course, you can't delete a constraint the doesn't exist:
+
+    >>> db._remove_row_constraints_('exam_marks', 'valid_sid')
+    Traceback (most recent call last):
+        ...
+    KeyError: 'valid_sid'
+
+Or from a relation that doesn't exist:
+
+    >>> db._remove_row_constraints_('foo', 'bar')
+    Traceback (most recent call last):
+        ...
+    AttributeError: 'Database' object has no attribute 'foo'

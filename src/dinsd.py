@@ -1032,7 +1032,7 @@ class Database:
         self._init()
         for attrname, val in _db_relations(db):
             super().__setattr__(attrname, val)
-        self._row_constraints_.update(_db_row_constraints(db))
+        self._row_constraints_.update(_db_get_row_constraints(db))
 
     def _init(self):
         self._row_constraints_ = _collections.defaultdict(dict)
@@ -1108,6 +1108,12 @@ class Database:
             self._row_constraints_[relname] = existing
             raise
         _db_add_row_constraints(self._db, relname, kw)
+
+    def _remove_row_constraints_(self, relname, *args):
+        getattr(self, relname)          # Attribute Error if no such rel.
+        for arg in args:
+            del self._row_constraints_[relname][arg]
+        _db_del_row_constraints(self._db, relname, args)
 
 
 
@@ -1185,6 +1191,15 @@ def _db_relations(db):
         rels.append((relname, r))
     return rels
 
+def _db_get_row_constraints(db):
+    constraints = _collections.defaultdict(dict)
+    c = db.cursor()
+    c.execute('select "relname", "constraint_name", "constraint" '
+                'from _row_constraints')
+    for relname, constraint_name, constraint in c:
+        constraints[relname][constraint_name] = constraint
+    return constraints
+
 def _db_add_row_constraints(db, relname, constraints):
     c = db.cursor()
     for constraint_name, constraint in constraints.items():
@@ -1194,14 +1209,13 @@ def _db_add_row_constraints(db, relname, constraints):
                    (relname, constraint_name, constraint))
     db.commit()
 
-def _db_row_constraints(db):
-    constraints = _collections.defaultdict(dict)
+def _db_del_row_constraints(db, relname, names):
     c = db.cursor()
-    c.execute('select "relname", "constraint_name", "constraint" '
-                'from _row_constraints')
-    for relname, constraint_name, constraint in c:
-        constraints[relname][constraint_name] = constraint
-    return constraints
+    in_qs = ', '.join('?'*len(names))
+    c.execute('delete from "_row_constraints" '
+                'where "relname"=? and "constraint_name" in ({})'.format(in_qs),
+              (relname,) + names)
+    db.commit()
 
 
 
