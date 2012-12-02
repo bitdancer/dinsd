@@ -48,6 +48,13 @@ the best possible introduction to dinsd, but if you can make your way through
 it you will have a fairly deep understanding of dinsd and its relationship to
 TTM and its correspondence (or occasionally lack thereof) to *Tutorial D*.
 
+Note that the error messages shown here are not part of the API.  In theory
+the exception classes that result from specific error cases are, but in
+practice I have not worried about making them "right" at this point.  So while
+the rest of the API is my current thinking on what the API should be, the
+exception classes are not even my current thinking, they are either accidents
+or relatively thoughtless implementations.  I'll fix that at some point.
+
 
 About the Name
 ~~~~~~~~~~~~~~
@@ -5068,3 +5075,27 @@ can define more than one in a single call:
     dinsd.RowConstraintError: exam_marks constraint valid_sid violated:
         "student_id!=SID('S0')" is not satisfied by row({'course_id': CID('C1'),
         'mark': 99, 'student_id': SID('S0')})
+
+Unlike other dinsd functions that take expressions, it is *not* valid to use
+a function or lambda as a constraint:
+
+    >>> db._constrain_rows_('exam_marks', invalid=lambda r: r.mark < 100)
+    ...
+    ... # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+        ...
+      not ((<function <lambda> at 0xb6c1f394>) and (course_id!=CID('C0'))...
+    SyntaxError: invalid syntax
+
+(Note: even more than some of the others, this error may well change.)
+
+This is because the constraints are stored in the database, and it is not
+practical to store Python function definitions in the database:
+
+    >>> x = db._row_constraints_.copy()
+    >>> db._close_()
+    >>> db._row_constraints_
+    defaultdict(<class 'dict'>, {})
+    >>> db = Database(dbfn)
+    >>> db._row_constraints_ == x
+    True

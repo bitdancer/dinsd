@@ -1024,11 +1024,15 @@ class RowConstraintError(ConstraintError):
 
 class Database:
 
-    def __init__(self, fn):
-        self._db = _db_connection(fn)
+    def __init__(self, fn, debug_sql=False):
+        db = self._db = _db_connection(fn)
+        if debug_sql:
+            outfile = None if debug_sql is True else debug_sql
+            db.set_trace_callback(lambda x: print(x, file=outfile))
         self._init()
-        for attrname, val in _db_relations(self._db):
+        for attrname, val in _db_relations(db):
             super().__setattr__(attrname, val)
+        self._row_constraints_.update(_db_row_constraints(db))
 
     def _init(self):
         self._row_constraints_ = _collections.defaultdict(dict)
@@ -1100,9 +1104,10 @@ class Database:
         self._row_constraints_[relname].update(kw)
         try:
             self._check_constraints(relname, r)
-        except ConstraintError:
+        except Exception:
             self._row_constraints_[relname] = existing
             raise
+        _db_add_row_constraints(self._db, relname, kw)
 
 
 
@@ -1113,71 +1118,91 @@ class Database:
 
 def _db_connection(fn):
     con = _sqlite.connect(fn)
-    #c = con.cursor()
-    #c.execute("create table if not exists '_reldefs' ("
-    #            "relname varchar not null, "
-    #            "attrname varchar not null, "
-    #            "attrtype blob not null, "
-    #            "primary key ('rename', 'attrname') "
-    #            ") ")
+    c = con.cursor()
+    c.execute('PRAGMA foreign_keys = ON')
+    c.execute('create table if not exists "_relnames" ('
+                '"relname" varchar unique not null)')
+    c.execute('create table if not exists "_reldefs" ('
+                '"relname" varchar not null '
+                    'constraint "_reldefs_fkey" '
+                        'references _relnames ("relname") '
+                        'on delete cascade,'
+                '"attrname" varchar not null, '
+                '"attrtype" blob not null, '
+                'primary key ("relname", "attrname") '
+                ') ')
+    c.execute('create table if not exists "_row_constraints" ('
+                '"relname" varchar not null '
+                    'constraint "_row_constraints_fkey" '
+                    'references _relnames ("relname") '
+                    'on delete cascade,'
+                '"constraint_name" varchar, '
+                '"constraint" varchar,'
+                'primary key ("relname", "constraint_name")'
+                ') ')
+    c.execute('create index if not exists "_row_constraints_relname_index" '
+                'on "_row_constraints" ("relname")')
     return con
 
 
 def _db_add_reltype(db, name, reltype):
-    # This is a bizarre hack, but it works :)
-    # XXX: can a version 3 pickle contain unquoted '"' characters?
-    columns = ', '.join('{} "blob {}"'.format(n, _pickle.dumps(t))
-                        for n, t in sorted(reltype.header.items()))
-    db.cursor().execute("create table {} ({})".format(name, columns))
+    header = reltype.header
+    c = db.cursor()
+    columns = ', '.join('"{}" blob'.format(n) for n in header)
+    c.execute('create table "{}" ({})'.format(name, columns))
+    c.execute('insert into "_relnames" ("relname") values (?)', (name,))
+    for n, t in header.items():
+        c.execute('insert into "_reldefs" ("relname", "attrname", "attrtype") '
+                    'values (?, ?, ?)', (name, n, _pickle.dumps(t)))
     db.commit()
 
 def _db_update_relation(db, name, val):
     c = db.cursor()
-    c.execute("delete from {}".format(name))
+    c.execute('delete from "{}"'.format(name))
     names = sorted(val.header.keys())
     for rw in val:
-        c.execute("insert into {} ({}) values ({})".format(
+        c.execute('insert into "{}" ({}) values ({})'.format(
                         name,
-                        ' ,'.join(names),
+                        ' ,'.join('"{}"'.format(n) for n in names),
                         ' ,'.join(['?'] * len(names))), 
                   [_pickle.dumps(getattr(rw, n)) for n in names])
     db.commit()
 
 def _db_relations(db):
-    c1 = db.cursor()
-    c2 = db.cursor()
-    c1.execute("select tbl_name, sql from sqlite_master where type='table'")
+    c = db.cursor()
+    c.execute('select "relname", "attrname", "attrtype" from "_reldefs"')
+    headers = _collections.defaultdict(dict)
+    for relname, attrname, attrtype in c:
+        headers[relname][attrname] = _pickle.loads(attrtype)
     rels = []
-    for name, reldef in c1:
-        reldef = _db_sqldef_to_reldef(reldef)
-        r = reldef()
-        c2.execute("select * from {}".format(name))
-        names = [t[0] for t in c2.description]
-        for rw in c2:
-            r._rows_.add(r.row({n: _pickle.loads(v) for n, v in zip(names, rw)}))
-        rels.append((name, r))
+    for relname, header in headers.items():
+        r = rel(**header)()
+        c.execute('select * from "{}"'.format(relname))
+        names = [t[0] for t in c.description]
+        for rwdata in c:
+            r._rows_.add(r.row({n: _pickle.loads(v)
+                                for n, v in zip(names, rwdata)}))
+        rels.append((relname, r))
     return rels
 
-def _db_sqldef_to_reldef(sqldef):
-    _, sqldef = sqldef.split('(', 1)
-    sqldef = sqldef[:-1]
-    coldefs = {}
-    while sqldef:
-        attrname, sqldef = sqldef.split(None, 1)
-        for i in range(1, len(sqldef)):
-            if sqldef[i] == '"' and sqldef[i-1] != '\\':
-                break
-        else:
-            raise ValueError("Could not find end of type in " + sqldef)
-        # "blob b'<pickle>'"
-        _, tstr = sqldef[1:i].split(None, 1)
-        sqldef = sqldef[i+1:].strip(', ')
-        # eval isn't any less safe than pickle here
-        typ = _pickle.loads(eval(tstr)) 
-        coldefs[attrname] = typ
-    return rel(**coldefs)
+def _db_add_row_constraints(db, relname, constraints):
+    c = db.cursor()
+    for constraint_name, constraint in constraints.items():
+        db.execute('insert into "_row_constraints" '
+                      '("relname", "constraint_name", "constraint") '
+                      'values (?, ?, ?)',
+                   (relname, constraint_name, constraint))
+    db.commit()
 
-        
+def _db_row_constraints(db):
+    constraints = _collections.defaultdict(dict)
+    c = db.cursor()
+    c.execute('select "relname", "constraint_name", "constraint" '
+                'from _row_constraints')
+    for relname, constraint_name, constraint in c:
+        constraints[relname][constraint_name] = constraint
+    return constraints
+
 
 
 # "import *" support: use this only when playing with relational algebra in the
