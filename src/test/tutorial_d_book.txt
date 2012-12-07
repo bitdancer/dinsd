@@ -5163,7 +5163,7 @@ constraints may be deleted in a single call:
     >>> db.row_constraints['exam_marks']
     {'valid_mark': '0 <= mark <= 100'}
 
-Of course, you can't delete a constraint the doesn't exist:
+Of course, you can't delete a constraint that doesn't exist:
 
     >>> db.remove_row_constraints('exam_marks', 'valid_sid')
     Traceback (most recent call last):
@@ -5176,3 +5176,56 @@ Or from a relation that doesn't exist:
     Traceback (most recent call last):
         ...
     AttributeError: '_Rels' object has no attribute 'foo'
+
+
+Relation Level Constraints
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+dinsd currently supports only one relation level constraint, and that is the
+special constraint "key".  *Tutorial D* requires that every relation stored
+in the database have a ``KEY`` declaration, which is intended to be the
+minimal key for the relation (that is, the key for which there is no key
+containing fewer columns that still guarantees that each row is unique).
+dinsd does not make this requirement, but neither does it pretend to know the
+minimal key in the absence of a key declaration.  (That is, unlike some
+systems, it does not default to using the entire row as the key.)
+
+In *Tutorial D* a key declaration is the keyword ``KEY`` and a list of columns
+that follows a relation declaration.  We've seen an example of this before:
+
+    VAR IS_CALLED BASE
+    INIT (ENROLMENT { StudentId, Name })
+    KEY { StudentId } ;
+    VAR IS_ENROLLED_ON BASE
+    INIT (ENROLMENT { StudentId, CourseId })
+    KEY { StudentId, CourseId } ;
+
+In dinsd, we use the ``set_key`` method of the ``Database`` object:
+
+    >>> db.set_key('is_called', {'student_id'})
+    >>> db.set_key('is_enrolled_on', {'student_id', 'course_id'})
+    >>> db.set_key('exam_marks', {'student_id', 'course_id'})
+
+As with row constraints, the key constraint is a property of a relation stored
+in a database, and not a property of the relation itself.  So to query the
+keys we ask the ``Database`` object:
+
+    >>> sorted(db.key('is_enrolled_on'))
+    ['course_id', 'student_id']
+
+The ``display`` function indicates the keys of a database relation by
+using ``=`` characters in the table header separator for key columns:
+
+    >>> print(display(exam_marks, 'student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +============+===========+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
+
+XXX: key constraints aren't fully working yet.  Nor are they saved.

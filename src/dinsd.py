@@ -396,8 +396,11 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
                                 self.degree,
                                 len(attrlist), sorted(attrlist),
                                 repr(self.__class__)))
+        self._validate_attr_names(attrlist)
+
+    def _validate_attr_names(self, attrlist):
         for attr in attrlist:
-            if attr not in self.header:
+            if attr not in self._header:
                 raise AttributeError(
                     "{!r} has no attribute {!r}".format(self.__class__, attr))
 
@@ -826,7 +829,20 @@ def _display(relation, *columns, sort=[]):
     r = [sep]
     r.extend((_tline(parts, widths) for parts in zip(*toprint[0]))
              if columns else ['||'])
-    r.append(sep)
+    # XXX This if test is ugly, improve it.
+    if (hasattr(relation, '_db') and
+            '_key_'+relation.__name__ in relation._db._constraint_ns):
+        h = ['+']
+        key = relation._db.key(relation.__name__)
+        for i, name in enumerate(columns):
+            if name in key:
+                h.append('=' * (widths[i]+2))
+            else:
+                h.append('-' * (widths[i]+2))
+            h.append('+')
+        r.append(''.join(h))
+    else:
+        r.append(sep)
     if not columns and len(toprint)==2:
         r.append("||")
     else:
@@ -1028,6 +1044,8 @@ class _Rels:
         self._db = db
         self._storage = storage
         for attrname, val in storage.relations():
+            val._db = self._db
+            val.__name__ = attrname
             super().__setattr__(attrname, val)
 
     def _iter_rels(self):
@@ -1053,6 +1071,8 @@ class _Rels:
                     "not {}".format(type(val)))
             self._storage.add_reltype(name, type(val))
         self._db._check_constraints(name, val)
+        val._db = self._db
+        val.__name__ = name
         self._storage.update_relation(name, val)
         super().__setattr__(name, val)
 
@@ -1067,6 +1087,8 @@ class Database:
 
     def _init(self):
         self.row_constraints = _collections.defaultdict(dict)
+        self._constraint_ns = _collections.ChainMap(_all)
+        self._constraints = {}
 
     def __repr__(self):
         return "{}({{{}}})".format(
@@ -1078,19 +1100,36 @@ class Database:
         row_validator = ' and '.join(
                            "({})".format(v)
                            for v in self.row_constraints[relname].values())
-        if not row_validator:
-            return
-        invalid = r.where("not ({})".format(row_validator))
-        if invalid:
-            # figure out one constraint and one row to put in error message,
-            # this is more useful than all the constraints and failures.
-            rw = sorted(invalid)[0]
-            for c, exp in sorted(self.row_constraints[relname].items()):
-                if not eval(exp, rw._as_locals_(), _all):
-                    raise RowConstraintError(relname, c, exp, rw)
-            raise AssertionError("Expected failure did not happen")
-
-    # Public methods and properties.
+        if row_validator:
+            invalid = r.where("not ({})".format(row_validator))
+            if invalid:
+                # figure out one constraint and one row to put in error message;
+                # this is more useful than all the constraints and failures.
+                rw = sorted(invalid)[0]
+                for c, exp in sorted(self.row_constraints[relname].items()):
+                    if not eval(exp, rw._as_locals_(), _all):
+                        raise RowConstraintError(relname, c, exp, rw)
+                raise AssertionError("Expected failure did not happen")
+        for i in range(10):
+            done = True
+            for name, (constraint, fixer) in self._constraints.items():
+                if callable(constraint):
+                    valid = constraint()
+                else:
+                    valid = eval(constraint, self._as_locals(), _all)
+                if not valid and fixer is not None:
+                    if callable(fixer):
+                        valid = fixer()
+                    else:
+                        valid = eval(constraint, {}, self._constraint_ns)
+                if not valid:
+                    raise DBConstraintError(name, constraint, fixer)
+                else:
+                    done = False
+            if done:
+                break
+        else:
+            raise DBConstraintLoop()
 
     def close(self):
         # Nullify all the relation attributes.  This does two things: makes
@@ -1098,6 +1137,8 @@ class Database:
         # Database object and the relations.
         del self.r
         self._init()
+
+    # Row Constraints
 
     def constrain_rows(self, relname, **kw):
         r = getattr(self.r, relname)
@@ -1115,6 +1156,31 @@ class Database:
         for arg in args:
             del self.row_constraints[relname][arg]
         self._storage.del_row_constraints(relname, args)
+
+    # Key Constraints
+
+    def set_key(self, relname, keynames):
+        r = getattr(self.r, relname)
+        r._validate_attr_names(keynames)
+        self._constraint_ns['_key_'+relname] = r >> keynames
+        self._constraints['_key_'+relname] = (
+            "len(relname)==len(_key_relaname)",
+            lambda r=relname: self._update_key(r))
+        self.row_constraints[relname]['_key_'+relname] = (
+            "_row_ >> _key_{}._header.keys() not in _key_{}".format(
+                relname, relname))
+
+    def _update_key(self, relname):
+        r = getattr(self.r, relname)
+        key = self._keys[relname]
+        if len(r) < len(key):
+            self._keys[relname] = key | (r - key) >> key._header.keys()
+        else:
+            self._keys[relname] = matching(key, r)
+        return True
+
+    def key(self, relname):
+        return set(self._constraint_ns['_key_'+relname]._header.keys())
 
 
 
