@@ -275,7 +275,7 @@ def _rel_dct(header):
 
 def _rel(attrdict):
     # For internal use we don't need to do all those checks above.
-    return _get_type('rel', attrdict.copy())
+    return _get_type('rel', attrdict)
 
 
 class _Relation(_RichCompareMixin):
@@ -486,7 +486,7 @@ def _get_type(typetype, header):
                     for n, v in sorted(header.items()))
     cls = _type_registry[baseclass].get(hsig)
     if cls is None:
-        dct = dct_maker(header)
+        dct = dct_maker(header.copy())
         name = '{}({{{}}})'.format(
             typetype,
             ', '.join(repr(n)+': '+v.__name__
