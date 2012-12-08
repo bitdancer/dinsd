@@ -1,5 +1,5 @@
-Disnd and An Introduction to Relational Database Theory
-=======================================================
+Relational Python
+=================
 
 Copyright 2012 by R. David Murray, Licensed under the Apache License, Version
 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
@@ -35,6 +35,10 @@ at the point where I was working on comparisons of relations I started doing a
 bunch of refactoring and backtracked to the beginning.  If you are curious
 about the evolution you can check out the repository history.
 
+This file stops at the end of Chapter 5 of AIRDT.  It covers only the
+relational algebra and how dinsd brings that into Python.  The topic of
+persistent databases and database constraints are covered by other documents.
+
 Where reference is made to specific page numbers or figures in AIRTD, this is
 based on the bookboon.com edition of the book as available for download on
 November 1st, 2012.
@@ -42,7 +46,7 @@ November 1st, 2012.
 This file contains blocks of tests that are meant to exercise edge cases as
 well as the primary test cases and examples, because it is the test document
 that I used as I was building the system.  It is, therefore, a cross between a
-design document, a literate test document, and a detailed discussion of the
+design document, a literate test document, a somewhat detailed discussion of the
 system mechanics, and a comparison of dinsd to *Tutorial D*.  It may not be
 the best possible introduction to dinsd, but if you can make your way through
 it you will have a fairly deep understanding of dinsd and its relationship to
@@ -88,9 +92,10 @@ It is otherwise as close to *D* as I understood how to make it.
 About the Namespace(s)
 ~~~~~~~~~~~~~~~~~~~~~~
 
-In Python terms, dinsd consists of a single module (namespace) named
-``dinsd``.  We could access all of dinsd through this namespace, using
-a single import:
+The relational algebra part of dinsd is its core.  All of the functions and
+classes that are used in the algebra (and documented in this document) are
+available at the top level of the dinsd namespace.  We could access all of
+dinsd through this namespace, using a single import:
 
     >>> import dinsd
 
@@ -101,14 +106,14 @@ program is of course free to either refer to everything though an import such
 as the preceding, or to import the names that it wants to use directly into
 its own namespace.
 
-On the other hand, if you are experimenting with dinsd and relation algebra in
-the Python shell, it can be very useful to do ``from dinsd import *``.  Per
+On the other hand, if you are experimenting with dinsd and relational algebra
+in the Python shell, it can be very useful to do ``from dinsd import *``.  Per
 best practices for Python programming this is the *only* time you should use
 that form.
 
 dinsd also defines a separate namespace that is used during expression
 evaluation (much more on that below).  It is named ``expression_namespace``,
-and starts out containing almost the same names and values as that imported by
+and starts out containing almost the same names and values as those imported by
 ``from dinsd import *``.  The exceptions are ``expression_namespace`` itself,
 and ``ns``, which we'll learn more about later.
 
@@ -136,10 +141,10 @@ A (Very) Few Words About Databases
 
 The concept of a database holding a set of relations is central to *Tutorial
 D*.  However, those concepts are not really required to understand the bulk of
-AIRDT, which is concerned with the relational algebra.  Therefore we will
-defer all discussion of the syntax related to such matters until later,
-focusing only on the syntax for declaring relations and manipulating them with
-the relational algebra.
+AIRDT, which is concerned with the relational algebra.  Therefore we will defer
+all discussion of the syntax related to such matters to other documents that
+deal with them specifically, and here we will focus only on the syntax for
+declaring relations and manipulating them with the relational algebra.
 
 
 Terminology
@@ -154,7 +159,7 @@ than trying to reuse the world ``tuple`` in a Python context.
 
 So, a relation consists of a name and a header.  The header consists of a list
 of attributes, with each attribute having a type.  A row consists of a header
-and a set of attributes, one attribute per attribute in the header, plus a
+and a set of attributes, one attribute per attribute in the header; plus a
 specific value, of the type defined by the header, for each attribute.
 
 
@@ -170,7 +175,8 @@ Python and providing a way to talk to Python (one way to satisfy OO
 prescription 3).  We can chose to view Python plus dinsd as being (almost)
 ``D``, and since Python is computationally complete, this would satisfy the
 prescription.  This makes the synthetic acronym meaning of the name dinsd even
-more important, since the dinsd module by itself cannot be ``D``.
+more apropos, since the dinsd module by itself cannot be ``D``, even
+leaving aside static typing considerations.
 
 Although Python does not support static typing, it is *strictly* typed.  Every
 object in the system has a strict type.  It is the names that refer to those
@@ -179,21 +185,18 @@ does not provide "early warning" if you mix types inappropriately.  It does,
 however, provide runtime warning.  I believe that dinsd observes the spirit
 of *TTM*, even if it doesn't conform to the letter.
 
-Python and dinds, then, separate the creation of a relation *object* (which
-has a type) from creating a reference to that object in a database (and
-therefore storing it as global, application independent state).  As indicated,
-we will postpone the discussion of creating databases until later.
-When we do, however, we will see that the names referring to the persistent
-relations *are* typed, bringing Python-plus-dinsd that much closer to a real
-``D``.
+Python and dinds, then, separate the creation of a relation *object* (which has
+a type) from creating a reference to that object in a database (and therefore
+storing it as global, application independent state).  As indicated, we will
+postpone the discussion of creating databases until later.  When we do discuss
+them, however, we will see that the names referring to the persistent
+relations *are* typed, bringing Python-plus-dinsd that much closer to a real ``D``.
 
 For now, though, we will create relation objects in the namespace of this test
 document, where the names that point to them will not be typed, and they will
 not outlast the test run.  (This association of a name with a non-persistent
 relation is in fact not dissimilar to what *Tutorial D* does with its ``WITH``
-statement, just longer lasting...and as we will see eventually,
-Python-plus-dinsd has something *very* like the *Tutorial D* ``WITH``
-statement).
+statement, just longer lasting.)
 
 
 
@@ -245,10 +248,21 @@ without using ``Scaler`` as the superclass, or using ``Scaler`` and
 implementing a more complex value store.  If an application does so it is
 responsible for correctly implementing the equivalents of all of the methods
 that ``Scaler`` provides.  Specifically, it must provide all the methods to
-define a total ordering of the values, as required by TTM.
+define a total ordering of the values.  (TTM does not require a total
+ordering, and this constraint in dinsd may eventually be relaxed.)
 
-Wee can define the ``SID`` and ``CID`` types that are introduced in section
-2.8 (page 42 of my copy of AIRDT) as follows:
+AITDT uses some custom types, ``SID`` and ``CID``, as examples in section 2.8
+and 2.9.  Example 2.4 in section 2.10 (page 42 of my copy of AIRDT) defines
+``SID`` this way:
+
+    TYPE SID POSSREP SID { C CHAR
+                           CONSTRAINT LENGTH(C) <= 5
+                           AND
+                           STARTS_WITH(C, 'S')
+                           AND
+                           IS_DIGITS(SUBSTRING(C,1)))
+
+We can define the ``SID`` and ``CID`` types as follows:
 
     >>> from dinsd import Scaler
     >>> class ID(Scaler):
@@ -275,9 +289,10 @@ Wee can define the ``SID`` and ``CID`` types that are introduced in section
     ...     firstchar = 'C'
 
 This definition corresponds to example 2.4 on page 47 of AIRDT.  It looks
-somewhat more complicated, but this is primarily because we are defining the
-error messages resulting from "selection" failure, whereas example 2.4 is
-leaving those error messages to be automatically generated by the *Tutorial D*
+somewhat more complicated, but this is because we have a clause for accepting
+an instance as a "selector", and also because we are defining the error
+messages resulting from "selection" failure, whereas example 2.4 is leaving
+those error messages to be automatically generated by the *Tutorial D*
 constraint system.
 
 Semantically the above is equivalent to the AIRDT example.  We are using
@@ -360,8 +375,8 @@ context, and (2) I'm going to convert from *Tutorial D*s case convention to
 the :pep:``8`` convention, which is used by a lot of Python software.  The
 :pep:``8`` convention that classes (types) are named with CamelCase, while
 variables, methods, and functions are named with
-underscore_separated_lower_case.  In standard Python code we also make much
-less use of blanks around grouping operators such as braces and parenthesis.
+underscore_separated_lower_case.  In standard Python code we also make more
+sparing use of blanks around grouping operators such as braces and parenthesis.
 
 With those preliminaries out of the way...the dinsd equivalent to
 the *Tutorial D* ``RELATION`` keyword is named ``rel``:
@@ -376,11 +391,11 @@ as its result:
     >>> x 
     <class 'dinsd.rel({'course_id': CID, 'name': str, 'student_id': SID})'>
 
-(Recall that extension types in Python are defined by classes.)
+(Recall that types in Python are defined by classes.)
 
 In Python, dictionaries are unordered, and the keys of a dictionary are a set
 (that is, no two keys may be equal), so this declaration fully satisfies
-the *TTM* requirement that the header of a relation be a set of pairs, in
+the *TTM* requirement that the header of a relation be a set of pairs in
 which order does not matter:
 
     >>> y = rel({'student_id': SID, 'course_id': CID, 'name': str})
@@ -446,7 +461,7 @@ is not mutated.)
 As with ``dict``, this is an update operation, so the values specified by
 the keyword arguments overwrite those in the dictionary argument.
 
-We mentioned that attribute name should be Python identifiers.  For reasons
+We mentioned that attribute names should be Python identifiers.  For reasons
 that will become clear when we talk about rows below, we *disallow*
 identifiers that start with an ``_``, which are otherwise legal Python
 identifiers:
