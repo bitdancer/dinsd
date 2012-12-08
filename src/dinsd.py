@@ -233,7 +233,7 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
     def _as_dict_(self):
         return self.__dict__.copy()
 
-    def _as_locals_(self):
+    def _as_locals(self):
         l = self.__dict__.copy()
         l['_row_'] = self
         l.update(_locals[_threading.current_thread].__dict__)
@@ -687,7 +687,7 @@ def project(relation, attr_names):
 
 def where(relation, condition):
     if isinstance(condition, str):
-        condition = lambda r, s=condition: eval(s, _all, r._as_locals_())
+        condition = lambda r, s=condition: eval(s, _all, r._as_locals())
     new_rel = type(relation)()
     for row in relation._rows_:
         if condition(row):
@@ -708,7 +708,7 @@ def extend(relation, _name_check=True, **new_attrs):
             raise ValueError("Duplicate relational attribute name "
                              "{!r}".format(n))
         if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, _all, r._as_locals_())
+            new_attrs[n] = lambda r, s=f: eval(s, _all, r._as_locals())
     attrs = relation.header
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
@@ -884,7 +884,7 @@ def _tline(parts, widths):
 
 def compute(relation, expr):
     if isinstance(expr, str):
-        expr = lambda r, s=expr: eval(s, _all, r._as_locals_())
+        expr = lambda r, s=expr: eval(s, _all, r._as_locals())
     for row in relation:
         yield expr(row)
 
@@ -1102,7 +1102,7 @@ class Database:
                 # this is more useful than all the constraints and failures.
                 rw = sorted(invalid)[0]
                 for c, exp in sorted(self.row_constraints[relname].items()):
-                    if not eval(exp, rw._as_locals_(), _all):
+                    if not eval(exp, rw._as_locals(), _all):
                         raise RowConstraintError(relname, c, exp, rw)
                 raise AssertionError("Expected failure did not happen")
         for i in range(10):
