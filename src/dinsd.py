@@ -124,21 +124,19 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
     _header = {}
 
     def __init__(self, *args, **kw):
-        if not args:
-            attrdict = kw
-        elif len(args) > 1:
-            raise TypeError("Unexpected arguments")
-        elif kw:
-            kw.update(args[0])
-            attrdict = kw
-        else:
-            attrdict = args[0]
-        if isinstance(attrdict, _Row) and not kw:
+        if len(args) > 1:
+            raise TypeError("row() takes at most one positional argument "
+                            "({} given)".format(len(args)))
+        if args and not kw and hasattr(args[0], '_header_'):
             # We are being called as a type function.
-            if self._header_ != attrdict._header_:
-                raise TypeError("Invalid Row type: {!r}".format(attrdict))
-            self.__dict__ = attrdict.__dict__
+            arg = args[0]
+            if self._header_ != arg._header_:
+                raise TypeError("Invalid Row type: {!r}".format(arg))
+            self.__dict__ = arg.__dict__
             return
+        attrdict = kw
+        if args:
+            kw.update(args[0])
         if len(attrdict) != self._degree_:
             raise TypeError("Expected {} attributes, got {} ({!r})".format(
                                 self._degree_, len(attrdict), attrdict))

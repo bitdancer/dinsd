@@ -740,7 +740,7 @@ This is an invalid call, though:
     >>> yt({'student_id': SID('S1')}, {'name': 'Anne'})
     Traceback (most recent call last):
         ...
-    TypeError: Unexpected arguments
+    TypeError: row() takes at most one positional argument (2 given)
 
 A useful difference between a row type constructor and ``row`` is that the
 constructor knows what type the attributes are supposed to be.  It can
