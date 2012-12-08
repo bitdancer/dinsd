@@ -95,7 +95,7 @@ class _RelationTypeMeta(type):
 
 
 #
-# Row _types (TTM/Tutorial D TUPLE Types)
+# Row types (TTM/Tutorial D TUPLE Types)
 #
 
 
@@ -161,11 +161,6 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
     @property
     def _degree_(self):
         return self.__class__.degree
-
-    # Access relation attributes as Python attributes.
-
-    def __getitem__(self, key):
-        return getattr(self, key)
 
     # Miscellaneous operators.
 
