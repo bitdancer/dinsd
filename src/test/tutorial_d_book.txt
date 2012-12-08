@@ -484,34 +484,15 @@ representation for the doctest:
     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
     ('student_id', <class '__main__.SID'>)]
 
-A small aside: in dinsd a relation type is *entirely* defined by its header,
-as required by *TTM*.  Because this is the case, and it would therefore
-completely screw up a program if the header of a relation that had one or more
-instances were changed, we make the ``header`` attribute of relations read
-only:
+An important aside: in dinsd a relation type is *entirely* defined by its
+header, as required by *TTM*.  This being Python, there is nothing preventing
+a program from modifying the ``header`` attribute of a relation (or the
+``degree`` attribute, for that matter).  This will of course completely screw
+things up, so don't do that.  That means if you want to use the information
+from the ``header`` attribute in a way that is not read only *make a copy
+of it*:
 
-    >>> x.header = {}
-    Traceback (most recent call last):
-        ...
-    AttributeError: can't set attribute
-
-``degree`` is actually ``len(relation.header)``, so this means that it is also
-read-only:
-
-    >>> x.degree = 0
-    Traceback (most recent call last):
-        ...
-    AttributeError: can't set attribute
-
-Since a dictionary is itself mutable, we also need to make sure that changes
-made to the dictionary returned by the relation type ``header`` attributes are
-copies, changes to which do not change the original header:
-
-    >>> x.header['course_id'] == CID
-    True
-    >>> x.header['course_id'] = 1
-    >>> x.header['course_id'] == CID
-    True
+    >>> myvar = x.header.copy()
 
 
 Row Literals
@@ -632,23 +613,11 @@ as explained above:
     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
      ('student_id', <class '__main__.SID'>)]
 
-These attributes are read-only:
+As with relations, these attributes are not read-only, but a program should
+not modify them.  Make a copy if you want to manipulate the header data in
+some way:
 
-    >>> x._degree_ = 1
-    Traceback (most recent call last):
-        ...
-    AttributeError: can't set attribute
-    >>> x._header_ = 1
-    Traceback (most recent call last):
-        ...
-    AttributeError: can't set attribute
-
-The dictionary returned by ``_header_`` is a copy; modifying it does not
-modify the ``_header_`` dict:
-
-    >>> original = x._header_.copy()
-    >>> x._header_['foo'] = 2
-    >>> assert x._header_ == original
+    >>> myvar = x._header_.copy()
 
 As with ``rel``, any attribute names that start with an ``_`` are rejected:
 
@@ -699,28 +668,16 @@ row type:
     >>> xt is yt
     True
 
-Row types have read-only ``header`` and ``degree`` attributes, just like
-relation types:
+Row types have ``_header_`` and ``_degree_`` attributes, just like
+their instances:
 
-    >>> sorted(yt.header.items())
+    >>> sorted(yt._header_.items())
     [('name', <class 'str'>), ('student_id', <class '__main__.SID'>)]
-    >>> yt.degree
+    >>> yt._degree_
     2
-    >>> yt.header = 1
-    Traceback (most recent call last):
-        ...
-    AttributeError: can't set attribute
-    >>> yt.degree = 1
-    Traceback (most recent call last):
-        ...
-    AttributeError: can't set attribute
 
-The dict returned by ``header`` is a copy, so mutating it does not affect the
-original:
-
-    >>> original = yt.header.copy()
-    >>> yt.header['foo'] = 2
-    >>> assert yt.header == original
+(In fact, the ``_header`` and ``_degree_`` attributes of the rows are
+references to the class (type) attributes.)
 
 The type can be used to create a new row of that type:
 
@@ -1158,9 +1115,9 @@ is one rather wordy way of doing it:
 
 A relation type has an attribute ``row`` that is a reference to the type for
 the rows that may be present in that relation.  That is, ``<relation>.row`` is
-the ``row`` type whose ``header`` is equal to the ``header`` of the relation:
+the ``row`` type whose ``_header_`` is equal to the ``header`` of the relation:
 
-    >>> IsEnrolledOn.header == IsEnrolledOn.row.header
+    >>> IsEnrolledOn.header == IsEnrolledOn.row._header_
     True
 
 As we saw above, the type for a row can convert appropriate standard literals into

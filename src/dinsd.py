@@ -79,22 +79,6 @@ class Scaler(_RichCompareMixin):
 
 
 #
-# Relation Type Metatype
-#
-
-class _RelationTypeMeta(type):
-
-    @property
-    def header(self):
-        return self._header.copy()
-
-    @property
-    def degree(self):
-        return len(self._header)
-
-
-
-#
 # Row types (TTM/Tutorial D TUPLE Types)
 #
 
@@ -116,12 +100,15 @@ def row(*args, **kw):
 
 
 def _row_dct(header):
-    return {'_header': header}
+    return {'_header_': header, '_degree_': len(header)}
 
 
-class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
+class _Row(_RichCompareMixin):
 
-    _header = {}
+    # Default values for relational properties.  These get set to the
+    # type-specific values when a row type is created.
+    _header_ = {}
+    _degree_ = 0
 
     def __init__(self, *args, **kw):
         if len(args) > 1:
@@ -149,16 +136,6 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
             except KeyError:
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None
-
-    # Access to class properties
-
-    @property
-    def _header_(self):
-        return self.__class__.header
-
-    @property
-    def _degree_(self):
-        return self.__class__.degree
 
     # Miscellaneous operators.
 
@@ -293,7 +270,7 @@ def rel(*args, **kw):
 
 
 def _rel_dct(header):
-    return dict(_header=header, row=_get_type('row', header))
+    return dict(header=header, degree=len(header), row=_get_type('row', header))
 
 
 def _rel(attrdict):
@@ -301,9 +278,12 @@ def _rel(attrdict):
     return _get_type('rel', attrdict.copy())
 
 
-class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
+class _Relation(_RichCompareMixin):
 
-    _header = {}
+    # Default values for relation properties.  These get set to the
+    # type-specific values when a relation type is created.
+    header = {}
+    degree = 0
 
     def __init__(self, *args):
         # Several cases: (1) empty relation (2) being called as a type
@@ -390,19 +370,9 @@ class _Relation(_RichCompareMixin, metaclass=_RelationTypeMeta):
 
     def _validate_attr_names(self, attrlist):
         for attr in attrlist:
-            if attr not in self._header:
+            if attr not in self.header:
                 raise AttributeError(
                     "{!r} has no attribute {!r}".format(self.__class__, attr))
-
-    # Access to class properties
-
-    @property
-    def header(self):
-        return self.__class__.header
-
-    @property
-    def degree(self):
-        return self.__class__.degree
 
     # Miscellaneous operators.
 
@@ -704,7 +674,7 @@ def extend(relation, _name_check=True, **new_attrs):
                              "{!r}".format(n))
         if isinstance(f, str):
             new_attrs[n] = lambda r, s=f: eval(s, _all, r._as_locals())
-    attrs = relation.header
+    attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
     new_rel = _rel(attrs)()
@@ -1157,20 +1127,20 @@ class Database:
             "len(relname)==len(_key_relaname)",
             lambda r=relname: self._update_key(r))
         self.row_constraints[relname]['_key_'+relname] = (
-            "_row_ >> _key_{}._header.keys() not in _key_{}".format(
+            "_row_ >> _key_{}.header.keys() not in _key_{}".format(
                 relname, relname))
 
     def _update_key(self, relname):
         r = getattr(self.r, relname)
         key = self._keys[relname]
         if len(r) < len(key):
-            self._keys[relname] = key | (r - key) >> key._header.keys()
+            self._keys[relname] = key | (r - key) >> key.header.keys()
         else:
             self._keys[relname] = matching(key, r)
         return True
 
     def key(self, relname):
-        return set(self._constraint_ns['_key_'+relname]._header.keys())
+        return set(self._constraint_ns['_key_'+relname].header.keys())
 
 
 
