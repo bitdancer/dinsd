@@ -226,10 +226,7 @@ class _Row(_RichCompareMixin, metaclass=_RelationTypeMeta):
             ', '.join('{}={}'.format(k, v)
                         for k, v in sorted(self.__dict__.items())))
 
-    # Type conversion operators.
-
-    def _as_dict_(self):
-        return self.__dict__.copy()
+    # Internal methods.
 
     def _as_locals(self):
         l = self.__dict__.copy()
@@ -590,8 +587,8 @@ def _binary_join(first, second):
     for row in first._rows_:
         key = getter(row)
         for row2 in matches(key):
-            attrs = row._as_dict_()
-            attrs.update(row2._as_dict_())
+            attrs = vars(row).copy()
+            attrs.update(vars(row2))
             new_rel._rows_.add(new_rel.row(attrs))
     return new_rel
 
@@ -639,7 +636,7 @@ def rename(relation, **renames):
     new_attrs.update(holder)
     new_rel = _rel(new_attrs)()
     for row in relation._rows_:
-        row_data = row._as_dict_()
+        row_data = vars(row).copy()
         holder = {}
         for old, new in renames.items():
             holder[new] = row_data.pop(old)
@@ -677,7 +674,7 @@ def project(relation, attr_names):
     reduced_attr_names = reduced_attrs.keys()
     new_rel = _rel(reduced_attrs)()
     for row in relation._rows_:
-        new_row_data = {n: v for n, v in row._as_dict_().items()
+        new_row_data = {n: v for n, v in vars(row).items()
                              if n in reduced_attr_names}
         new_rel._rows_.add(new_rel.row(new_row_data))
     return new_rel
@@ -712,7 +709,7 @@ def extend(relation, _name_check=True, **new_attrs):
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
     new_rel = _rel(attrs)()
     for row in relation:
-        new_values = row._as_dict_()
+        new_values = vars(row).copy()
         new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
         new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
@@ -937,10 +934,10 @@ def ungroup(relation, attrname):
     attrs.update(getattr(row1, attrname).header)
     new_rel = _rel(attrs)()
     for row in relation:
-        new_values = row._as_dict_()
+        new_values = vars(row).copy()
         subrel = new_values.pop(attrname)
         for subrow in subrel:
-            new_values.update(subrow._as_dict_())
+            new_values.update(vars(subrow))
             new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
 
@@ -965,9 +962,9 @@ def unwrap(relation, attrname):
     attrs.update(getattr(row1, attrname)._header_)
     new_rel = _rel(attrs)()
     for row in relation:
-        new_values = row._as_dict_()
+        new_values = vars(row).copy()
         subrow = new_values.pop(attrname)
-        new_values.update(subrow._as_dict_())
+        new_values.update(vars(subrow))
         new_rel._rows_.add(new_rel.row(new_values))
     return new_rel
 
