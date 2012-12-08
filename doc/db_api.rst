@@ -1,52 +1,79 @@
+Databases
+=========
+
+Copyright 2012 by R. David Murray, Licensed under the Apache License, Version
+2.0 (http://www.apache.org/licenses/LICENSE-2.0).
 
 
+Introduction
+------------
 
+This document covers the persistent database API which all dinsd persistent
+database modules are expected to provide.  Because this document is an API
+validation document, some of the tests will be a bit more complex that is
+optimal for documentation.  As with the ``Relational Python`` document, this
+document is a mixture of explanation and tests, as well as being the
+development document for the API.
 
-Databases, Updates, and Constraints
------------------------------------
+In this document I am still following along with AIRDT (see ``Relational
+Python`` for more information on that reference), beginning with Chapter 6.
 
-Now at last we get to the stuff that makes this relational algebra useful in
-the real world: data persistence and database consistency.
+As implied by the first paragraph above, dinsd has more than one persistent
+database module.  Which one you use depends on your specific needs.  As of this
+writing there is in fact only one, the ``sqlite_pickle_db`` module.  There is
+likely to be a lot of revision happening in this file when there starts to be
+more than one.
+
+In order to use this as an API validation document, we need to make the import
+of the names we will be testing conditional on which database module we are
+testing.  We do this via an environment variable set by the testing
+infrastructure:
+
+    >>> import os
+    >>> test_mod_name = os.getenv('DINSD_DB_MODULE_TO_TEST',
+    ...                           'dinsd.sqlite_pickle_db')
+    >>> import importlib
+    >>> test_mod = importlib.import_module(test_mod_name)
+    >>> Database = getattr(test_mod, 'Database')
+
+As you can see above, the main name that we are concerned with testing and
+describing here is the ``Database`` class provided by the persistent database
+module under test.
+
 
 
 Defining and Accessing a Database
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
-A database object is functionally a connection to a persistent backing store.
-In this version of dinsd, only one backing store is supported, ``sqlite``, and
-it is used strictly for storing the data from the relations that are part of
-the persistent database.  Other than the basic update operations (which we
-will discuss in this chapter), none of the SQL features of ``sqlite`` are
-used.  (Of course, we do also use the table definition SQL.)
+A ``Database`` object is functionally a connection to a persistent backing
+store.
 
-You don't need to worry about any of that, though.  In this version of
-dinsd, we don't give you any choices.
+To create or access a database, you create a ``Database`` connection object
+and tell it how to connect to the database by passing it a database URI.
+Since the URI is database-specific, we'll need to fetch that from the
+test environment as well:
 
-To create or access a database, you create a database connection object
-and tell it where the database backing file is located.
+    >>> dburi = os.getenv('DINSD_TEST_DB_URI')
 
-Because this is a doctest document, there's a some bookkeeping we need to do
-to make this actually work.  First we need a file we can use to store
-the DB:
+Creating the database connection is simple:
 
-    >>> import tempfile
-    >>> dbfile = tempfile.NamedTemporaryFile()
-    >>> dbfn = dbfile.name
+    >>> db = Database(dburi)
 
-The ``NamedTemporaryFile`` will get deleted automatically by Python when the
-``dbfile`` name goes out of scope at the end of the doctest.
+If the test infrastructure is working correctly, this database will initially
+be empty:
 
-Next, persistence involves Python pickles, so all the classes we use need
-to be defined in a module, not in the doctest.  We'll re-engineer our
-test classes using versions of the ``SID`` and ``CID`` classes from our
-test module:
+    >>> db
+    Database({})
+    
+We need some relations to work with, which means replicating the data
+definitions from ``Relational Python``, since we are still following AIRDT.
+To make this easier the ``SID`` and ``CID`` classes are defined in
+our ``test_support`` test module.
 
     >>> from dinsd import rel, row, expression_namespace, display
-
     >>> from test_support import SID, CID
     >>> expression_namespace['CID'] = CID
     >>> expression_namespace['SID'] = SID
-
     >>> IsCalled = rel(name=str, student_id=SID)
     >>> is_called = IsCalled(
     ...     ('student_id',  'name'),
@@ -76,16 +103,6 @@ test module:
     ...     ('S3',         'C3',        66),
     ...     ('S4',         'C1',        93),
     ...     )
-
-With those preliminaries out of the way, we can create a database:
-
-    >>> from dinsd.sqlite_pickle_db import Database
-    >>> db = Database(dbfn)
-
-Initially the database is empty:
-
-    >>> db
-    Database({})
 
 The database object has a special attribute ``r`` that acts as a namespace
 container for the relations defined in the database.  This avoids any naming
@@ -153,7 +170,7 @@ Indeed, it is an error to try to anything that is not of the correct type:
          <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
 
 However, wholesale assignment is not the typical way to update a relation in a
-database.  We'll talk about the alternatives later in the chapter.
+database.  We'll talk about the alternatives later.
 
 As is usual in dinsd names, relation attribute names are restricted to names
 that do not start with ``_``:
@@ -173,7 +190,7 @@ and verifying that the data is still be there:
     AttributeError: 'Database' object has no attribute 'r'
     >>> del db
 
-    >>> db = Database(dbfn)
+    >>> db = Database(dburi)
     >>> print(db.r.is_called)
     +----------+------------+
     | name     | student_id |
@@ -190,8 +207,9 @@ And we can add another relation to the database, which we'll need later:
     >>> db.r.exam_marks = exam_marks
 
 
+
 Constraints
-~~~~~~~~~~~
+-----------
 
 It seems to me that defining anything other than value-level constraints on a
 computed relation doesn't make much sense.  Although AIRDT doesn't address
@@ -216,7 +234,7 @@ them at the appropriate level using level-specific mechanisms.
 
 
 Value Level Constraints
-^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Value level constraints are most efficiently defined by defining a custom
 type.  We did that with ``SID`` and ``CID``.  However, it can sometimes
@@ -225,7 +243,7 @@ give an example of doing that in the next section.
 
 
 Row Level Constraints
-^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~
 
 Following AIRDT, our example of using the row level constraint mechanism is
 actually a value level constraint.  We will constrain the integer values of
@@ -348,7 +366,7 @@ persistent store.
     >>> db.close()
     >>> db.row_constraints
     defaultdict(<class 'dict'>, {})
-    >>> db = Database(dbfn)
+    >>> db = Database(dburi)
     >>> db.row_constraints == x
     True
 
@@ -389,7 +407,7 @@ Constraints may also be deleted:
     >>> db.row_constraints['is_called']
     {}
     >>> db.close()
-    >>> db = Database(dbfn)
+    >>> db = Database(dburi)
     >>> db.row_constraints['is_called']
     {}
 

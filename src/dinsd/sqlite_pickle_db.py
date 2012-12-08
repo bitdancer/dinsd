@@ -1,3 +1,4 @@
+#Copyright 2012 R. David Murray (see end comment for terms).
 import collections as _collections
 import pickle as _pickle
 import sqlite3 as _sqlite
