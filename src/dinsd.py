@@ -151,12 +151,12 @@ class _Row(_RichCompareMixin):
         return tuple(sorted(self.__dict__.items()))
 
     def _compare(self, other, method):
-        if not isinstance(other, _Row) or self._header_ != other._header_:
+        if not hasattr(other, '_header_') or self._header_ != other._header_:
             return NotImplemented
         return super()._compare(other, method)
 
     def __eq__(self, other):
-        if not isinstance(other, _Row):
+        if not hasattr(other, '_header_') and hasattr(other, '_cmpkey'):
             return False
         return self._cmpkey() == other._cmpkey()
 
@@ -294,7 +294,7 @@ class _Relation(_RichCompareMixin):
             # (1) Empty relation.
             self._rows_ = set()
             return
-        if (len(args)==1 and isinstance(args[0], _Relation) and
+        if (len(args)==1 and hasattr(args[0], 'header') and
                 args[0].header == self.header):
             # (2) We were called as a type validation function.  Return an
             # immutable copy, because the only time this happens is when a
@@ -509,7 +509,7 @@ Dee = rel(row())
 def join(*relations):
     if not relations:
         return Dee
-    if len(relations)==1 and not isinstance(relations[0], _Relation):
+    if len(relations)==1 and not hasattr(relations[0], 'header'):
         # Assume it is an iterator.
         relations = relations[0]
     joined, *relations = relations
@@ -566,7 +566,7 @@ def _binary_join(first, second):
 def intersect(*relations):
     if not relations:
         return Dee
-    if len(relations)==1 and not isinstance(relations[0], _Relation):
+    if len(relations)==1 and not hasattr(relations[0], 'header'):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
@@ -582,7 +582,7 @@ def intersect(*relations):
 def times(*relations):
     if not relations:
         return Dee
-    if len(relations)==1 and not isinstance(relations[0], _Relation):
+    if len(relations)==1 and not hasattr(relations[0], 'header'):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
@@ -688,7 +688,7 @@ def extend(relation, _name_check=True, **new_attrs):
 def union(*relations):
     if len(relations) == 0:
         return Dum
-    if len(relations)==1 and not isinstance(relations[0], _Relation):
+    if len(relations)==1 and not hasattr(relations[0], 'header'):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
@@ -876,7 +876,7 @@ def avg(iterator):
 
 
 def summarize(relation, comprel, _debug_=False, **new_attrs):
-    if not isinstance(comprel, _Relation):
+    if not hasattr(comprel, 'header'):
         # Assume it is an attribute name list
         comprel = relation >> comprel
     x = extend(comprel, _name_check=False,
