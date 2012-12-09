@@ -4,30 +4,49 @@ import pickle as _pickle
 import sqlite3 as _sqlite
 from dinsd import rel, expression_namespace as _all
 from dinsd.db import ConstraintError, RowConstraintError
+
+# For debugging only.
+import sys as _sys
+#__ = lambda *args: print(*args, file=_sys.stderr)
+
 #
 # Databases
 #
 
+class _R:
 
-class _Rels:
-
-    def __init__(self, db, storage):
+    def __init__(self, db):
         self._db = db
-        self._storage = storage
-        for attrname, val in storage.relations():
-            val._db = self._db
-            val.__name__ = attrname
-            super().__setattr__(attrname, val)
 
-    def _iter_rels(self):
-        return [(n, r) for n, r in self.__dict__.items()
-                       if not n.startswith('_')]
+    def __getattr__(self, name):
+        return self._db[name]
 
     def __setattr__(self, name, val):
         if name.startswith('_'):
             super().__setattr__(name, val)
             return
-        attr = getattr(self, name, None)
+        self._db[name] = val
+
+
+class Database(dict):
+
+    def __init__(self, fn, debug_sql=False):
+        self.r = _R(self)
+        storage = self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
+        self._init()
+        self.row_constraints.update(storage.get_row_constraints())
+        for attrname, val in self._storage.relations():
+            val._db = self
+            val.__name__ = attrname
+            super().__setitem__(attrname, val)
+
+    def _init(self):
+        self.row_constraints = _collections.defaultdict(dict)
+        self._constraint_ns = _collections.ChainMap(_all)
+        self._constraints = {}
+
+    def __setitem__(self, name, val):
+        attr = self.get(name)
         if attr is not None:
             if type(val) != type(attr):
                 raise ValueError("Cannot assign value of type {} to "
@@ -39,31 +58,17 @@ class _Rels:
                 raise ValueError("Database attributes must be relations, "
                     "not {}".format(type(val)))
             self._storage.add_reltype(name, type(val))
-        self._db._check_constraints(name, val)
-        val._db = self._db
+        self._check_constraints(name, val)
+        val._db = self
         val.__name__ = name
         self._storage.update_relation(name, val)
-        super().__setattr__(name, val)
-
-
-class Database:
-
-    def __init__(self, fn, debug_sql=False):
-        storage = self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
-        self._init()
-        self.r = _Rels(self, storage)
-        self.row_constraints.update(storage.get_row_constraints())
-
-    def _init(self):
-        self.row_constraints = _collections.defaultdict(dict)
-        self._constraint_ns = _collections.ChainMap(_all)
-        self._constraints = {}
+        super().__setitem__(name, val)
 
     def __repr__(self):
         return "{}({{{}}})".format(
             self.__class__.__name__,
             ', '.join("{!r}: {!r}".format(n, type(r))
-                      for n, r in sorted(self.r._iter_rels())))
+                      for n, r in sorted(self.items())))
 
     def _check_constraints(self, relname, r):
         row_validator = ' and '.join(
@@ -101,16 +106,16 @@ class Database:
             raise DBConstraintLoop()
 
     def close(self):
-        # Nullify all the relation attributes.  This does two things: makes
-        # them inaccessible, and breaks the reference cycle between the
-        # Database object and the relations.
-        del self.r
+        # Empty the dictionary.  This does two things: makes the relations
+        # inaccessible after a close, and breaks the reference cycle between
+        # the Database object and the relations.
+        self.clear()
         self._init()
 
     # Row Constraints
 
     def constrain_rows(self, relname, **kw):
-        r = getattr(self.r, relname)
+        r = self[relname]
         existing = self.row_constraints[relname].copy()
         self.row_constraints[relname].update(kw)
         try:

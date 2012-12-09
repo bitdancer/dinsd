@@ -104,29 +104,44 @@ our ``test_support`` test module.
     ...     ('S4',         'C1',        93),
     ...     )
 
-The database object has a special attribute ``r`` that acts as a namespace
-container for the relations defined in the database.  This avoids any naming
+The database object acts like a Python dictionary: the relations that are
+stored in the database are entries in that dictionary.  This avoids any naming
 conflicts with the methods defined on the ``Database`` object.  We do this
-rather than use the ``_xxx_`` convention because it is much more common to
-access the methods of the database object than it is to access the
-non-relational-attribute attributes of a ``row``.  It is also helpful to think
-of the ``r`` attribute as the "``TUPLE`` of relations" discussed in AIRDT, and
-the rest of the attributes of the ``Database`` objects as the controls for the
-database management system.
+rather than use attribute notation and the ``_xxx_`` naming convention because
+it is much more common to access the methods of the database object than it is
+to access the non-relational-attribute attributes of a ``row``.  It is also
+helpful to think of the dictionary as the "``TUPLE`` of relations" discussed in
+AIRDT, and the rest of the attributes of the ``Database`` objects as the
+controls for the database management system.
 
-We persist a relation into the database by assigning it to an attribute of the
-``Database``s ``r`` object:
+We persist a relation into the database by storing it in the ``Database``:
 
-    >>> db.r.is_called = is_called
+    >>> db['is_called'] = is_called
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
     Database({'is_called': <class 'dinsd.rel({'name': str,
          'student_id': SID})'>})
 
 The ``repr`` of a ``Database`` indicates that it is a set of names mapped to
-relation types.  Using AIRDT's terminology, it is a ``TUPLE`` of relations,
-but in the ``repr`` we show only the types, not the content.  Note that
-unlike other dinsd objects, this repr cannot be evaluated to obtain an
-equivalent object.
+relation types.  Using AIRDT's terminology, it is a ``TUPLE`` of relations, but
+in the ``repr`` we show only the types, not the content.  Note that unlike
+other dinsd objects, this repr cannot be evaluated to obtain an equivalent
+object (if you were to eval it, you'd end up with a database with relations of
+equivalent *type*, but all empty).
+
+Using attribute syntax to access the persistent relations is often much more
+convenient than using dictionary syntax, so dinsd databases also support it,
+though a special attribute ``r``:
+
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
 
 We can also create a persistent relation by supplying just the type:
 
@@ -179,7 +194,7 @@ and verifying that the data is still be there:
     >>> db.r.is_called
     Traceback (most recent call last):
         ...
-    AttributeError: 'Database' object has no attribute 'r'
+    KeyError: 'is_called'
     >>> del db
 
     >>> db = Database(dburi)
@@ -367,7 +382,7 @@ You cannot define a row constraint on a relation that doesn't exist:
     >>> db.constrain_rows('foo', bar='True')
     Traceback (most recent call last):
         ...
-    AttributeError: '_Rels' object has no attribute 'foo'
+    KeyError: 'foo'
 
 Unlike the case with relation and row headers, it is unlikely that an
 application will accidentally update the dictionary of row constraints.  dinsd
@@ -422,7 +437,7 @@ Or from a relation that doesn't exist:
     >>> db.remove_row_constraints('foo', 'bar')
     Traceback (most recent call last):
         ...
-    AttributeError: '_Rels' object has no attribute 'foo'
+    KeyError: 'foo'
 
 
 Relation Level Constraints
