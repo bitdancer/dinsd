@@ -461,20 +461,6 @@ is not mutated.)
 As with ``dict``, this is an update operation, so the values specified by
 the keyword arguments overwrite those in the dictionary argument.
 
-We mentioned that attribute names should be Python identifiers.  For reasons
-that will become clear when we talk about rows below, we *disallow*
-identifiers that start with an ``_``, which are otherwise legal Python
-identifiers:
-
-    >>> rel({'_foo': int})
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_foo'
-    >>> rel(student_id=SID, _foo=str)
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_foo'
-
 Passing something that is not a type as the value of a keyword argument is
 invalid:
 
@@ -635,20 +621,6 @@ not modify them.  Make a copy if you want to manipulate the header data in
 some way:
 
     >>> myvar = x._header_.copy()
-
-As with ``rel``, any attribute names that start with an ``_`` are rejected:
-
-    >>> row({'_foo': 10})
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_foo'
-
-Likewise keyword arguments that start with ``_`` are disallowed:
-
-    >>> row(student_id=SID('S1'), _foo=1)
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_foo'
 
 As usual, dictionary and keywords can be mixed:
 
@@ -997,14 +969,6 @@ This is because a ``row`` has a header, so that is compared against the
 relation header, while in the dictionary case the values get passed to the
 type function for the attribute, and it is that type function that raises the
 type error.
-
-The restriction to names that do not start with ``_`` is of course enforced
-also in a relation literal even with the row in dict form:
-
-    >>> rel({'foo': 1, '_bar': 2})
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_bar'
 
 It is valid to specify a relation literal with no attributes (degree zero) and
 no rows (cardinality 0).  Given that we are allowing a plain dictionary to
@@ -1994,14 +1958,6 @@ We can't rename a non-existent attribute:
         ...
     KeyError: 'fred'
 
-Nor can we rename an attribute to a name that is not otherwise a valid
-attribute name:
-
-    >>> is_called.rename(name='_name')
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_name'
-
 Specifying a name as the target of more than one attribute rename is also an
 error:
 
@@ -2534,14 +2490,7 @@ There is, as usual, a prefix version of ``extend``:
     >>> x == extend(is_called, initial="name[0]")
     True
 
-``extend`` can not be used to add an invalid attribute:
-
-    >>> is_called.extend(_foo="'hello'")
-    Traceback (most recent call last):
-        ...
-    ValueError: Invalid relational attribute name '_foo'
-
-Nor can a duplicate attribute be added:
+``extend`` not be used to add a duplicate attribute:
 
     >>> is_called.extend(name="'hello'")
     Traceback (most recent call last):

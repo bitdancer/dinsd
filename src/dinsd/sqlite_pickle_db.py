@@ -25,8 +25,6 @@ class _Rels:
 
     def __setattr__(self, name, val):
         if name.startswith('_'):
-            if hasattr(val, 'header'):
-                raise ValueError("Relation names may not begin with '_'")
             super().__setattr__(name, val)
             return
         attr = getattr(self, name, None)

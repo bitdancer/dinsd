@@ -172,14 +172,6 @@ Indeed, it is an error to try to anything that is not of the correct type:
 However, wholesale assignment is not the typical way to update a relation in a
 database.  We'll talk about the alternatives later.
 
-As is usual in dinsd names, relation attribute names are restricted to names
-that do not start with ``_``:
-
-    >>> db.r._foo = is_enrolled_on
-    Traceback (most recent call last):
-        ...
-    ValueError: Relation names may not begin with '_'
-
 We prove that the backing store works by closing the database, reopening it,
 and verifying that the data is still be there:
 

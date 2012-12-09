@@ -86,9 +86,6 @@ def row(*args, **kw):
         kw = dict(args[0], **kw)
     header = {}
     for n, v in sorted(kw.items()):
-        if n.startswith('_'):
-            raise ValueError("Invalid relational attribute name "
-                             "{!r}".format(n))
         if isinstance(v, type):
             raise ValueError('Invalid value for attribute {!r}: '
                              '"{!r}" is a type'.format(n, v))
@@ -235,9 +232,6 @@ def rel(*args, **kw):
         header = args[0].copy() if args else {}
         header.update(kw)
         for n, v in sorted(header.items()):
-            if n.startswith('_'):
-                raise ValueError("Invalid relational attribute name "
-                                 "{!r}".format(n))
             if not isinstance(v, type):
                 raise ValueError(
                     'Invalid value for attribute {!r} in relation type '
@@ -594,9 +588,6 @@ def rename(relation, **renames):
     new_attrs = relation.header.copy()
     holder = {}
     for old, new in renames.items():
-        if new.startswith('_'):
-            raise ValueError("Invalid relational attribute name "
-                             "{!r}".format(new))
         if new in holder:
             raise ValueError("Duplicate relational attribute name "
                              "{!r}".format(new))
@@ -658,15 +649,12 @@ def where(relation, condition):
     return new_rel
 
 
-def extend(relation, _name_check=True, **new_attrs):
+def extend(relation, **new_attrs):
     if len(relation) == 0:
         # Tutorial D can do this, but the fact that we can't probably doesn't
         # matter much in practice.
         raise TypeError("Cannot extend empty relation")
     for n, f in new_attrs.items():
-        if _name_check and n.startswith('_'):
-            raise ValueError("Invalid relational attribute name "
-                             "{!r}".format(n))
         if n in relation.header:
             raise ValueError("Duplicate relational attribute name "
                              "{!r}".format(n))
@@ -877,7 +865,7 @@ def summarize(relation, comprel, _debug_=False, **new_attrs):
     if not hasattr(comprel, 'header'):
         # Assume it is an attribute name list
         comprel = relation >> comprel
-    x = extend(comprel, _name_check=False,
+    x = extend(comprel, 
                _summary_=lambda r, t=type(comprel): compose(relation, t(r)))
     if _debug_:
         print(x)
