@@ -1,13 +1,46 @@
 #Copyright 2012 R. David Murray (see end comment for terms).
 import collections as _collections
+import weakref as _weakref
 import pickle as _pickle
 import sqlite3 as _sqlite
-from dinsd import rel as _rel, expression_namespace as _all
+from dinsd import (rel as _rel, expression_namespace as _all, _Relation,
+                   _hsig, display as _display)
 from dinsd.db import ConstraintError, RowConstraintError
 
 # For debugging only.
 import sys as _sys
-#__ = lambda *args: print(*args, file=_sys.stderr)
+___ = lambda *args: print(*args, file=_sys.stderr)
+
+
+class PersistentRelation(_Relation):
+
+    def __init__(self, db, name, r):
+        self.db = db
+        self.name = name
+        super().__init__(r)
+
+    def __str__(self):
+        return self.display(*sorted(self.header))
+
+    def display(self, *args, **kw):
+        if 'highlight' not in kw:
+            key = self.db._constraint_ns.get('_key_'+self.name)
+            kw['highlight'] = key.header if key else []
+        return _display(self, *args, **kw)
+        
+
+_persistent_type_registry = _weakref.WeakValueDictionary()
+
+def _get_persistent_type(r):
+    hsig = _hsig(r.header)
+    cls = _persistent_type_registry.get(hsig)
+    if cls is None:
+        rcls = r.__class__
+        dct = dict(rcls.__dict__)
+        name = PersistentRelation.__name__ + '(' + rcls.__name__.split('(', 1)[1]
+        cls = type(name, (PersistentRelation,), dct)
+        _persistent_type_registry[hsig] = cls
+    return cls
 
 
 class _R:
@@ -34,10 +67,8 @@ class Database(dict):
         storage = self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
         self._init()
         self.row_constraints.update(storage.get_row_constraints())
-        for attrname, val in self._storage.relations():
-            val._db = self
-            val.__name__ = attrname
-            super().__setitem__(attrname, val)
+        for name, r in self._storage.relations():
+            super().__setitem__(name, _get_persistent_type(r)(self, name, r))
 
     def _init(self):
         self.row_constraints = _collections.defaultdict(dict)
@@ -45,23 +76,23 @@ class Database(dict):
         self._constraints = {}
 
     def __setitem__(self, name, val):
+        if isinstance(val, type):
+            val = val()
+        if not hasattr(val, 'header'):
+            raise ValueError("Only relations may be stored in database, "
+                "not {}".format(type(val)))
         attr = self.get(name)
         if attr is not None:
-            if type(val) != type(attr):
-                raise ValueError("Cannot assign value of type {} to "
-                    "attribute of type {}".format(type(val), type(attr)))
+            if val.header != attr.header:
+                raise ValueError("header mismatch: a value of type {} cannot "
+                    "be assigned to a database relation of type {}".format(
+                        type(val), type(attr)))
         else:
-            if isinstance(val, type):
-                val = val()
-            if not hasattr(val, 'header'):
-                raise ValueError("Database attributes must be relations, "
-                    "not {}".format(type(val)))
-            self._storage.add_reltype(name, type(val))
+            self._storage.add_reltype(name, val.header)
+        # XXX Do we need to use the DB relation in _check_constraints?
         self._check_constraints(name, val)
-        val._db = self
-        val.__name__ = name
         self._storage.update_relation(name, val)
-        super().__setitem__(name, val)
+        super().__setitem__(name, _get_persistent_type(val)(self, name, val))
 
     def __repr__(self):
         return "{}({{{}}})".format(
@@ -195,9 +226,8 @@ class _dumb_sqlite_persistence:
                     'on "_row_constraints" ("relname")')
 
 
-    def add_reltype(self, name, reltype):
+    def add_reltype(self, name, header):
         db = self.con
-        header = reltype.header
         c = db.cursor()
         columns = ', '.join('"{}" blob'.format(n) for n in header)
         c.execute('create table "{}" ({})'.format(name, columns))

@@ -1553,10 +1553,24 @@ we can print the relations in the same column order that is used in AIRDT:
     | S4         | C1        |
     +------------+-----------+
 
+Since ``display`` can only ever apply to one relation, it is available
+as a method on relations:
+
+    >>> print(is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    +------------+----------+
+
 We can also choose a sort order that is different from sorting by the
 columns in the ordered displayed:
 
-    >>> print(display(is_called, 'student_id', 'name',
+    >>> print(is_called.display('student_id', 'name',
     ...          sort=('name', 'student_id')))
     +------------+----------+
     | student_id | name     |
@@ -1592,7 +1606,7 @@ dinsd equivalent of the *Tutorial D* expression above is:
 
 and produces the table from figure 4.2 (page 89 in my copy of AIRDT):
 
-    >>> print(display(enrollment, 'student_id', 'name', 'course_id'))
+    >>> print(enrollment.display('student_id', 'name', 'course_id'))
     +------------+----------+-----------+
     | student_id | name     | course_id |
     +------------+----------+-----------+
@@ -1615,7 +1629,7 @@ that we can overload.)
 The prefix form of ``join`` in dinsd is:
 
     >>> j2 = join(is_enrolled_on, is_called)
-    >>> print(display(j2, 'student_id', 'name', 'course_id'))
+    >>> print(j2.display('student_id', 'name', 'course_id'))
     +------------+----------+-----------+
     | student_id | name     | course_id |
     +------------+----------+-----------+
@@ -1649,7 +1663,7 @@ The prefix form of ``join`` can take more than two arguments, joining all of
 the relations so specified:
 
     >>> x = join(is_enrolled_on, is_called, rel(row(student_id=SID('S1'))))
-    >>> print(display(x, 'student_id', 'name', 'course_id'))
+    >>> print(x.display('student_id', 'name', 'course_id'))
     +------------+------+-----------+
     | student_id | name | course_id |
     +------------+------+-----------+
@@ -1729,7 +1743,7 @@ the two relations being joined are the same.  It is equivalent to the
 set-intersection of the two relations:
 
     >>> repeat_enrollment = intersect(is_enrolled_on, last_year)
-    >>> print(display(repeat_enrollment, 'student_id', 'course_id'))
+    >>> print(repeat_enrollment.display('student_id', 'course_id'))
     +------------+-----------+
     | student_id | course_id |
     +------------+-----------+
@@ -1842,7 +1856,7 @@ In Python, the natural notation for this is the postfix object method
 invocation syntax:
 
     >>> r = is_called.rename(student_id='sid')
-    >>> print(display(r, 'sid', 'name'))
+    >>> print(r.display('sid', 'name'))
     +-----+----------+
     | sid | name     |
     +-----+----------+
@@ -1864,7 +1878,7 @@ As is standard for dinsd, there is also a prefix form:
 We can also rename multiple attributes:
 
     >>> r2 = is_called.rename(student_id='sid', name='called')
-    >>> print(display(r2, 'sid', 'called'))
+    >>> print(r2.display('sid', 'called'))
     +-----+----------+
     | sid | called   |
     +-----+----------+
@@ -1905,7 +1919,7 @@ Rename is a read-only operation, it does not modify the source relation:
     False
     >>> r2 == is_called
     False
-    >>> print(display(is_called, 'student_id', 'name'))
+    >>> print(is_called.display('student_id', 'name'))
     +------------+----------+
     | student_id | name     |
     +------------+----------+
@@ -1921,7 +1935,7 @@ pairs of students that share the same name:
 
     >>> shared_name = join(is_called.rename(student_id='sid1'),
     ...                    is_called.rename(student_id='sid2'))
-    >>> print(display(shared_name, 'sid1', 'name', 'sid2'))
+    >>> print(shared_name.display('sid1', 'name', 'sid2'))
     +------+----------+------+
     | sid1 | name     | sid2 |
     +------+----------+------+
@@ -1937,7 +1951,7 @@ pairs of students that share the same name:
 This table doesn't quite look like the one on page 98.  We can fix that using
 the 'sort' keyword of ``display``:
 
-    >>> print(display(shared_name, 'sid1', 'name', 'sid2',
+    >>> print(shared_name.display('sid1', 'name', 'sid2',
     ...                 sort=('name', 'sid1', 'sid2')))
     +------+----------+------+
     | sid1 | name     | sid2 |
@@ -2136,7 +2150,7 @@ think *Tutorial D* does the persistence automatically.  But more, we haven't
 dealt with constraints at all yet, and establishing those for a table is a bit
 more complicated.
 
-    >>> print(display(is_enrolled_on_split, 'student_id', 'course_id'))
+    >>> print(is_enrolled_on_split.display('student_id', 'course_id'))
     +------------+-----------+
     | student_id | course_id |
     +------------+-----------+
@@ -2146,7 +2160,7 @@ more complicated.
     | S3         | C3        |
     | S4         | C1        |
     +------------+-----------+
-    >>> print(display(is_called_split, 'student_id', 'name'))
+    >>> print(is_called_split.display('student_id', 'name'))
     +------------+----------+
     | student_id | name     |
     +------------+----------+
@@ -2436,7 +2450,7 @@ string pointed to by ``name``.
 a method of relations:
 
     >>> x = is_called.extend(initial="name[0]")
-    >>> print(display(x, 'student_id', 'name', 'initial'))
+    >>> print(x.display('student_id', 'name', 'initial'))
     +------------+----------+---------+
     | student_id | name     | initial |
     +------------+----------+---------+
@@ -2461,7 +2475,7 @@ here mixing ``lambda`` expressions and string expressions:
 
     >>> x2 = is_called.extend(caps="name.upper()",
     ...                       hello=lambda row: "hello")
-    >>> print(display(x2, 'student_id', 'name', 'caps', 'hello'))
+    >>> print(x2.display('student_id', 'name', 'caps', 'hello'))
     +------------+----------+----------+-------+
     | student_id | name     | caps     | hello |
     +------------+----------+----------+-------+
@@ -2865,7 +2879,7 @@ Exercise 2:
     >>> x = ((order_items & products & orders & cust).extend(
     ...         price="round(qty*unit_price*(1-discount/100), 2)")
     ...             >> {'o_no', 'p_no', 'price'})
-    >>> print(display(x, 'o_no', 'p_no', 'price'))
+    >>> print(x.display('o_no', 'p_no', 'price'))
     +------+-------+---------+
     | o_no | p_no  | price   |
     +------+-------+---------+
@@ -2891,7 +2905,7 @@ Exercise 3:
     >>> pairs = (x & y).where("sid1 < sid2")
     >>> diff = pairs.extend(gap="abs(mark1 - mark2)")
     >>> diff_only = diff << {'mark1', 'mark2'}
-    >>> print(display(diff_only, 'course_id', 'sid1', 'sid2', 'gap'))
+    >>> print(diff_only.display('course_id', 'sid1', 'sid2', 'gap'))
     +-----------+------+------+-----+
     | course_id | sid1 | sid2 | gap |
     +-----------+------+------+-----+
@@ -2991,7 +3005,7 @@ relation instance in one of the problems above.  Now we'll add courses.
     | C3        | Op systems  |
     | C4        | Programming |
     +-----------+-------------+
-    >>> print(display(exam_marks, 'student_id', 'course_id', 'mark'))
+    >>> print(exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
     | student_id | course_id | mark |
     +------------+-----------+------+
@@ -3101,7 +3115,7 @@ whose meaning is anywhere near as close.
 
 which gives us our equivalent of the table from Figure 5.3:
 
-    >>> print(display(course_marks, 'title', 'student_id', 'mark',
+    >>> print(course_marks.display('title', 'student_id', 'mark',
     ...                             sort=('student_id', 'title')))
     +------------+------------+------+
     | title      | student_id | mark |
@@ -3586,7 +3600,7 @@ of dinsd's decomposed aggregation operators to do it in one step:
     ...               "round(avg((rel(row(course_id=course_id)) + "
     ...                          "exam_marks).compute('mark')), 2)"
     ...               )
-    ...     print(display(av, 'course_id', 'avg_mark'))
+    ...     print(av.display('course_id', 'avg_mark'))
     +-----------+----------+
     | course_id | avg_mark |
     +-----------+----------+
@@ -3715,7 +3729,7 @@ may be a mix of strings and lambda expressions:
     >>> x = exam_marks.summarize({'course_id'},
     ...               attendees=lambda r: len(r._summary_),
     ...               avg_mark="round(avg(_summary_.compute('mark')), 2)")
-    >>> print(display(x, 'course_id', 'attendees', 'avg_mark'))
+    >>> print(x.display('course_id', 'attendees', 'avg_mark'))
     +-----------+-----------+----------+
     | course_id | attendees | avg_mark |
     +-----------+-----------+----------+
@@ -3978,7 +3992,7 @@ So we can write the dinsd equivalent of 5.14 as follows:
     >>> addrs = contact_info.extend(address=
     ...             "row(dict(house=house, street=street, city=city, zip=zip))"
     ...             ) << {'house', 'street', 'city', 'zip'}
-    >>> print(display(addrs, 'name', 'address'))
+    >>> print(addrs.display('name', 'address'))
     +-------+---------------------------------------------------+
     | name  | address                                           |
     +-------+---------------------------------------------------+
@@ -4278,7 +4292,7 @@ looking at the solution, and came up with:
     ...                 "courses >> {'course_id'} == marks >> {'course_id'}"
     ...           ) >> {'student_id', 'completed'}
     >>> done = join(r, is_called)
-    >>> print(display(done, 'name', 'student_id', 'completed'))
+    >>> print(done.display('name', 'student_id', 'completed'))
     +----------+------------+-----------+
     | name     | student_id | completed |
     +----------+------------+-----------+
@@ -4569,7 +4583,7 @@ we'll need the relations described in figure 4.13:
     ...        ('S4',  'Clark',     20,        'London'),
     ...        ('S5',  'Adams',     30,        'Athens'),
     ...        )
-    >>> print(display(S, 'sn', 'sname', 'status', 'city'))
+    >>> print(S.display('sn', 'sname', 'status', 'city'))
     +----+-------+--------+--------+
     | sn | sname | status | city   |
     +----+-------+--------+--------+
@@ -4595,7 +4609,7 @@ we'll need the relations described in figure 4.13:
     ...          ('S4', 'P5', 400),
     ...          ('S5', 'P2', 100),
     ...          )
-    >>> print(display(SP, 'sn', 'pn', 'qty'))
+    >>> print(SP.display('sn', 'pn', 'qty'))
     +----+----+-----+
     | sn | pn | qty |
     +----+----+-----+
@@ -4622,7 +4636,7 @@ we'll need the relations described in figure 4.13:
     ...         ('P5', 'Cam',     'Blue',      12.0,      'Paris'),
     ...         ('P6', 'Cog',     'Red',       19.0,      'London'),
     ...         )
-    >>> print(display(P, 'pn', 'pname', 'color', 'weight', 'city'))
+    >>> print(P.display('pn', 'pname', 'color', 'weight', 'city'))
     +----+-------+-------+--------+--------+
     | pn | pname | color | weight | city   |
     +----+-------+-------+--------+--------+

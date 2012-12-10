@@ -70,7 +70,7 @@ definitions from ``Relational Python``, since we are still following AIRDT.
 To make this easier the ``SID`` and ``CID`` classes are defined in
 our ``test_support`` test module.
 
-    >>> from dinsd import rel, row, expression_namespace, display
+    >>> from dinsd import rel, row, expression_namespace
     >>> from test_support import SID, CID
     >>> expression_namespace['CID'] = CID
     >>> expression_namespace['SID'] = SID
@@ -118,7 +118,7 @@ We persist a relation into the database by storing it in the ``Database``:
 
     >>> db['is_called'] = is_called
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
-    Database({'is_called': <class 'dinsd.rel({'name': str,
+    Database({'is_called': <class 'dinsd.PersistentRelation({'name': str,
          'student_id': SID})'>})
 
 The ``repr`` of a ``Database`` indicates that it is a set of names mapped to
@@ -147,9 +147,9 @@ We can also create a persistent relation by supplying just the type:
 
     >>> db.r.is_enrolled_on = IsEnrolledOn
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
-    Database({'is_called': <class 'dinsd.rel({'name': str,
+    Database({'is_called': <class 'dinsd.PersistentRelation({'name': str,
          'student_id': SID})'>, 'is_enrolled_on': <class
-         'dinsd.rel({'course_id': CID, 'student_id': SID})'>})
+         'dinsd.PersistentRelation({'course_id': CID, 'student_id': SID})'>})
 
 At this point, ``db.r.is_called`` has content, but ``is_enrolled_on`` is an
 empty relation:
@@ -172,17 +172,17 @@ attribute:
     >>> db.r.is_enrolled_on = is_called       # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    ValueError: Cannot assign value of type <class 'dinsd.rel({'name': str,
-        'student_id': SID})'> to attribute of type <class
-        'dinsd.rel({'course_id': CID, 'student_id': SID})'>
+    ValueError: header mismatch: a value of type <class 'dinsd.rel({'name': str,
+        'student_id': SID})'> cannot be assigned to a database relation of type
+         <class 'dinsd.PersistentRelation({'course_id': CID,
+         'student_id': SID})'>
 
 Indeed, it is an error to try to anything that is not of the correct type:
 
-    >>> db.r.is_enrolled_on = 1               # doctest: +NORMALIZE_WHITESPACE
+    >>> db.r.is_enrolled_on = 1
     Traceback (most recent call last):
         ...
-    ValueError: Cannot assign value of type <class 'int'> to attribute of type
-         <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
+    ValueError: Only relations may be stored in database, not <class 'int'>
 
 However, wholesale assignment is not the typical way to update a relation in a
 database.  We'll talk about the alternatives later.
@@ -209,9 +209,43 @@ and verifying that the data is still be there:
     | Devinder | S4         |
     +----------+------------+
 
-And we can add another relation to the database, which we'll need later:
+We can create a relation via the ``r`` attribute as well:
 
     >>> db.r.exam_marks = exam_marks
+
+A very important note: unlike a normal dictionary, the relation sorted in the
+``Database`` is *not* the same object that we assigned to it:
+
+    >>> db.r.exam_marks is exam_marks
+    False
+
+As we saw in the ``Database`` repr above, it isn't even the same Python type:
+
+    >>> type(db.r.exam_marks) == type(exam_marks)
+    False
+
+The *headers*, however, are the same:
+
+    >>> db.r.exam_marks.header == exam_marks.header
+    True
+
+Which means they are of the same *relational* type.
+
+Since relations are treated as read-only objects, much of the time this
+distinction does not matter.  But occasionally it does (we'll see an example
+below), so it is best to be aware of it.
+
+Because it sometimes matters, and because this document is testing the database
+and not the base algebra, we'll switch our names to be pointing to the database
+relations.  But we'll keep pointers to the non-database versions, to use to
+demonstrate the places where it matters which you use.
+
+    >>> is_called_save = is_called
+    >>> is_enrolled_on_save = is_enrolled_on
+    >>> exam_marks_save = exam_marks
+    >>> is_called = db.r.is_called
+    >>> is_enrolled_on = db.r.is_enrolled_on
+    >>> exam_marks = db.r.exam_marks
 
 
 
@@ -478,10 +512,27 @@ keys we ask the ``Database`` object:
 The ``display`` function indicates the keys of a database relation by
 using ``=`` characters in the table header separator for key columns:
 
-    >>> print(display(exam_marks, 'student_id', 'course_id', 'mark'))
+    >>> print(exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
     | student_id | course_id | mark |
     +============+===========+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
+
+This, by the way, is the first of those places where it matters whether the
+relation is the database object or not.  The original relation (the
+non-database one) doesn't have a key constraint, and so display does
+not show any '='s:
+
+    >>> print(exam_marks_save.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
     | S1         | C1        | 85   |
     | S1         | C2        | 49   |
     | S1         | C3        | 85   |

@@ -10,7 +10,7 @@ import weakref as _weakref
 
 # For debugging only.
 import sys as _sys
-__ = lambda *args: print(*args, file=_sys.stderr)
+___ = lambda *args: print(*args, file=_sys.stderr)
 
 
 
@@ -151,7 +151,7 @@ class _Row(_RichCompareMixin):
         return super()._compare(other, method)
 
     def __eq__(self, other):
-        if not hasattr(other, '_header_') and hasattr(other, '_cmpkey'):
+        if not hasattr(other, '_header_') or not hasattr(other, '_cmpkey'):
             return False
         return self._cmpkey() == other._cmpkey()
 
@@ -459,6 +459,9 @@ class _Relation(_RichCompareMixin):
                           for row in sorted(self._rows_)))
         return self.__class__.__name__ + '()'
 
+    def display(self, *args, **kw):
+        return display(self, *args, **kw)
+
     def __str__(self):
         return _display(self, *sorted(self.header))
 
@@ -470,12 +473,19 @@ class _Relation(_RichCompareMixin):
 
 _type_registry = {_Relation: _weakref.WeakValueDictionary(),
                   _Row: _weakref.WeakValueDictionary()}
+
 _typetype_map = {'rel': (_Relation, _rel_dct),
                  'row': (_Row, _row_dct)}
+
+
+def _hsig(header):
+    return '_'.join(n+'-'+v.__name__+str(id(v))
+                    for n, v in sorted(header.items()))
+
+
 def _get_type(typetype, header):
     baseclass, dct_maker = _typetype_map[typetype]
-    hsig = '_'.join(n+'-'+v.__name__+str(id(v))
-                    for n, v in sorted(header.items()))
+    hsig = _hsig(header)
     cls = _type_registry[baseclass].get(hsig)
     if cls is None:
         dct = dct_maker(header.copy())
@@ -642,7 +652,7 @@ def project(relation, attr_names):
 def where(relation, condition):
     if isinstance(condition, str):
         condition = lambda r, s=condition: eval(s, _all, r._as_locals())
-    new_rel = type(relation)()
+    new_rel = rel(relation.header)()
     for row in relation._rows_:
         if condition(row):
             new_rel._rows_.add(row)
@@ -754,7 +764,7 @@ def display(relation, *columns, **kw):
     return _display(relation, *columns, **kw)
 
 
-def _display(relation, *columns, sort=[]):
+def _display(relation, *columns, sort=[], highlight=[]):
     toprint = [list(map(_printable, columns))]
     getter = _operator.attrgetter(*columns) if columns else lambda x: x
     # Working around a little Python wart here.
@@ -775,13 +785,10 @@ def _display(relation, *columns, sort=[]):
     r = [sep]
     r.extend((_tline(parts, widths) for parts in zip(*toprint[0]))
              if columns else ['||'])
-    # XXX This if test is ugly, improve it.
-    if (hasattr(relation, '_db') and
-            '_key_'+relation.__name__ in relation._db._constraint_ns):
+    if highlight:
         h = ['+']
-        key = relation._db.key(relation.__name__)
         for i, name in enumerate(columns):
-            if name in key:
+            if name in highlight:
                 h.append('=' * (widths[i]+2))
             else:
                 h.append('-' * (widths[i]+2))
