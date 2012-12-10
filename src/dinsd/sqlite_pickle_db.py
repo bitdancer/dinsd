@@ -2,18 +2,17 @@
 import collections as _collections
 import pickle as _pickle
 import sqlite3 as _sqlite
-from dinsd import rel, expression_namespace as _all
+from dinsd import rel as _rel, expression_namespace as _all
 from dinsd.db import ConstraintError, RowConstraintError
 
 # For debugging only.
 import sys as _sys
 #__ = lambda *args: print(*args, file=_sys.stderr)
 
-#
-# Databases
-#
 
 class _R:
+
+    """Provides attribute style access to Database relations."""
 
     def __init__(self, db):
         self._db = db
@@ -230,7 +229,7 @@ class _dumb_sqlite_persistence:
             headers[relname][attrname] = _pickle.loads(attrtype)
         rels = []
         for relname, header in headers.items():
-            r = rel(**header)()
+            r = _rel(**header)()
             c.execute('select * from "{}"'.format(relname))
             names = [t[0] for t in c.description]
             for rwdata in c:
