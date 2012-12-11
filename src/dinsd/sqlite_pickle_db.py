@@ -24,10 +24,14 @@ class PersistentRelation(_Relation):
 
     def display(self, *args, **kw):
         if 'highlight' not in kw:
-            key = self.db._constraint_ns.get('_key_'+self.name)
+            key = getattr(self, 'key', None)
             kw['highlight'] = key.header if key else []
         return _display(self, *args, **kw)
-        
+
+
+class DisconnectedPersistentRelation:
+    pass
+
 
 _persistent_type_registry = _weakref.WeakValueDictionary()
 
@@ -136,11 +140,15 @@ class Database(dict):
             raise DBConstraintLoop()
 
     def close(self):
-        # Empty the dictionary.  This does two things: makes the relations
-        # inaccessible after a close, and breaks the reference cycle between
-        # the Database object and the relations.
-        self.clear()
+        # Empty the dictionary and nullify the associated relations.  This does
+        # two things: makes the relations inaccessible after a close, and
+        # breaks the reference cycle between the Database object and the
+        # relations.
         self._init()
+        for r in self.values():
+            r._rows_ = set()
+            r.__class__ = DisconnectedPersistentRelation
+        self.clear()
 
     # Row Constraints
 
@@ -164,9 +172,9 @@ class Database(dict):
     # Key Constraints
 
     def set_key(self, relname, keynames):
-        r = getattr(self.r, relname)
+        r = self[relname]
         r._validate_attr_names(keynames)
-        self._constraint_ns['_key_'+relname] = r >> keynames
+        r.key = self._constraint_ns['_key_'+relname] = r >> keynames
         self._constraints['_key_'+relname] = (
             "len(relname)==len(_key_relaname)",
             lambda r=relname: self._update_key(r))

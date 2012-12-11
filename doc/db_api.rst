@@ -145,7 +145,7 @@ though a special attribute ``r``:
 
 We can also create a persistent relation by supplying just the type:
 
-    >>> db.r.is_enrolled_on = IsEnrolledOn
+    >>> db['is_enrolled_on'] = IsEnrolledOn
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
     Database({'is_called': <class 'dinsd.PersistentRelation({'name': str,
          'student_id': SID})'>, 'is_enrolled_on': <class
@@ -165,6 +165,10 @@ has content to the attribute:
     >>> db.r.is_enrolled_on = is_enrolled_on
     >>> len(db.r.is_enrolled_on)
     6
+
+We can create a relation via the ``r`` attribute as well:
+
+    >>> db.r.exam_marks = exam_marks
 
 It is an error to try to assign a relation of the wrong type to a relation
 attribute:
@@ -186,32 +190,6 @@ Indeed, it is an error to try to anything that is not of the correct type:
 
 However, wholesale assignment is not the typical way to update a relation in a
 database.  We'll talk about the alternatives later.
-
-We prove that the backing store works by closing the database, reopening it,
-and verifying that the data is still be there:
-
-    >>> db.close()
-    >>> db.r.is_called
-    Traceback (most recent call last):
-        ...
-    KeyError: 'is_called'
-    >>> del db
-
-    >>> db = Database(dburi)
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    +----------+------------+
-
-We can create a relation via the ``r`` attribute as well:
-
-    >>> db.r.exam_marks = exam_marks
 
 A very important note: unlike a normal dictionary, the relation sorted in the
 ``Database`` is *not* the same object that we assigned to it:
@@ -235,17 +213,52 @@ Since relations are treated as read-only objects, much of the time this
 distinction does not matter.  But occasionally it does (we'll see an example
 below), so it is best to be aware of it.
 
-Because it sometimes matters, and because this document is testing the database
-and not the base algebra, we'll switch our names to be pointing to the database
-relations.  But we'll keep pointers to the non-database versions, to use to
-demonstrate the places where it matters which you use.
+Because this is Python, we don't have to always reference the relation through
+the db (although that is often best, as we will see in a moment), we can
+instead put a reference to it into another name:
 
-    >>> is_called_save = is_called
-    >>> is_enrolled_on_save = is_enrolled_on
-    >>> exam_marks_save = exam_marks
-    >>> is_called = db.r.is_called
-    >>> is_enrolled_on = db.r.is_enrolled_on
-    >>> exam_marks = db.r.exam_marks
+    >>> x = db.r.is_enrolled_on
+    >>> print(x)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    +-----------+------------+
+
+We prove that the backing store works by closing the database, reopening it,
+and verifying that the data is still be there:
+
+    >>> db.close()
+    >>> db.r.is_called
+    Traceback (most recent call last):
+        ...
+    KeyError: 'is_called'
+    >>> x                                           # doctest: +ELLIPSIS
+    <...DisconnectedPersistentRelation object at 0x...>
+    >>> del db
+
+    >>> db = Database(dburi)
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    +----------+------------+
+    >>> x                                           # doctest: +ELLIPSIS
+    <...DisconnectedPersistentRelation object at 0x...>
+
+And here you see the value of referring to the db relations through the db
+object: you don't end up with disconnected objects if the database is closed
+and reopened.
 
 
 
@@ -345,12 +358,13 @@ relation does not satisfy, we will also get a constraint violation:
         '50 <= mark <= 100' is not satisfied by row({'course_id': CID('C1'),
          'mark': 49, 'student_id': SID('S2')})
 
-In this case, it is the list of constraints that is not updated.  The database
-relation is again unchanged, and the database still conforms to all of the
-active constraints:
+In this case, it is the list of constraints that is not updated:
 
     >>> db.row_constraints['exam_marks']
     {'valid_mark': '0 <= mark <= 100'}
+
+The database relation is again unchanged, and the database still conforms to
+all of the active constraints.
 
 We can define more than one constraint for a database relation, and we
 can define more than one in a single call:
@@ -418,33 +432,28 @@ You cannot define a row constraint on a relation that doesn't exist:
         ...
     KeyError: 'foo'
 
-Unlike the case with relation and row headers, it is unlikely that an
-application will accidentally update the dictionary of row constraints.  dinsd
-therefore, in the Python consenting adults fashion, does not try to protect
-you from doing so.  If you modify the ``row_constraints`` dictionary, the
+dinsd, in the usual Python consenting adults fashion, does not try to protect
+you from modifying the ``row_constraints dictionary``.  If you modify it, the
 in-memory database constraints will cease to match the constraints in the
 persistent store, which is likely to lead to undesirable results.  So don't do
-that unless you've thought of a really good reason and are willing to
-risk shooting yourself in the foot and screwing up your data.
+that unless you've thought of a really good reason and are willing to risk
+shooting yourself in the foot and screwing up your data.
 
-Unlike other named dinsd objects, which exist as attributes and so are
-restricted from having names that start with ``_``, constraints are never
-accessed as attributes, and so there is no restriction on their names other
-than that they be Python identifiers:
+Constraint names may be any valid Python identifier:
 
-    >>> db.constrain_rows('is_called', _no_foos_allowed="name!='foo'")
+    >>> db.constrain_rows('is_called', no_föos_allowed="name!='foo'")
     >>> db.r.is_called = ~row(name='foo', student_id=SID('S42'))
     ...
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    dinsd.db.RowConstraintError: is_called constraint _no_foos_allowed violated:
+    dinsd.db.RowConstraintError: is_called constraint no_föos_allowed violated:
         "name!='foo'" is not satisfied by row({'name': 'foo', 'student_id':
         SID('S42')})
 
 Constraints may also be deleted:
 
-    >>> db.remove_row_constraints('is_called', '_no_foos_allowed')
+    >>> db.remove_row_constraints('is_called', 'no_föos_allowed')
     >>> db.row_constraints['is_called']
     {}
     >>> db.close()
@@ -512,7 +521,7 @@ keys we ask the ``Database`` object:
 The ``display`` function indicates the keys of a database relation by
 using ``=`` characters in the table header separator for key columns:
 
-    >>> print(exam_marks.display('student_id', 'course_id', 'mark'))
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
     | student_id | course_id | mark |
     +============+===========+------+
@@ -526,10 +535,10 @@ using ``=`` characters in the table header separator for key columns:
 
 This, by the way, is the first of those places where it matters whether the
 relation is the database object or not.  The original relation (the
-non-database one) doesn't have a key constraint, and so display does
-not show any '='s:
+non-database one) doesn't have a key constraint, and so display does not show
+any '='s:
 
-    >>> print(exam_marks_save.display('student_id', 'course_id', 'mark'))
+    >>> print(exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
     | student_id | course_id | mark |
     +------------+-----------+------+
