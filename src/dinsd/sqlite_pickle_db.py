@@ -33,6 +33,9 @@ class DisconnectedPersistentRelation:
     pass
 
 
+# There isn't likely to be much memory savings from doing this, but we need a
+# place to construct the type anyway, so it might as well be a registry.
+
 _persistent_type_registry = _weakref.WeakValueDictionary()
 
 def _get_persistent_type(r):
@@ -164,7 +167,7 @@ class Database(dict):
         self._storage.add_row_constraints(relname, kw)
 
     def remove_row_constraints(self, relname, *args):
-        getattr(self.r, relname)          # Attribute Error if no such rel.
+        self[relname]          # Key Error if no such rel.
         for arg in args:
             del self.row_constraints[relname][arg]
         self._storage.del_row_constraints(relname, args)
@@ -183,7 +186,7 @@ class Database(dict):
                 relname, relname))
 
     def _update_key(self, relname):
-        r = getattr(self.r, relname)
+        self[relname]
         key = self._keys[relname]
         if len(r) < len(key):
             self._keys[relname] = key | (r - key) >> key.header.keys()
