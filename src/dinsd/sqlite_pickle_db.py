@@ -118,7 +118,7 @@ class Database(dict):
                 # this is more useful than all the constraints and failures.
                 rw = sorted(invalid)[0]
                 for c, exp in sorted(self.row_constraints[relname].items()):
-                    if not eval(exp, rw._as_locals(), _all):
+                    if not eval(exp, _all, rw._as_locals()):
                         raise RowConstraintError(relname, c, exp, rw)
                 raise AssertionError("Expected failure did not happen")
         for i in range(10):

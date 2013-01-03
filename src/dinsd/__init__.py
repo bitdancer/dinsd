@@ -201,10 +201,10 @@ class _Row(_RichCompareMixin):
     # Internal methods.
 
     def _as_locals(self):
-        l = self.__dict__.copy()
-        l['_row_'] = self
-        l.update(_locals[_threading.current_thread].__dict__)
-        return l
+        return _collections.ChainMap(
+                    {'_row_': self},
+                    self.__dict__,
+                    _locals[_threading.current_thread].__dict__)
 
 
 
