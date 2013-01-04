@@ -5,6 +5,7 @@ import weakref as _weakref
 import pickle as _pickle
 import sqlite3 as _sqlite
 import threading as _threading
+import dinsd as _dinsd
 from dinsd import (rel as _rel, expression_namespace as _all, _Relation,
                    _hsig, display as _display)
 from dinsd.db import ConstraintError, RowConstraintError, Rollback
@@ -97,7 +98,8 @@ class Database(dict):
         stack = self._transactions[tid]
         stack.rel_ns.maps[:0] = [{}]
         try:
-            yield
+            with _dinsd.ns(stack.rel_ns):
+                yield
             if stack.rel_ns.maps[1] is self:
                 self._update_db_rels(stack.rel_ns.maps[0])
             else:

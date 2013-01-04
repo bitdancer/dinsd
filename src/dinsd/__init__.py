@@ -201,10 +201,11 @@ class _Row(_RichCompareMixin):
     # Internal methods.
 
     def _as_locals(self):
-        return _collections.ChainMap(
-                    {'_row_': self},
-                    self.__dict__,
-                    _locals[_threading.current_thread()].__dict__)
+        l = _collections.ChainMap({'_row_': self}, self.__dict__)
+        tid = _threading.current_thread()
+        if tid in _locals:
+            l.maps.append(_locals[tid][-1].__dict__)
+        return l
 
 
 
@@ -719,7 +720,7 @@ def _common_attrs(first, second):
 
 def _matcher(first, second, match):
     common_attrs = _common_attrs(first, second)
-    new_rel = type(first)()
+    new_rel = rel(first.header)()
     if not common_attrs:
         if bool(second) == match:   # exclusive or
             new_rel._rows_.update(first._rows_)
@@ -950,15 +951,24 @@ _all = {n: v for n, v in globals().items() if not n.startswith('_')}
 expression_namespace = _all
 
 # 'with ns()' support.
-_locals = _collections.defaultdict(_types.SimpleNamespace)
+_locals = {}
 
 @_contextlib.contextmanager
 def ns(*args, **kw):
+    # We use this as globals in an eval call, so it has to be a real dict,
+    # which is too bad.  It would be easier to use a ChainMap here.
     ns = _threading.local()
+    tid = _threading.current_thread()
+    if tid in _locals:
+        ns.__dict__.update(_locals[tid][-1].__dict__)
+        _locals[tid].append(ns)
+    else:
+        _locals[tid] = [ns]
     ns.__dict__.update(*args, **kw)
-    _locals[_threading.current_thread()] = ns
     yield ns
-    del _locals[_threading.current_thread()]
+    _locals[tid].pop()
+    if not _locals[tid]:
+        del _locals[tid]
 
 # 'from dinsd import *' support for interactive shell.
 __all__ = list(_all) + ['expression_namespace', 'ns']

@@ -890,3 +890,24 @@ affect the outer transaction:
     | C3        | S8         |
     | C3        | S9         |
     +-----------+------------+
+
+Another advantage of using transactions is that inside a transaction scope all
+of the database relations are available by name in the expression namespace
+automatically:
+
+    >>> from dinsd import matching
+    >>> with db.transaction():
+    ...     gpas = matching(db.r.is_called, db.r.exam_marks).extend(
+    ...         gpa="avg((exam_marks + ~row(student_id=student_id) "
+    ...                    ").compute('mark'))")
+    >>> print(gpas.display('name', 'student_id', 'gpa'))
+    +----------+------------+------+
+    | name     | student_id | gpa  |
+    +----------+------------+------+
+    | Anne     | S1         | 73.0 |
+    | Boris    | S2         | 49.0 |
+    | Cindy    | S3         | 66.0 |
+    | Devinder | S4         | 93.0 |
+    | Foo      | S8         | 87.0 |
+    | Foo      | S9         | 87.0 |
+    +----------+------------+------+

@@ -2982,8 +2982,8 @@ Extended Relational Operators
 -----------------------------
 
 
-mtching
-~~~~~~~
+matching
+~~~~~~~~
 
 Following along in Chapter 5 of AIRDT, we need to another couple of relations
 to use in the subsequent examples.  We already defined the ``exam_marks``
@@ -3625,6 +3625,29 @@ indeed we do:
 
 The two step version is probably easier to parse visually, but as we will see
 in the next section, there is an even simpler way to do this operation.
+
+Namespaces can be nested.  This isn't particularly useful in a single piece of
+code (nested with statements), but can be very useful if a called function
+needs to add something to the namespace.  We'll demonstrate the capability with
+a contrived example:
+
+    >>> def avg_marks():
+    ...     with ns(exam_marks=exam_marks):
+    ...         return (exam_marks >> {'course_id'}).extend(avg_mark=
+    ...                     "round(avg((rel(row(course_id=course_id)) + "
+    ...                                "exam_marks).compute('mark')), 2)"
+    ...                )
+    >>> with ns(is_enrolled_on=is_enrolled_on):
+    ...     one_student_enrolled = avg_marks().where(
+    ...         "len(matching(is_enrolled_on, "
+    ...                      "rel(row(course_id=course_id)))) == 1")
+    >>> print(one_student_enrolled)
+    +----------+-----------+
+    | avg_mark | course_id |
+    +----------+-----------+
+    | 49.0     | C2        |
+    | 75.5     | C3        |
+    +----------+-----------+
 
 
 summarize
