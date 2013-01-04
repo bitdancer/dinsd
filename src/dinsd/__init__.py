@@ -204,7 +204,7 @@ class _Row(_RichCompareMixin):
         return _collections.ChainMap(
                     {'_row_': self},
                     self.__dict__,
-                    _locals[_threading.current_thread].__dict__)
+                    _locals[_threading.current_thread()].__dict__)
 
 
 
@@ -688,12 +688,12 @@ def union(*relations):
         # Assume it is an iterator.
         relations = relations[0]
     first, *relations = relations
-    new_rel = type(first)()
+    new_rel = rel(first.header)()
     new_rel._rows_.update(first._rows_.copy())
-    for rel in relations:
-        if not first.header == rel.header:
+    for r in relations:
+        if not first.header == r.header:
             raise TypeError("Union operands must of equal types")
-        new_rel._rows_.update(rel._rows_.copy())
+        new_rel._rows_.update(r._rows_.copy())
     return new_rel
 
 
@@ -956,9 +956,9 @@ _locals = _collections.defaultdict(_types.SimpleNamespace)
 def ns(*args, **kw):
     ns = _threading.local()
     ns.__dict__.update(*args, **kw)
-    _locals[_threading.current_thread] = ns
+    _locals[_threading.current_thread()] = ns
     yield ns
-    del _locals[_threading.current_thread]
+    del _locals[_threading.current_thread()]
 
 # 'from dinsd import *' support for interactive shell.
 __all__ = list(_all) + ['expression_namespace', 'ns']

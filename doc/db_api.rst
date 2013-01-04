@@ -551,3 +551,342 @@ any '='s:
     +------------+-----------+------+
 
 XXX: key constraints aren't fully working yet.  Nor are they saved.
+
+
+
+Transactions
+------------
+
+Transactions are a familiar concept to anyone who has worked with an
+SQL DBMS.  The basic idea is that we can mark the start of a set of
+changes to the database, and at any point we can either commit those
+changes (store them in the persistent store so that they are visible
+to other clients accessing the database) or discard them (usually
+referred to as a "rollback").
+
+In *Tutorial D*, this is supported using specific statements:
+``START TRANSACTION``, ``COMMIT``, and ``ROLLBACK``, which do the
+obvious things.  In Python, the natural way to implement a
+"transaction block" is by using a transaction context manager in
+a ``with`` block.  So in dinsd, a transaction looks like this:
+
+    >>> with db.transaction():
+    ...     db.r.is_called = (db.r.is_called |
+    ...                         ~row(name='Foo', student_id=SID('S9')))
+    ...     db.r.exam_marks = (db.r.exam_marks |
+    ...                         ~row(student_id=SID('S9'),
+    ...                              course_id=CID('C3'),
+    ...                              mark=87))
+    ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
+    ...                             ~row(student_id=SID('S9'),
+    ...                                  course_id=CID('C3')))
+
+At the end of the ``with`` block, the transaction is automatically committed:
+
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    | Foo      | S9         |
+    +----------+------------+
+    >>> print(db.r.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    | C3        | 87   | S9         |
+    +-----------+------+------------+
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S9         |
+    +-----------+------------+
+
+If any exception occurs, then the transaction is automatically rolled back:
+
+    >>> with db.transaction():
+    ...     db.r.is_called = (db.r.is_called |
+    ...                         ~row(name='Foo', student_id=SID('S8')))
+    ...     db.r.exam_marks = (db.r.exam_marks |
+    ...                         ~row(student_id=SID('S8'),
+    ...                              course_id=CID('C3'),
+    ...                              mark=87))
+    ...     raise Exception('oops')
+    ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
+    ...                             ~row(student_id=SID('S8'),
+    ...                                  course_id=CID('C3')))
+    Traceback (most recent call last):
+        ...
+    Exception: oops
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    | Foo      | S9         |
+    +----------+------------+
+    >>> print(db.r.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    | C3        | 87   | S9         |
+    +-----------+------+------------+
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S9         |
+    +-----------+------------+
+
+dinsd provides the special exception ``Rollback`` for intentionally rolling
+back a transaction.  This exception is caught by the ``transaction``
+context manager and does not cause a program abort:
+
+    >>> from dinsd.db import Rollback
+    >>> with db.transaction():
+    ...     db.r.is_called = (db.r.is_called |
+    ...                         ~row(name='Foo', student_id=SID('S8')))
+    ...     db.r.exam_marks = (db.r.exam_marks |
+    ...                         ~row(student_id=SID('S8'),
+    ...                              course_id=CID('C3'),
+    ...                              mark=87))
+    ...     raise Rollback('cancel')
+    ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
+    ...                             ~row(student_id=SID('S8'),
+    ...                                  course_id=CID('C3')))
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    | Foo      | S9         |
+    +----------+------------+
+    >>> print(db.r.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    | C3        | 87   | S9         |
+    +-----------+------+------------+
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S9         |
+    +-----------+------------+
+
+Transactions may be nested:
+
+    >>> with db.transaction():
+    ...     db.r.is_called = (db.r.is_called |
+    ...                         ~row(name='Foo', student_id=SID('S8')))
+    ...     with db.transaction():
+    ...         db.r.exam_marks = (db.r.exam_marks |
+    ...                             ~row(student_id=SID('S8'),
+    ...                                  course_id=CID('C3'),
+    ...                                  mark=87))
+    ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
+    ...                             ~row(student_id=SID('S8'),
+    ...                                  course_id=CID('C3')))
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    | Foo      | S8         |
+    | Foo      | S9         |
+    +----------+------------+
+    >>> print(db.r.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    | C3        | 87   | S8         |
+    | C3        | 87   | S9         |
+    +-----------+------+------------+
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S8         |
+    | C3        | S9         |
+    +-----------+------------+
+
+An exception in an inner transaction that is not caught will roll back the
+outer transaction as well:
+
+    >>> with db.transaction():
+    ...     db.r.is_called = (db.r.is_called |
+    ...                         ~row(name='Foo', student_id=SID('S7')))
+    ...     with db.transaction():
+    ...         db.r.exam_marks = (db.r.exam_marks |
+    ...                             ~row(student_id=SID('S7'),
+    ...                                  course_id=CID('C3'),
+    ...                                  mark=187))
+    ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
+    ...                             ~row(student_id=SID('S7'),
+    ...                                  course_id=CID('C3')))
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    dinsd.db.RowConstraintError: exam_marks constraint valid_mark violated:
+         '0 <= mark <= 100' is not satisfied by row({'course_id': CID('C3'),
+         'mark': 187, 'student_id': SID('S7')})
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    | Foo      | S8         |
+    | Foo      | S9         |
+    +----------+------------+
+    >>> print(db.r.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    | C3        | 87   | S8         |
+    | C3        | 87   | S9         |
+    +-----------+------+------------+
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S8         |
+    | C3        | S9         |
+    +-----------+------------+
+
+Explicitly rolling back an inner transaction, on the other hand, does not
+affect the outer transaction:
+
+    >>> with db.transaction():
+    ...     db.r.is_called = (db.r.is_called |
+    ...                         ~row(name='Foo', student_id=SID('S7')))
+    ...     with db.transaction():
+    ...         db.r.exam_marks = (db.r.exam_marks |
+    ...                             ~row(student_id=SID('S7'),
+    ...                                  course_id=CID('C3'),
+    ...                                  mark=87))
+    ...         raise Rollback
+    ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
+    ...                             ~row(student_id=SID('S7'),
+    ...                                  course_id=CID('C3')))
+    >>> print(db.r.is_called)
+    +----------+------------+
+    | name     | student_id |
+    +----------+------------+
+    | Anne     | S1         |
+    | Boris    | S2         |
+    | Boris    | S5         |
+    | Cindy    | S3         |
+    | Devinder | S4         |
+    | Foo      | S7         |
+    | Foo      | S8         |
+    | Foo      | S9         |
+    +----------+------------+
+    >>> print(db.r.exam_marks)
+    +-----------+------+------------+
+    | course_id | mark | student_id |
+    +-----------+------+------------+
+    | C1        | 49   | S2         |
+    | C1        | 85   | S1         |
+    | C1        | 93   | S4         |
+    | C2        | 49   | S1         |
+    | C3        | 66   | S3         |
+    | C3        | 85   | S1         |
+    | C3        | 87   | S8         |
+    | C3        | 87   | S9         |
+    +-----------+------+------------+
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S7         |
+    | C3        | S8         |
+    | C3        | S9         |
+    +-----------+------------+

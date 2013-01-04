@@ -1,11 +1,14 @@
 #Copyright 2012 R. David Murray (see end comment for terms).
 import collections as _collections
+import contextlib as _contextlib
 import weakref as _weakref
 import pickle as _pickle
 import sqlite3 as _sqlite
+import threading as _threading
 from dinsd import (rel as _rel, expression_namespace as _all, _Relation,
                    _hsig, display as _display)
-from dinsd.db import ConstraintError, RowConstraintError
+from dinsd.db import ConstraintError, RowConstraintError, Rollback
+_null = _contextlib.ExitStack()
 
 # For debugging only.
 import sys as _sys
@@ -81,10 +84,49 @@ class Database(dict):
         self.row_constraints = _collections.defaultdict(dict)
         self._constraint_ns = _collections.ChainMap(_all)
         self._constraints = {}
+        self._transactions = {}
+
+    @_contextlib.contextmanager
+    def transaction(self):
+        tid = _threading.current_thread()
+        if tid in self._transactions:
+            stack = self._transactions[tid]
+        else:
+            stack = self._transactions[tid] = _threading.local()
+            stack.rel_ns = _collections.ChainMap(self)
+        stack = self._transactions[tid]
+        stack.rel_ns.maps[:0] = [{}]
+        try:
+            yield
+            if stack.rel_ns.maps[1] is self:
+                self._update_db_rels(stack.rel_ns.maps[0])
+            else:
+                stack.rel_ns.maps[1].update(stack.rel_ns.maps[0])
+        except Rollback:
+            pass
+        finally:
+            stack.rel_ns.maps.pop(0)
+            if len(stack.rel_ns.maps) == 1:
+                del self._transactions[tid]
+
+    @property
+    def in_transaction(self):
+        x = self._transactions.get(_threading.current_thread())
+        return _threading.current_thread() in self._transactions
+
+    def _update_db_rels(self, updated_rels):
+        with self._storage.transaction():
+            for name, val in updated_rels.items():
+                oldval = self.get(name)
+                if oldval is None:
+                    self._storage.add_reltype(name, val.header)
+                if val != oldval:
+                    self._storage.update_relation(name, val)
+        for name, val in updated_rels.items():
+            # XXX this can be made more efficient.
+            super().__setitem__(name, _get_persistent_type(val)(self, name, val))
 
     def __setitem__(self, name, val):
-        if isinstance(val, type):
-            val = val()
         if not hasattr(val, 'header'):
             raise ValueError("Only relations may be stored in database, "
                 "not {}".format(type(val)))
@@ -94,12 +136,17 @@ class Database(dict):
                 raise ValueError("header mismatch: a value of type {} cannot "
                     "be assigned to a database relation of type {}".format(
                         type(val), type(attr)))
-        else:
-            self._storage.add_reltype(name, val.header)
+            if isinstance(val, type):
+                raise ValueError("database relation type already set")
+        elif isinstance(val, type):
+            val = val()
         # XXX Do we need to use the DB relation in _check_constraints?
         self._check_constraints(name, val)
-        self._storage.update_relation(name, val)
-        super().__setitem__(name, _get_persistent_type(val)(self, name, val))
+        with _null if self.in_transaction else self.transaction():
+            stack = self._transactions[_threading.current_thread()]
+            if stack.rel_ns.maps[0] is self:
+                raise Exception("recursion")
+            stack.rel_ns[name] = val
 
     def __repr__(self):
         return "{}({{{}}})".format(
@@ -178,12 +225,13 @@ class Database(dict):
         r = self[relname]
         r._validate_attr_names(keynames)
         r.key = self._constraint_ns['_key_'+relname] = r >> keynames
-        self._constraints['_key_'+relname] = (
-            "len(relname)==len(_key_relaname)",
-            lambda r=relname: self._update_key(r))
-        self.row_constraints[relname]['_key_'+relname] = (
-            "_row_ >> _key_{}.header.keys() not in _key_{}".format(
-                relname, relname))
+        # XXX We need more infrastructure to make this work.
+        #self._constraints['_key_'+relname] = (
+        #    "len(relname)==len(_key_relaname)",
+        #    lambda r=relname: self._update_key(r))
+        #self.row_constraints[relname]['_key_'+relname] = (
+        #    "_row_ >> _key_{}.header.keys() not in _key_{}".format(
+        #        relname, relname))
 
     def _update_key(self, relname):
         self[relname]
@@ -236,6 +284,9 @@ class _dumb_sqlite_persistence:
         c.execute('create index if not exists "_row_constraints_relname_index" '
                     'on "_row_constraints" ("relname")')
 
+    def transaction(self):
+        # The connection is a context manager for sqlite transactions.
+        return self.con
 
     def add_reltype(self, name, header):
         db = self.con
