@@ -8,7 +8,8 @@ import threading as _threading
 import dinsd as _dinsd
 from dinsd import (rel as _rel, expression_namespace as _all, _Relation,
                    _hsig, display as _display)
-from dinsd.db import ConstraintError, RowConstraintError, Rollback
+from dinsd.db import (ConstraintError, RowConstraintError, DBConstraintLoop,
+                      Rollback)
 _null = _contextlib.ExitStack()
 
 # For debugging only.
@@ -86,6 +87,13 @@ class Database(dict):
         self._constraint_ns = _collections.ChainMap(_all)
         self._constraints = {}
         self._transactions = {}
+
+    def _as_locals(self):
+        l = _collections.ChainMap(self)
+        tid = _threading.current_thread()
+        if tid in _dinsd._locals:    # XXX clarify this API.
+            l.maps.append(_dinsd._locals[tid][-1].__dict__)
+        return l
 
     @_contextlib.contextmanager
     def transaction(self):
@@ -176,12 +184,12 @@ class Database(dict):
                 if callable(constraint):
                     valid = constraint()
                 else:
-                    valid = eval(constraint, self._as_locals(), _all)
+                    valid = eval(constraint, _all, self._as_locals())
                 if not valid and fixer is not None:
                     if callable(fixer):
                         valid = fixer()
                     else:
-                        valid = eval(constraint, {}, self._constraint_ns)
+                        valid = eval(fixer, _all, self._as_locals())
                 if not valid:
                     raise DBConstraintError(name, constraint, fixer)
                 else:
@@ -227,21 +235,23 @@ class Database(dict):
         r = self[relname]
         r._validate_attr_names(keynames)
         r.key = self._constraint_ns['_key_'+relname] = r >> keynames
+        self.row_constraints[relname]['_key_'+relname] = (
+            "_row_ in {relname} or "
+            "_row_ >> _key_{relname}.header.keys() not in _key_{relname}".format(
+                relname=relname))
         # XXX We need more infrastructure to make this work.
         #self._constraints['_key_'+relname] = (
-        #    "len(relname)==len(_key_relaname)",
+        #    "len({relname})==len(_key_{relname})".format(relname=relname),
         #    lambda r=relname: self._update_key(r))
-        #self.row_constraints[relname]['_key_'+relname] = (
-        #    "_row_ >> _key_{}.header.keys() not in _key_{}".format(
-        #        relname, relname))
 
     def _update_key(self, relname):
-        self[relname]
-        key = self._keys[relname]
-        if len(r) < len(key):
-            self._keys[relname] = key | (r - key) >> key.header.keys()
+        r = self[relname]
+        keyname = '_key_'+relname
+        key = self._constraint_ns[keyname]
+        if len(r) > len(key):
+            self._constraint_ns[keyname] = key | (r - key) >> key.header.keys()
         else:
-            self._keys[relname] = matching(key, r)
+            self._constraint_ns[keyname] = matching(key, r)
         return True
 
     def key(self, relname):

@@ -26,6 +26,12 @@ class Rollback(Exception):
     pass
 
 
+class DBConstraintLoop(ConstraintError):
+
+    def __str__(self):
+        return "Database constrain-and-update loop did not terminate"
+
+
 
 #Licensed under the Apache License, Version 2.0 (the "License");
 #you may not use this file except in compliance with the License.
