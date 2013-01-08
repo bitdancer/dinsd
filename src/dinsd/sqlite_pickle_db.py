@@ -106,7 +106,7 @@ class Database(dict):
         stack = self._transactions[tid]
         stack.rel_ns.maps[:0] = [{}]
         try:
-            with _dinsd.ns(stack.rel_ns):
+            with _dinsd.ns(**stack.rel_ns):
                 yield
             if stack.rel_ns.maps[1] is self:
                 self._update_db_rels(stack.rel_ns.maps[0])

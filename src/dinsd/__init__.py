@@ -10,7 +10,9 @@ import weakref as _weakref
 
 # For debugging only.
 import sys as _sys
-___ = lambda *args: print(*args, file=_sys.stderr)
+def ___(*args):
+    print(*args, file=_sys.stderr, flush=True)
+    return args[-1]
 
 
 
@@ -201,10 +203,9 @@ class _Row(_RichCompareMixin):
     # Internal methods.
 
     def _as_locals(self):
-        l = _collections.ChainMap({'_row_': self}, self.__dict__)
-        tid = _threading.current_thread()
-        if tid in _locals:
-            l.maps.append(_locals[tid][-1].__dict__)
+        l =    _collections.ChainMap({'_row_': self},
+                                     self.__dict__,
+                                     ns._current_)
         return l
 
 
@@ -950,25 +951,25 @@ def extract_only_row(relation):
 _all = {n: v for n, v in globals().items() if not n.startswith('_')}
 expression_namespace = _all
 
-# 'with ns()' support.
-_locals = {}
 
-@_contextlib.contextmanager
-def ns(*args, **kw):
-    # We use this as globals in an eval call, so it has to be a real dict,
-    # which is too bad.  It would be easier to use a ChainMap here.
-    ns = _threading.local()
-    tid = _threading.current_thread()
-    if tid in _locals:
-        ns.__dict__.update(_locals[tid][-1].__dict__)
-        _locals[tid].append(ns)
-    else:
-        _locals[tid] = [ns]
-    ns.__dict__.update(*args, **kw)
-    yield ns
-    _locals[tid].pop()
-    if not _locals[tid]:
-        del _locals[tid]
+# 'with ns()' support.
+class _NS(_threading.local):
+
+    def __init__(self):
+        self._current_ = _collections.ChainMap()
+
+    def __call__(self, **kw):
+        self._current_ = _collections.ChainMap(kw, *self._current_.maps)
+        return self
+
+    def __enter__(self):
+        return self._current_
+
+    def __exit__(self, *args, **kw):
+        self._current_ = self._current_.parents
+
+ns = _NS()
+
 
 # 'from dinsd import *' support for interactive shell.
 __all__ = list(_all) + ['expression_namespace', 'ns']

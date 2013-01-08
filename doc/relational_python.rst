@@ -3649,6 +3649,25 @@ a contrived example:
     | 75.5     | C3        |
     +----------+-----------+
 
+The names placed into the expression namespace by the context manager are
+removed at the end of the context:
+
+    >>> av = (exam_marks >> {'course_id'}).extend(avg_mark=
+    ...           "round(avg((rel(row(course_id=course_id)) + "
+    ...                      "exam_marks).compute('mark')), 2)"
+    ...           )
+    Traceback (most recent call last):
+        ...
+    NameError: name 'exam_marks' is not defined
+
+    >>> with ns():
+    ...     av = (exam_marks >> {'course_id'}).extend(avg_mark=
+    ...               "round(avg((rel(row(course_id=course_id)) + "
+    ...                          "exam_marks).compute('mark')), 2)"
+    ...               )
+    Traceback (most recent call last):
+        ...
+    NameError: name 'exam_marks' is not defined
 
 summarize
 ~~~~~~~~~
@@ -4382,8 +4401,8 @@ Here is the dinsd equivalent, in which we use a slightly different form of the
 namespace:
 
     >>> with ns() as n:                     # doctest: +NORMALIZE_WHITESPACE
-    ...     n.exam_marks = exam_marks
-    ...     n.enrollment = is_called & is_enrolled_on
+    ...     n['exam_marks'] = exam_marks
+    ...     n['enrollment'] = is_called & is_enrolled_on
     ...     print(is_called.where(          
     ...            "enrollment + rel(row(student_id=student_id)) <= "
     ...            "exam_marks + rel(row(student_id=student_id)) "
@@ -4400,7 +4419,10 @@ rid of ``marks``, leaving us with ``course_id`` (as we can see from the
 projection relation names in the error message).  So, no, those two
 aren't comparable.  We can do:
 
-    >>> print(is_called.where(
+    >>> with ns() as n:
+    ...     n['exam_marks'] = exam_marks
+    ...     n['enrollment'] = is_called & is_enrolled_on
+    ...     print(is_called.where(
     ...         "(enrollment + rel(row(student_id=student_id))) "
     ...             "<< {'name'}  <= "
     ...         "(exam_marks + rel(row(student_id=student_id))) "
@@ -4722,7 +4744,7 @@ exactly the same set of parts each.
 
     >>> sns = S >> {'sn'}
     >>> with ns() as names:
-    ...     names.pSP = SP >> {'sn', 'pn'}
+    ...     names['pSP'] = SP >> {'sn', 'pn'}
     ...     pairs = (sns & sns.rename(sn='sn2')).where(
     ...                 "pSP + ~row(sn=sn) == pSP + ~row(sn=sn2) and sn < sn2")
     >>> print(pairs)
