@@ -89,7 +89,7 @@ class Database(dict):
         self._transaction_ns = _dinsd._NS(self)
 
     def _as_locals(self):
-        n = _dinsd.ns._current_
+        n = _dinsd.ns.current
         if self.transactions:
             return n
         return _collections.ChainMap(n, self)
@@ -98,7 +98,7 @@ class Database(dict):
     def transaction(self):
         changes = {}
         self._transaction_ns.push(changes)
-        _dinsd.ns.push(self._transaction_ns._current_)
+        _dinsd.ns.push(self._transaction_ns.current)
         try:
             yield
         except Rollback:
@@ -107,7 +107,7 @@ class Database(dict):
             _dinsd.ns.pop()
             self._transaction_ns.pop()
         if self.transactions:
-            self._transaction_ns._current_.maps[1].update(changes)
+            self._transaction_ns.current.maps[1].update(changes)
         else:
             self._update_db_rels(changes)
 
@@ -144,7 +144,7 @@ class Database(dict):
         # XXX Do we need to use the DB relation in _check_constraints?
         self._check_constraints(name, val)
         with _null if self.transactions else self.transaction():
-            self._transaction_ns._current_[name] = val
+            self._transaction_ns.current[name] = val
 
     def __repr__(self):
         return "{}({{{}}})".format(

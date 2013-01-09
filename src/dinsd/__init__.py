@@ -205,7 +205,7 @@ class _Row(_RichCompareMixin):
     def _as_locals(self):
         return _collections.ChainMap({'_row_': self},
                                      self.__dict__,
-                                     ns._current_)
+                                     ns.current)
 
 
 
@@ -955,26 +955,26 @@ expression_namespace = _all
 class _NS(_threading.local):
 
     def __init__(self, *args):
-        self._current_ = _collections.ChainMap(*args)
+        self.current = _collections.ChainMap(*args)
 
     def __call__(self, **kw):
         self.push(kw)
         return self
 
     def __enter__(self):
-        return self._current_
+        return self.current
 
     def __exit__(self, *args, **kw):
         self.pop()
 
     def __len__(self):
-        return len(self._current_.maps)
+        return len(self.current.maps)
 
     def push(self, d):
-        self._current_ = _collections.ChainMap(d, *self._current_.maps)
+        self.current = _collections.ChainMap(d, *self.current.maps)
 
     def pop(self):
-        self._current_ = self._current_.parents
+        self.current = self.current.parents
 
 ns = _NS()
 
