@@ -652,7 +652,8 @@ def project(relation, attr_names):
 
 def where(relation, condition):
     if isinstance(condition, str):
-        condition = lambda r, s=condition: eval(s, _all, r._as_locals())
+        c = compile(condition, '<where>', 'eval')
+        condition = lambda r, c=c: eval(c, _all, r._as_locals())
     new_rel = rel(relation.header)()
     for row in relation._rows_:
         if condition(row):
@@ -670,7 +671,8 @@ def extend(relation, **new_attrs):
             raise ValueError("Duplicate relational attribute name "
                              "{!r}".format(n))
         if isinstance(f, str):
-            new_attrs[n] = lambda r, s=f: eval(s, _all, r._as_locals())
+            c = compile(f, '<extend>', 'eval')
+            new_attrs[n] = lambda r, c=c: eval(c, _all, r._as_locals())
     attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
@@ -843,7 +845,8 @@ def _tline(parts, widths):
 
 def compute(relation, expr):
     if isinstance(expr, str):
-        expr = lambda r, s=expr: eval(s, _all, r._as_locals())
+        c = compile(expr, '<compute>', 'eval')
+        expr = lambda r, c=c: eval(c, _all, r._as_locals())
     for row in relation:
         yield expr(row)
 
