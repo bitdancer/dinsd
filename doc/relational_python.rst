@@ -3675,7 +3675,7 @@ The namespace additions are also kept separate across threads:
     >>> start = threading.Event()
     >>> def thread_demo():
     ...     with ns(exam_marks=exam_marks, is_enrolled_on=is_enrolled_on):
-    ...         start.wait()
+    ...         start.wait(timeout=20)
     ...         av = (exam_marks >> {'course_id'}).extend(avg_mark=
     ...                   "round(avg((rel(row(course_id=course_id)) + "
     ...                              "exam_marks).compute('mark')), 2)"

@@ -86,7 +86,7 @@ class Database(dict):
         self.row_constraints = _collections.defaultdict(dict)
         self._constraint_ns = _collections.ChainMap(_all)
         self._constraints = {}
-        self._transaction_ns = _dinsd._NS(self)
+        self._transaction_ns = _dinsd._NS(self, in_getitem=False)
 
     def _as_locals(self):
         n = _dinsd.ns.current
@@ -145,6 +145,14 @@ class Database(dict):
         self._check_constraints(name, val)
         with _null if self.transactions else self.transaction():
             self._transaction_ns.current[name] = val
+
+    def __getitem__(self, name):
+        # XXX I wonder if there is a more elegant way to to do this.
+        if self._transaction_ns.in_getitem:
+            self._transaction_ns.in_getitem = False
+            return super().__getitem__(name)
+        self._transaction_ns.in_getitem = True
+        return self._transaction_ns.current[name]
 
     def __repr__(self):
         return "{}({{{}}})".format(

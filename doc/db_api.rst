@@ -911,3 +911,88 @@ automatically:
     | Foo      | S8         | 87.0 |
     | Foo      | S9         | 87.0 |
     +----------+------------+------+
+
+When you make changes to the database inside a transaction, those changes are
+visible only to the current thread until the end of the outermost transaction,
+at which time they are committed to the DB and are visible to other threads:
+
+    >>> import threading
+    >>> start = threading.Event()
+    >>> done = threading.Event()
+    >>> def wait_for(name, event):
+    ...     if not event.wait(timeout=5):
+    ...         print("timeout waiting for", name)
+    >>> def tfunc():
+    ...     print("subthread, before change in main thread:")
+    ...     print(db.r.is_enrolled_on)
+    ...     wait_for('start1', start)
+    ...     print("subthread, after change in main thread:")
+    ...     print(db.r.is_enrolled_on)
+    ...     start.clear()
+    ...     done.set()
+    ...     wait_for('start2', start)
+    ...     print("subthread, after main thread transaction exit:")
+    ...     print(db.r.is_enrolled_on)
+    >>> t = threading.Thread(target=tfunc)
+    >>> t.start()
+    subthread, before change in main thread:
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S7         |
+    | C3        | S8         |
+    | C3        | S9         |
+    +-----------+------------+
+    >>> with db.transaction():
+    ...     db.r.is_enrolled_on = db.r.is_enrolled_on.where(
+    ...         "student_id < SID('S7')")
+    ...     print("main thread after change:")
+    ...     print(db.r.is_enrolled_on)
+    ...     start.set()
+    ...     wait_for('done', done)
+    ...     print("about to exit transaction")
+    main thread after change:
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    +-----------+------------+
+    subthread, after change in main thread:
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    | C3        | S7         |
+    | C3        | S8         |
+    | C3        | S9         |
+    +-----------+------------+
+    about to exit transaction
+    >>> start.set()
+    >>> t.join(timeout=5)
+    subthread, after main thread transaction exit:
+    +-----------+------------+
+    | course_id | student_id |
+    +-----------+------------+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C3        | S2         |
+    | C3        | S3         |
+    +-----------+------------+

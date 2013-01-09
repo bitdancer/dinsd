@@ -957,8 +957,9 @@ expression_namespace = _all
 # 'with ns()' support.
 class _NS(_threading.local):
 
-    def __init__(self, *args):
+    def __init__(self, *args, **kw):
         self.current = _collections.ChainMap(*args)
+        self.__dict__.update(kw)
 
     def __call__(self, **kw):
         self.push(kw)
