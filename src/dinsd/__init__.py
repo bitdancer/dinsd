@@ -961,8 +961,15 @@ class _NS(_threading.local):
         self.current = _collections.ChainMap(*args)
         self.__dict__.update(kw)
 
-    def __call__(self, **kw):
-        self.push(kw)
+    def __call__(self, *args, **kw):
+        if len(args) > 1:
+            raise TypeError("Expected 0 or 1 argument, got {}", len(args))
+        if args and kw:
+            raise TypeError("Expected arg *or* keywords, got both")
+        if args:
+            self.push(args[0])
+        else:
+            self.push(kw)
         return self
 
     def __enter__(self):

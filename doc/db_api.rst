@@ -550,7 +550,18 @@ any '='s:
     | S4         | C1        | 93   |
     +------------+-----------+------+
 
-XXX: key constraints aren't fully working yet.  Nor are they saved.
+With the key constraint in place, we can no longer add a row with an existing
+``SID``, ``CID`` pair, even if it has a different mark:
+
+    >>> db.r.exam_marks = exam_marks | ~row(student_id=SID('S1'),
+    ...                                     course_id=CID('C1'),
+    ...                                     mark=27)
+    ... # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+        ...
+    dinsd.db.RowConstraintError: ...
+
+XXX: key constraints are not saved yet.
 
 
 
@@ -925,6 +936,7 @@ at which time they are committed to the DB and are visible to other threads:
     >>> def tfunc():
     ...     print("subthread, before change in main thread:")
     ...     print(db.r.is_enrolled_on)
+    ...     done.set()
     ...     wait_for('start1', start)
     ...     print("subthread, after change in main thread:")
     ...     print(db.r.is_enrolled_on)
@@ -934,7 +946,7 @@ at which time they are committed to the DB and are visible to other threads:
     ...     print("subthread, after main thread transaction exit:")
     ...     print(db.r.is_enrolled_on)
     >>> t = threading.Thread(target=tfunc)
-    >>> t.start()
+    >>> t.start(); wait_for('done1', done)
     subthread, before change in main thread:
     +-----------+------------+
     | course_id | student_id |
@@ -949,6 +961,7 @@ at which time they are committed to the DB and are visible to other threads:
     | C3        | S8         |
     | C3        | S9         |
     +-----------+------------+
+    >>> done.clear()
     >>> with db.transaction():
     ...     db.r.is_enrolled_on = db.r.is_enrolled_on.where(
     ...         "student_id < SID('S7')")

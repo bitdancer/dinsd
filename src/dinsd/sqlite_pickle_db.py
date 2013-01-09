@@ -14,7 +14,10 @@ _null = _contextlib.ExitStack()
 
 # For debugging only.
 import sys as _sys
-___ = lambda *args: print(*args, file=_sys.stderr)
+def ___(*args):
+    print(*args, file=_sys.stderr, flush=True)
+    return args[-1]
+_all['___'] = ___
 
 
 class PersistentRelation(_Relation):
@@ -29,8 +32,7 @@ class PersistentRelation(_Relation):
 
     def display(self, *args, **kw):
         if 'highlight' not in kw:
-            key = getattr(self, 'key', None)
-            kw['highlight'] = key.header if key else []
+            kw['highlight'] = getattr(self, 'key', [])
         return _display(self, *args, **kw)
 
 
@@ -84,21 +86,24 @@ class Database(dict):
 
     def _init(self):
         self.row_constraints = _collections.defaultdict(dict)
-        self._constraint_ns = _collections.ChainMap(_all)
+        self._system_relations = {}
+        self._system_ns = _dinsd._NS(self._system_relations)
         self._constraints = {}
         self._transaction_ns = _dinsd._NS(self, in_getitem=False)
 
     def _as_locals(self):
-        n = _dinsd.ns.current
-        if self.transactions:
-            return n
-        return _collections.ChainMap(n, self)
+        n = [_dinsd.ns.current]
+        if not self.transactions:
+            n.append(self)
+        return _collections.ChainMap(self._system_ns.current, *n)
 
     @_contextlib.contextmanager
     def transaction(self):
         changes = {}
         self._transaction_ns.push(changes)
         _dinsd.ns.push(self._transaction_ns.current)
+        system_changes = {}
+        self._system_ns.push(system_changes)
         try:
             yield
         except Rollback:
@@ -106,10 +111,13 @@ class Database(dict):
         finally:
             _dinsd.ns.pop()
             self._transaction_ns.pop()
+            self._system_ns.pop()
         if self.transactions:
             self._transaction_ns.current.maps[1].update(changes)
+            self._system_ns.current.maps[1].update(system_changes)
         else:
             self._update_db_rels(changes)
+            self._system_relations.update(system_changes)
 
     @property
     def transactions(self):
@@ -165,15 +173,19 @@ class Database(dict):
                            "({})".format(v)
                            for v in self.row_constraints[relname].values())
         if row_validator:
-            invalid = r.where("not ({})".format(row_validator))
-            if invalid:
-                # figure out one constraint and one row to put in error message;
-                # this is more useful than all the constraints and failures.
-                rw = sorted(invalid)[0]
-                for c, exp in sorted(self.row_constraints[relname].items()):
-                    if not eval(exp, _all, rw._as_locals()):
-                        raise RowConstraintError(relname, c, exp, rw)
-                raise AssertionError("Expected failure did not happen")
+            # We need a transaction here to get the db relation names in scope.
+            with (_null if self.transactions else
+                    self.transaction()), _dinsd.ns(self._system_ns.current):
+                invalid = r.where("not ({})".format(row_validator))
+                if invalid:
+                    # figure out one constraint and one row to put in error
+                    # message; this is more useful than all of the constraints
+                    # and all of the failed rows.
+                    rw = sorted(invalid)[0]
+                    for c, exp in sorted(self.row_constraints[relname].items()):
+                        if not eval(exp, _all, rw._as_locals()):
+                            raise RowConstraintError(relname, c, exp, rw)
+                    raise AssertionError("Expected failure did not happen")
         for i in range(10):
             done = True
             for name, (constraint, fixer) in self._constraints.items():
@@ -186,10 +198,10 @@ class Database(dict):
                         valid = fixer()
                     else:
                         valid = eval(fixer, _all, self._as_locals())
+                    if valid:
+                        done = False
                 if not valid:
                     raise DBConstraintError(name, constraint, fixer)
-                else:
-                    done = False
             if done:
                 break
         else:
@@ -230,28 +242,32 @@ class Database(dict):
     def set_key(self, relname, keynames):
         r = self[relname]
         r._validate_attr_names(keynames)
-        r.key = self._constraint_ns['_key_'+relname] = r >> keynames
-        self.row_constraints[relname]['_key_'+relname] = (
+        k = self._system_ns.current['_sys_key_'+relname] = r >> keynames
+        r.key = k.header
+        self.row_constraints[relname]['_sys_key_'+relname] = (
             "_row_ in {relname} or "
-            "_row_ >> _key_{relname}.header.keys() not in _key_{relname}".format(
-                relname=relname))
-        # XXX We need more infrastructure to make this work.
-        #self._constraints['_key_'+relname] = (
-        #    "len({relname})==len(_key_{relname})".format(relname=relname),
-        #    lambda r=relname: self._update_key(r))
+            "_row_ >> _sys_key_{relname}.header.keys() not in "
+                "_sys_key_{relname}".format(relname=relname))
+        self._constraints['_key_'+relname] = (
+            "len({relname})==len(_sys_key_{relname})".format(relname=relname),
+            lambda r=relname: self._update_key(r))
 
     def _update_key(self, relname):
         r = self[relname]
-        keyname = '_key_'+relname
-        key = self._constraint_ns[keyname]
+        keyname = '_sys_key_'+relname
+        key = self._system_ns.current[keyname]
+        if len(r) == len(key):
+            raise AssertionError("Relation and key have equal len in key fixer")
+        # We could just re-project the key, but this is more fun...for now.
         if len(r) > len(key):
-            self._constraint_ns[keyname] = key | (r - key) >> key.header.keys()
+            new_key = key | (r - key) >> key.header.keys()
         else:
-            self._constraint_ns[keyname] = matching(key, r)
+            new_key = _dinsd.matching(key, r)
+        self._system_ns.current[keyname] = new_key
         return True
 
     def key(self, relname):
-        return set(self._constraint_ns['_key_'+relname].header.keys())
+        return set(self._system_ns.current['_sys_key_'+relname].header.keys())
 
 
 
