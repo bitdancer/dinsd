@@ -3669,6 +3669,50 @@ removed at the end of the context:
         ...
     NameError: name 'exam_marks' is not defined
 
+The namespace additions are also kept separate across threads:
+
+    >>> import threading
+    >>> start = threading.Event()
+    >>> def thread_demo():
+    ...     with ns(exam_marks=exam_marks, is_enrolled_on=is_enrolled_on):
+    ...         start.wait()
+    ...         av = (exam_marks >> {'course_id'}).extend(avg_mark=
+    ...                   "round(avg((rel(row(course_id=course_id)) + "
+    ...                              "exam_marks).compute('mark')), 2)"
+    ...                   )
+    ...         print(av.display('course_id', 'avg_mark'))
+    >>> t = threading.Thread(target=thread_demo)
+    >>> t.start()
+    >>> fake_exam_marks = rel(exam_marks.header)(
+    ...                       ('student_id', 'course_id', 'mark'),
+    ...                       ('S1', 'C1', 87),
+    ...                       ('S1', 'C2', 89),
+    ...                       ('S1', 'C3', 89),
+    ...                       )
+    >>> with ns(exam_marks=fake_exam_marks):
+    ...     start.set()
+    ...     f = (exam_marks >> {'course_id'}).extend(avg_mark=
+    ...               "round(avg((rel(row(course_id=course_id)) + "
+    ...                          "exam_marks).compute('mark')), 2)"
+    ...               )
+    ...     t.join()
+    ...     print(f.display('course_id', 'avg_mark'))
+    +-----------+----------+
+    | course_id | avg_mark |
+    +-----------+----------+
+    | C1        | 75.67    |
+    | C2        | 49.0     |
+    | C3        | 75.5     |
+    +-----------+----------+
+    +-----------+----------+
+    | course_id | avg_mark |
+    +-----------+----------+
+    | C1        | 87.0     |
+    | C2        | 89.0     |
+    | C3        | 89.0     |
+    +-----------+----------+
+
+
 summarize
 ~~~~~~~~~
     >>> from dinsd import summarize
