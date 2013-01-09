@@ -86,43 +86,34 @@ class Database(dict):
         self.row_constraints = _collections.defaultdict(dict)
         self._constraint_ns = _collections.ChainMap(_all)
         self._constraints = {}
-        self._transactions = {}
+        self._transaction_ns = _dinsd._NS(self)
 
     def _as_locals(self):
-        l = _collections.ChainMap(self)
-        tid = _threading.current_thread()
-        if tid in _dinsd._locals:    # XXX clarify this API.
-            l.maps.append(_dinsd._locals[tid][-1].__dict__)
-        return l
+        n = _dinsd.ns._current_
+        if self.transactions:
+            return n
+        return _collections.ChainMap(n, self)
 
     @_contextlib.contextmanager
     def transaction(self):
-        tid = _threading.current_thread()
-        if tid in self._transactions:
-            stack = self._transactions[tid]
-        else:
-            stack = self._transactions[tid] = _threading.local()
-            stack.rel_ns = _collections.ChainMap(self)
-        stack = self._transactions[tid]
-        stack.rel_ns.maps[:0] = [{}]
+        changes = {}
+        self._transaction_ns.push(changes)
+        _dinsd.ns.push(self._transaction_ns._current_)
         try:
-            with _dinsd.ns(**stack.rel_ns):
-                yield
-            if stack.rel_ns.maps[1] is self:
-                self._update_db_rels(stack.rel_ns.maps[0])
-            else:
-                stack.rel_ns.maps[1].update(stack.rel_ns.maps[0])
+            yield
         except Rollback:
-            pass
+            return
         finally:
-            stack.rel_ns.maps.pop(0)
-            if len(stack.rel_ns.maps) == 1:
-                del self._transactions[tid]
+            _dinsd.ns.pop()
+            self._transaction_ns.pop()
+        if self.transactions:
+            self._transaction_ns._current_.maps[1].update(changes)
+        else:
+            self._update_db_rels(changes)
 
     @property
-    def in_transaction(self):
-        x = self._transactions.get(_threading.current_thread())
-        return _threading.current_thread() in self._transactions
+    def transactions(self):
+        return len(self._transaction_ns) - 1
 
     def _update_db_rels(self, updated_rels):
         with self._storage.transaction():
@@ -152,11 +143,8 @@ class Database(dict):
             val = val()
         # XXX Do we need to use the DB relation in _check_constraints?
         self._check_constraints(name, val)
-        with _null if self.in_transaction else self.transaction():
-            stack = self._transactions[_threading.current_thread()]
-            if stack.rel_ns.maps[0] is self:
-                raise Exception("recursion")
-            stack.rel_ns[name] = val
+        with _null if self.transactions else self.transaction():
+            self._transaction_ns._current_[name] = val
 
     def __repr__(self):
         return "{}({{{}}})".format(
