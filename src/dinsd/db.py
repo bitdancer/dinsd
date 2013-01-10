@@ -1,4 +1,4 @@
-#Copyright 2012 R. David Murray (see end comment for terms).
+#Copyright 2012, 2013 R. David Murray (see end comment for terms).
 """Common code used by the various XXX_db modules"""
 
 
