@@ -89,7 +89,9 @@ class Database(dict):
         self._system_relations = {}
         self._system_ns = _dinsd._NS(self._system_relations)
         self._constraints = {}
-        self._transaction_ns = _dinsd._NS(self, in_getitem=False)
+        self._transaction_ns = _dinsd._NS(self,
+                                          in_getitem=False,
+                                          dbcon=lambda: self._storage.new_con())
 
     def _as_locals(self):
         n = [_dinsd.ns.current]
@@ -124,7 +126,7 @@ class Database(dict):
         return len(self._transaction_ns) - 1
 
     def _update_db_rels(self, updated_rels):
-        with self._storage.transaction():
+        with self._transaction_ns.dbcon():
             for name, val in updated_rels.items():
                 oldval = self.get(name)
                 if oldval is None:
@@ -277,11 +279,13 @@ class Database(dict):
 
 class _dumb_sqlite_persistence:
 
+    con_max = 10  # XXX Need to make this configurable.
+
     def __init__(self, fn, debug_sql=False):
-        con = self.con = _sqlite.connect(fn)
-        if debug_sql:
-            outfile = None if debug_sql is True else debug_sql
-            con.set_trace_callback(lambda x: print(x, file=outfile))
+        self.dbfn = fn
+        self.debug_sql = debug_sql
+        self.con_pool = _collections.deque()
+        con = self.con = self.new_con()
         c = con.cursor()
         c.execute('PRAGMA foreign_keys = ON')
         c.execute('create table if not exists "_relnames" ('
@@ -308,9 +312,12 @@ class _dumb_sqlite_persistence:
         c.execute('create index if not exists "_row_constraints_relname_index" '
                     'on "_row_constraints" ("relname")')
 
-    def transaction(self):
-        # The connection is a context manager for sqlite transactions.
-        return self.con
+    def new_con(self):
+        con = _sqlite.connect(self.dbfn)
+        if self.debug_sql:
+            outfile = None if self.debug_sql is True else self.debug_sql
+            con.set_trace_callback(lambda x: print(x, file=outfile))
+        return con
 
     def add_reltype(self, name, header):
         db = self.con
