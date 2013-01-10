@@ -496,7 +496,7 @@ minimal key in the absence of a key declaration.  (That is, unlike some
 systems, it does not default to using the entire row as the key.)
 
 In *Tutorial D* a key declaration is the keyword ``KEY`` and a list of columns
-that follows a relation declaration.  We've seen an example of this before:
+that follows a relation declaration.  We've seen an example of this before::
 
     VAR IS_CALLED BASE
     INIT (ENROLMENT { StudentId, Name })
