@@ -95,7 +95,7 @@ About the Namespace(s)
 The relational algebra part of dinsd is its core.  All of the functions and
 classes that are used in the algebra (and documented in this document) are
 available at the top level of the dinsd namespace.  We could access all of
-dinsd through this namespace, using a single import:
+dinsd through this namespace, using a single import::
 
     >>> import dinsd
 
@@ -115,7 +115,7 @@ dinsd also defines a separate namespace that is used during expression
 evaluation (much more on that below).  It is named ``expression_namespace``,
 and starts out containing almost the same names and values as those imported by
 ``from dinsd import *``.  The exceptions are ``expression_namespace`` itself,
-and ``ns``, which we'll learn more about later.
+and ``ns``, which we'll learn more about later. ::
 
     >>> g = {}
     >>> exec("from dinsd import *", g)
@@ -253,7 +253,7 @@ ordering, and this constraint in dinsd may eventually be relaxed.)
 
 AITDT uses some custom types, ``SID`` and ``CID``, as examples in section 2.8
 and 2.9.  Example 2.4 in section 2.10 (page 42 of my copy of AIRDT) defines
-``SID`` this way:
+``SID`` this way::
 
     TYPE SID POSSREP SID { C CHAR
                            CONSTRAINT LENGTH(C) <= 5
@@ -262,7 +262,7 @@ and 2.9.  Example 2.4 in section 2.10 (page 42 of my copy of AIRDT) defines
                            AND
                            IS_DIGITS(SUBSTRING(C,1)))
 
-We can define the ``SID`` and ``CID`` types as follows:
+We can define the ``SID`` and ``CID`` types as follows::
 
     >>> from dinsd import Scaler
     >>> class ID(Scaler):
@@ -304,7 +304,7 @@ type, which our code is constraining to be ``str`` (Python's equivalent
 of *Tutorial D*'s ``CHAR``), but as is normal in Python the name we store it
 under is not itself typed.
 
-To prove that this straightforward Python implementation is correct:
+To prove that this straightforward Python implementation is correct::
 
     >>> SID('S1')
     SID('S1')
@@ -351,7 +351,7 @@ To prove that this straightforward Python implementation is correct:
 
 In dinsd there is one more thing we need to do with user defined types: we
 need to register them in the ``expression_namespace``.  This allows them to be
-used in string valued expressions, about which more later.
+used in string valued expressions, about which more later. ::
 
     >>> from dinsd import expression_namespace
     >>> expression_namespace['SID'] = SID
@@ -362,7 +362,7 @@ Defining Relations
 ~~~~~~~~~~~~~~~~~~
 
 The *Tutorial D* syntax for defining a Relation type is given on page
-42 of my copy of AIRDT:
+42 of my copy of AIRDT::
 
     RELATION { StudentId SID, Name NAME, CourseId CID }
 
@@ -379,7 +379,7 @@ underscore_separated_lower_case.  In standard Python code we also make more
 sparing use of blanks around grouping operators such as braces and parenthesis.
 
 With those preliminaries out of the way...the dinsd equivalent to
-the *Tutorial D* ``RELATION`` keyword is named ``rel``:
+the *Tutorial D* ``RELATION`` keyword is named ``rel``::
 
     >>> from dinsd import rel
 
@@ -396,19 +396,19 @@ as its result:
 In Python, dictionaries are unordered, and the keys of a dictionary are a set
 (that is, no two keys may be equal), so this declaration fully satisfies
 the *TTM* requirement that the header of a relation be a set of pairs in
-which order does not matter:
+which order does not matter::
 
     >>> y = rel({'student_id': SID, 'course_id': CID, 'name': str})
     >>> x is y
     True
 
 However, rather than indicating a syntax error if a key is repeated, Python
-simply uses the last value specified:
+simply uses the last value specified::
 
     >>> x == rel({'student_id': SID, 'course_id': CID, 'name': int, 'name': str})
     True
 
-The order does matter in this case:
+The order does matter in this case::
 
     >>> y = rel({'student_id': SID, 'course_id': CID, 'name': str, 'name': int})
     >>> x == y
@@ -418,7 +418,7 @@ The order does matter in this case:
 
 There is an alternate way to declare relations in dinsd that *will* raise an
 error if keys are duplicated, and that is to use the Python keyword syntax to
-specify the attribute names and values:
+specify the attribute names and values::
 
     >>> x == rel(student_id=SID, course_id=CID, name=str)
     True
@@ -450,7 +450,7 @@ Python's support for both a dictionary and a keyword list in the ``dict``
 constructor, and because it is occasionally convenient to use this form to
 merge some new attributes into an existing attribute list.  (This test looks a
 little odd because it is important that we make sure that the input dictionary
-is not mutated.)
+is not mutated.) ::
 
     >>> orig = {'student_id': SID, 'name': int}
     >>> test = orig.copy()
@@ -462,7 +462,7 @@ As with ``dict``, this is an update operation, so the values specified by
 the keyword arguments overwrite those in the dictionary argument.
 
 Passing something that is not a type as the value of a keyword argument is
-invalid:
+invalid::
 
     >>> rel(course_id=CID('C1'))            # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -471,7 +471,7 @@ invalid:
         definition: "CID('C1')" is not a type
 
 Relation types (and therefore relation objects, but we'll get to those later)
-have an attribute ``degree``, which gives the number of attributes.
+have an attribute ``degree``, which gives the number of attributes. ::
 
     >>> x.degree
     3
@@ -481,7 +481,7 @@ attributes and their types, and corresponds to the TTM ``HEADER``.  (The
 attributes are not not Python attributes of the relation, but they *are*
 Python attributes of the *rows*, which we haven't discussed yet.)  The header
 is a plain Python dictionary, so we need to sort its items to get a consistent
-representation for the doctest:
+representation for the doctest::
 
     >>> sorted(x.header.items())            # doctest: +NORMALIZE_WHITESPACE
     [('course_id', <class '__main__.CID'>), ('name', <class 'str'>),
@@ -493,7 +493,7 @@ a program from modifying the ``header`` attribute of a relation (or the
 ``degree`` attribute, for that matter).  This will of course completely screw
 things up, so don't do that.  That means if you want to use the information
 from the ``header`` attribute in a way that is not read only *make a copy
-of it*:
+of it*::
 
     >>> myvar = x.header.copy()
 
@@ -505,14 +505,14 @@ Remember, a dinsd "row" corresponds to a *Tutorial D* "tuple".  (Unlike
 "attribute", which is used in Python fairly loosely, "tuple" means something
 very precise in Python, and it isn't a *Tutorial D* tuple).
 
-On page 44 of my copy of AIRDT, there is this example of a TUPLE literal:
+On page 44 of my copy of AIRDT, there is this example of a TUPLE literal::
 
     TUPLE { StudentId SID('S1'), CourseId CID('C1'), Name NAME('Anne') }
 
 Considering that I'm coming from a Python dynamically typed background, it
 took me an inordinately long time to understand that the above is *implicitly
 typed* by the names of its attributes and the type of its concrete values.
-Once I figured that out, though, it was simple to support it in dinsd:
+Once I figured that out, though, it was simple to support it in dinsd::
 
     >>> from dinsd import row
     >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'})
@@ -520,21 +520,21 @@ Once I figured that out, though, it was simple to support it in dinsd:
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
 
 A ``row`` object has Python attributes to match the relational attributes of
-its header:
+its header::
 
     >>> x.course_id
     CID('C1')
     >>> x.name
     'Anne'
 
-Similar to ``rel``, there is a keyword form for ``row`` literals:
+Similar to ``rel``, there is a keyword form for ``row`` literals::
 
     >>> y = row(student_id=SID('S1'), course_id=CID('C1'), name='Anne')
     >>> x == y
     True
 
 This is the preferred form for row literals, since unlike the dictionary
-form it will object to to multiply defined keywords:
+form it will object to to multiply defined keywords::
 
     >>> row(student_id=SID('S1'), student_id=SID('S2'))
     Traceback (most recent call last):
@@ -552,7 +552,7 @@ test the output in doctests like this one.
 The default ordering for tuples is defined by first sorting the attributes in
 the row alphabetically, and then sorting the rows by comparing the values
 (which must themselves have a total ordering) of each attribute in turn from
-the first to the last alphabetically:
+the first to the last alphabetically::
 
     >>> y = row(student_id=SID('S2'), course_id=CID('C1'), name='Boris')
     >>> x == y
@@ -574,7 +574,7 @@ the first to the last alphabetically:
     >>> y >= y
     True
 
-You can't order rows of unlike type, though:
+You can't order rows of unlike type, though::
 
     >>> x < row(student_id=SID('S2'))         # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -586,7 +586,7 @@ This default ordering of the attribute names is also used in the repr as you
 can see above.  Rows also have a simpler string representation, that uses
 the string representation of both the attribute names and the values, with
 an ``=`` separating them.  The whole thing is enclosed in ``{}`` to indicate
-that it is a set rather than an ordered tuple:
+that it is a set rather than an ordered tuple::
 
     >>> str(x)
     '{course_id=C1, name=Anne, student_id=S1}'
@@ -608,7 +608,7 @@ with a ``_`` but are nonetheless intended to be part of the public API.
 
 So, rows have two public non-relational attributes of interest.  These
 correspond to the ``degree`` and ``header`` attributes of relations, but named
-as explained above:
+as explained above::
 
     >>> x._degree_
     3
@@ -618,16 +618,16 @@ as explained above:
 
 As with relations, these attributes are not read-only, but a program should
 not modify them.  Make a copy if you want to manipulate the header data in
-some way:
+some way::
 
     >>> myvar = x._header_.copy()
 
-As usual, dictionary and keywords can be mixed:
+As usual, dictionary and keywords can be mixed::
 
     >>> row({'name': 'Anne', 'student_id': SID('S3')}, student_id=SID('S1'))
     row({'name': 'Anne', 'student_id': SID('S1')})
 
-Types are not legal as row values, only non-type object instances.
+Types are not legal as row values, only non-type object instances. ::
 
     >>> row({'student_id': SID})           # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -644,21 +644,21 @@ stored.
 Row Types
 ~~~~~~~~~
 
-Rows have a type, just like relations have a type:
+Rows have a type, just like relations have a type::
 
     >>> xt = type(row(student_id=SID('S1'), name='Anne'))
     >>> xt
     <class 'dinsd.row({'name': str, 'student_id': SID})'>
 
 And, like relation types, only one type object is created for each distinct
-row type:
+row type::
 
     >>> yt = type(row(name='Anne', student_id=SID('S1')))
     >>> xt is yt
     True
 
 Row types have ``_header_`` and ``_degree_`` attributes, just like
-their instances:
+their instances::
 
     >>> sorted(yt._header_.items())
     [('name', <class 'str'>), ('student_id', <class '__main__.SID'>)]
@@ -668,20 +668,20 @@ their instances:
 (In fact, the ``_header`` and ``_degree_`` attributes of the rows are
 references to the class (type) attributes.)
 
-The type can be used to create a new row of that type:
+The type can be used to create a new row of that type::
 
     >>> yt(student_id=SID('S1'), name='Anne')
     row({'name': 'Anne', 'student_id': SID('S1')})
 
 For consistency with ``rel`` and ``row``, these are also valid ways to call
-the row constructor:
+the row constructor::
 
     >>> yt({'student_id': SID('S1'), 'name': 'Anne'})
     row({'name': 'Anne', 'student_id': SID('S1')})
     >>> yt({'student_id': SID('S1')}, name='Anne')
     row({'name': 'Anne', 'student_id': SID('S1')})
 
-This is an invalid call, though:
+This is an invalid call, though::
 
     >>> yt({'student_id': SID('S1')}, {'name': 'Anne'})
     Traceback (most recent call last):
@@ -691,12 +691,12 @@ This is an invalid call, though:
 A useful difference between a row type constructor and ``row`` is that the
 constructor knows what type the attributes are supposed to be.  It can
 therefore coerce appropriate literals of other types that are passed to it
-into the correct type by passing them to the attribute's type function:
+into the correct type by passing them to the attribute's type function::
 
     >>> yt(student_id='S1', name='Anne')
     row({'name': 'Anne', 'student_id': SID('S1')})
 
-Passing it a literal of an inappropriate type will produce an error:
+Passing it a literal of an inappropriate type will produce an error::
 
     >>> yt(student_id=1, name='Anne')       # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -714,7 +714,7 @@ if it passes that test, it also has to be something that matches the
 requirements imposed by our ``SID`` user defined type.
 
 Passing the constructor the wrong attribute names or the wrong number of
-attributes will also produce an error:
+attributes will also produce an error::
 
     >>> yt(student_id='S1', foo='Anne')
     Traceback (most recent call last):
@@ -731,7 +731,7 @@ attributes will also produce an error:
     TypeError: Expected 2 attributes, got 1 ({...})
 
 There is no such thing as an "empty" row, so passing no arguments is als
-an error:
+an error::
 
     >>> yt()
     Traceback (most recent call last):
@@ -746,7 +746,7 @@ an error:
 Relation Literals
 ~~~~~~~~~~~~~~~~~
 
-Given the preceding, the dinsd equivalent to AIRDT's example 2.3 (page 45):
+Given the preceding, the dinsd equivalent to AIRDT's example 2.3 (page 45)::
 
     RELATION {
         TUPLE { StudentId SID('S1'), CourseId CID('C1'), Name NAME('Anne')},
@@ -758,7 +758,7 @@ Given the preceding, the dinsd equivalent to AIRDT's example 2.3 (page 45):
 
 should be reasonably obvious.  We'll do the set-of-rows form first, since
 it is closest to the *Tutorial D* notation, and also because it is the
-most complete and formal specification of a relation literal:
+most complete and formal specification of a relation literal::
 
     >>> x = rel({
     ...     row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
@@ -783,7 +783,7 @@ can be used to create that relation.
 The ``repr`` is a bit hard to parse visually, though, since it is so long and
 ends up line wrapped at arbitrary points.  Relations (as opposed to
 relation *types*) also have an ``str`` form that is much easier to parse
-visually:
+visually::
 
     >>> print(x)
     +-----------+----------+------------+
@@ -801,7 +801,7 @@ types of the values, we don't really need to first turn the dict into a row
 before passing it in to ``rel``.  ``rel`` can process dictionaries to create
 a relation just as easily as it can process rows.  However, Python sets
 can't hold dictionaries (because Python dictionaries are mutable), so we
-instead pass them as a list:
+instead pass them as a list::
 
     >>> y = rel((
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
@@ -815,7 +815,7 @@ instead pass them as a list:
 
 A Python function can turn a list of arguments into an iterator automatically,
 and many Python functions that accept an iterator also accept an equivalent
-list of arguments.  dinsd supports this call form for the ``rel`` function:
+list of arguments.  dinsd supports this call form for the ``rel`` function::
 
     >>> y = rel(
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
@@ -828,7 +828,7 @@ list of arguments.  dinsd supports this call form for the ``rel`` function:
     True
 
 We can even mix dictionaries and rows in these forms, because the dictionaries
-and rows are logically interchangeable.
+and rows are logically interchangeable. ::
 
     >>> y = rel((
     ...     row({'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'}),
@@ -859,7 +859,7 @@ set of duplicates.
 
 If you wish to hew as close as possible to the type-safety
 of ``D``, you should use the keyword form of ``row`` with either the
-multiple-argument or non-set iterator form of ``rel``:
+multiple-argument or non-set iterator form of ``rel``::
 
     >>> y = rel(
     ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
@@ -872,7 +872,7 @@ multiple-argument or non-set iterator form of ``rel``:
     True
 
 This is because, like the dict literal, the Python set literal will happily
-accept duplicate entries:
+accept duplicate entries::
 
     >>> y = rel({
     ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
@@ -886,7 +886,7 @@ accept duplicate entries:
     True
 
 The non-set form, however, will produce an error if you try to specify two
-identical rows in a relation literal:
+identical rows in a relation literal::
 
     >>> rel(row(foo=1), row(foo=2), row(foo=1), row(foo=4))
     Traceback (most recent call last):
@@ -903,7 +903,7 @@ relation *is* a set, which is important information to convey.
 
 Although it isn't technically a literal form, this is a good place to mention
 that any Python iterator can be used as the argument to ``rel``.  Here is
-an example using a generator:
+an example using a generator::
 
     >>> def multiplication_table():
     ...     for a in range(10):
@@ -931,7 +931,7 @@ We could equally well have used a generator expression, or a list
 comprehension.
 
 It is possible to define a single row literal (this may seem obvious, but it
-needs to be tested since it is an edge case):
+needs to be tested since it is an edge case)::
 
     >>> rel({'foo': 1, 'bar': CID('C1')})
     rel({row({'bar': CID('C1'), 'foo': 1})})
@@ -939,7 +939,7 @@ needs to be tested since it is an edge case):
     rel({row({'student_id': SID('S1')})})
 
 It is an error to specify unlike types in a relation literal.  The type of the
-first row is assumed to be the "correct" type of the relation:
+first row is assumed to be the "correct" type of the relation::
 
     >>> rel(row(foo=1), row(foo=1, bar=2))     # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -953,7 +953,7 @@ first row is assumed to be the "correct" type of the relation:
     TypeError: Row header does not match relation header in row 1 (got
         row({'foo': 'bar'}) for <class 'dinsd.rel({'foo': int})'>)
 
-The errors are a bit different if we use the dictionary form:
+The errors are a bit different if we use the dictionary form::
 
     >>> rel({'foo': 1}, {'foo': 1, 'bar': 2})       #doctest: +ELLIPSIS
     Traceback (most recent call last):
@@ -976,12 +976,12 @@ represent a row, there is a syntactic ambiguity in the ``rel`` notation: is
 ``rel()`` the degree 0 cardinality 0 type, or an instance of a relation of
 that type?  The same question applies to ``rel({})``.  Because our type name
 notation uses ``rel({})`` to represent the degree zero cardinality zero type,
-we resolve the ambiguity by declaring that ``rel({})`` returns that type:
+we resolve the ambiguity by declaring that ``rel({})`` returns that type::
 
     >>> rel({})
     <class 'dinsd.rel({})'>
 
-while ``rel()`` returns an instance of that type:
+while ``rel()`` returns an instance of that type::
 
     >>> rel()
     rel({})()
@@ -992,13 +992,13 @@ know which one weighs more with me until I've actually coded an application in
 dinsd, so for the moment we have the situation described above.
 
 Note that passing any empty iterator to ``rel`` is equivalent to the second
-form above:
+form above::
 
     >>> rel() == rel(set()) == rel([]) == rel(tuple())
     True
 
 We can also write a literal for a relation with no attributes (degree 0) and
-one row with no attributes (cardinality 1):
+one row with no attributes (cardinality 1)::
 
     >>> rel(row())
     rel({row({})})
@@ -1014,11 +1014,11 @@ and which object (and which type of object) they reference can change over
 time.  This is Python's dynamically typed nature.  As I've mentioned already,
 the objects themselves are strongly typed.
 
-The dinsd equivalent of example 2.5:
+The dinsd equivalent of example 2.5::
 
     VAR SN SID INIT SID ( 'S1' ) ;
 
-is simply:
+is simply::
 
     >>> sn = SID('S1')
     >>> sn
@@ -1027,14 +1027,14 @@ is simply:
 There is no Python equivalent to an actual variable declaration, and therefore
 no equivalent to a variable *without* an initializer.
 
-The dinsd equivalent to example 2.6:
+The dinsd equivalent to example 2.6::
 
     VAR ENROLLMENT BASE RELATION { StudentId SID,
                                    Name NAME,
                                    CourseId CID )
                         KEY ( StudentId, CourseId ) ;
 
-is:
+is::
 
     >>> enrollment = rel(student_id=SID, name=str, course_id=CID)()
     >>> enrollment
@@ -1047,7 +1047,7 @@ Note carefully the ``()`` at the end of that expression.  What is happening
 here is that we are using the type declaration form of ``rel``, and
 then *calling the type* to obtain an actual relation.  Since we specify no rows
 for the relation, we get an empty instance of that relation type.  You can
-see that a bit more clearly in table form:
+see that a bit more clearly in table form::
 
     >>> print(enrollment)
     +-----------+------+------------+
@@ -1055,7 +1055,7 @@ see that a bit more clearly in table form:
     +-----------+------+------------+
     +-----------+------+------------+
 
-We could equally well write the above as follows:
+We could equally well write the above as follows::
 
     >>> IsEnrolledOn = rel(student_id=SID, name=str, course_id=CID)
     >>> enrollment = IsEnrolledOn()
@@ -1069,7 +1069,7 @@ part that involves dinsd-specific concepts.
 
 If we want to create an instance of the type now pointed to by
 ``IsEnrolledOn`` that does have content, we have a number of choices.  Here
-is one rather wordy way of doing it:
+is one rather wordy way of doing it::
 
     >>> is_enrolled_on = IsEnrolledOn(
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
@@ -1096,13 +1096,13 @@ is one rather wordy way of doing it:
 
 A relation type has an attribute ``row`` that is a reference to the type for
 the rows that may be present in that relation.  That is, ``<relation>.row`` is
-the ``row`` type whose ``_header_`` is equal to the ``header`` of the relation:
+the ``row`` type whose ``_header_`` is equal to the ``header`` of the relation::
 
     >>> IsEnrolledOn.header == IsEnrolledOn.row._header_
     True
 
 As we saw above, the type for a row can convert appropriate standard literals into
-the appropriate type, so we can simplify the above:
+the appropriate type, so we can simplify the above::
 
     >>> x = IsEnrolledOn(
     ...     IsEnrolledOn.row({'student_id': 'S1', 'course_id': 'C1',
@@ -1120,7 +1120,7 @@ the appropriate type, so we can simplify the above:
     True
 
 We can save ourselves some typing by using a temporary name to refer to
-this row type function:
+this row type function::
 
     >>> r = IsEnrolledOn.row
     >>> x = IsEnrolledOn(
@@ -1134,7 +1134,7 @@ this row type function:
     True
 
 And we can get make sure we have no duplicate attributes in our literal
-rows by using the keyword version:
+rows by using the keyword version::
 
     >>> r = IsEnrolledOn.row
     >>> x = IsEnrolledOn(
@@ -1150,7 +1150,7 @@ rows by using the keyword version:
 We can of course also just use the regular row function, although in that
 case we must provide values of the correct type, since the generic
 row function doesn't know what type of row we want and produces
-whatever we tell it to:
+whatever we tell it to::
 
     >>> x = IsEnrolledOn(
     ...     row(student_id=SID('S1'), course_id=CID('C1'), name='Anne'),
@@ -1165,7 +1165,7 @@ whatever we tell it to:
 While it works fine to define rows just with the ``row`` function, using the
 ``row`` attribute of the relation gives the system opportunities to optimize
 the row creation process.  But the rows created by the two methods are
-entirely equivalent:
+entirely equivalent::
 
     >>> x = row({'student_id': SID('S1'), 'course_id': CID('C1'),
     ...           'name': 'Anne'})
@@ -1182,14 +1182,14 @@ entirely equivalent:
 
 Just like in *Tutorial D*, if you use a generic ``row`` declaration,
 you *must* use the exact type for the attribute values.  Otherwise you
-end up with a row with a different type:
+end up with a row with a different type::
 
     >>> z = row({'course_id': 'C1', 'name': 'Anne', 'student_id': 'S1'})
     >>> z == y
     False
 
 Trying to pass such a row into a relation of a different type will
-produce an error:
+produce an error::
 
     >>> x = IsEnrolledOn(               # doctest: +NORMALIZE_WHITESPACE
     ...     row(student_id='S1', course_id='C1', name='Anne'),
@@ -1206,7 +1206,7 @@ produce an error:
 
 We can see exactly why this is by inspecting the ``_header_`` attribute
 of the respective rows (the ``_header_`` is just a ``dict``, so we have
-to sort it as tuples to get something predictable to doctest :
+to sort it as tuples to get something predictable to doctest::
 
     >>> sorted(z._header_.items())          # doctest: +NORMALIZE_WHITESPACE
     [('course_id', <class 'str'>), ('name', <class 'str'>),
@@ -1221,7 +1221,7 @@ means the two rows are not the same type, and are not equal.
 
 Since the dictionary representation of a row is logically equivalent to
 the row representation, we also have the option of just passing a list
-of dictionaries into the relation constructor:
+of dictionaries into the relation constructor::
 
     >>> x = IsEnrolledOn(
     ...     {'student_id': SID('S1'), 'course_id': CID('C1'), 'name': 'Anne'},
@@ -1235,7 +1235,7 @@ of dictionaries into the relation constructor:
 
 In this case, too, since the relation knows the types of the attributes, it
 can automatically convert appropriate literals into the correct type for the
-attribute:
+attribute::
 
     >>> x = IsEnrolledOn(
     ...     {'student_id': 'S1', 'course_id': 'C1', 'name': 'Anne'},
@@ -1248,7 +1248,7 @@ attribute:
     True
 
 Trying to pass the wrong names, inappropriate literals, or wrong number of
-attributes will result in an error:
+attributes will result in an error::
 
     >>> IsEnrolledOn(
     ...     {'student_id': 'S1', 'course_id': 'C1', 'foo': 'Anne'},
@@ -1286,7 +1286,7 @@ attributes will result in an error:
 
 All of these examples require repeating the attribute names in every row,
 though.  dinsd provides an additional specialized shorthand for creating
-a relation instance that eliminates this duplication:
+a relation instance that eliminates this duplication::
 
     >>> x = IsEnrolledOn(
     ...     ('student_id', 'course_id', 'name'),
@@ -1307,7 +1307,7 @@ that same order.
 
 There is no loss of type-safety here, since each tuple is checked for
 conformance to the relation's type, and each value  is passed through the
-corresponding attribute's type constructor:
+corresponding attribute's type constructor::
 
     >>> IsEnrolledOn(               # doctest: +NORMALIZE_WHITESPACE
     ...     ('student_id', 'course_id', 'foo'),
@@ -1355,7 +1355,7 @@ the value (and usefulness) of specifying the order of the tuples in the
 literal representation is too valuable to give up for the small reduction in
 additional typing.
 
-By the way, as with ``rel``, rows and dictionaries can be mixed:
+By the way, as with ``rel``, rows and dictionaries can be mixed::
 
     >>> x = IsEnrolledOn(
     ...     IsEnrolledOn.row({'student_id': SID('S1'), 'course_id': CID('C1'),
@@ -1376,7 +1376,7 @@ One Obvious Way To Do It?
 
 The Python language is designed around a set of philosophical principles.
 (Well, actually, the set of philosophical principles was derived from the
-original language design, but then it became a guide.)
+original language design, but then it became a guide.) ::
 
     >>> import this
     The Zen of Python, by Tim Peters
@@ -1429,23 +1429,23 @@ So: using dictionary/set notation is provided mostly because it would be
 surprising if it didn't work.  But the one (mostly obvious) way to do it
 should be the following:
 
-Defining a relation type:
+Defining a relation type::
 
     >>> Foo = rel(foo=int, bar=SID)
 
-Row literals:
+Row literals::
 
     >>> r = row(foo=1, bar=SID('S1'))
 
-Extending a relation type into an instance:
+Extending a relation type into an instance::
 
     >>> foo = Foo(('foo', 'bar'), (1, 'S1'), (2, 'S2'))
 
-A single row relational literal:
+A single row relational literal::
 
     >>> baz = rel(row(baz='test', foobar=2))
 
-A multi-row relational literal:
+A multi-row relational literal::
 
     >>> baz2 = rel(baz=str, foobar=int)(
     ...             ('baz',  'foobar'),
@@ -1462,7 +1462,7 @@ Relational Operators
 Example Relations
 ~~~~~~~~~~~~~~~~~
 
-Here are the two relations used in the examples in Chapter 4 of AIRDT:
+Here are the two relations used in the examples in Chapter 4 of AIRDT::
 
     >>> IsCalled = rel(student_id=SID, name=str)
     >>> is_called = IsCalled(
@@ -1523,14 +1523,14 @@ display
 
 ``display`` is not a relational algebra function, but we introduce it here
 because it is useful in the examples, and there is no corresponding
-concept in AIRDT.
+concept in AIRDT. ::
 
     >>> from dinsd import display
 
 The value returned by ``display`` is very similar to the value returned
 by turning a relation in to a string, except that we can control the
 order of the columns in the resulting table display.  Using ``display``
-we can print the relations in the same column order that is used in AIRDT:
+we can print the relations in the same column order that is used in AIRDT::
 
     >>> print(display(is_called, 'student_id', 'name'))
     +------------+----------+
@@ -1554,7 +1554,7 @@ we can print the relations in the same column order that is used in AIRDT:
     +------------+-----------+
 
 Since ``display`` can only ever apply to one relation, it is available
-as a method on relations:
+as a method on relations::
 
     >>> print(is_called.display('student_id', 'name'))
     +------------+----------+
@@ -1568,7 +1568,7 @@ as a method on relations:
     +------------+----------+
 
 We can also choose a sort order that is different from sorting by the
-columns in the ordered displayed:
+columns in the ordered displayed::
 
     >>> print(is_called.display('student_id', 'name',
     ...          sort=('name', 'student_id')))
@@ -1588,7 +1588,7 @@ join
 
     >>> from dinsd import join
 
-In *Tutorial D*, a join operation looks like this:
+In *Tutorial D*, a join operation looks like this::
 
     IS_CALLED JOIN IS_ENROLLED_ON
 
@@ -1618,7 +1618,7 @@ and produces the table from figure 4.2 (page 89 in my copy of AIRDT):
     +------------+----------+-----------+
 
 In *Tutorial D* the ``JOIN`` relational operator can be used both as a prefix
-function and as a infix operator:
+function and as a infix operator::
 
     JOIN { r1, r2, ... }
 
@@ -1626,7 +1626,7 @@ function and as a infix operator:
 only sometimes an infix form...because there are a limited number of operators
 that we can overload.)
 
-The prefix form of ``join`` in dinsd is:
+The prefix form of ``join`` in dinsd is::
 
     >>> j2 = join(is_enrolled_on, is_called)
     >>> print(j2.display('student_id', 'name', 'course_id'))
@@ -1644,7 +1644,7 @@ The prefix form of ``join`` in dinsd is:
 
 On page 93 there is a discussion of cases where we *can't* perform a join.  In
 particular, if two tables have columns with the same name but different types,
-we cannot join them:
+we cannot join them::
 
     >>> permissive_is_called = rel(student_id=str, name=str)(
     ...     ('student_id', 'name'),
@@ -1660,7 +1660,7 @@ we cannot join them:
         str})'> and <class 'dinsd.rel({'course_id': CID, 'student_id': SID})'>
 
 The prefix form of ``join`` can take more than two arguments, joining all of
-the relations so specified:
+the relations so specified::
 
     >>> x = join(is_enrolled_on, is_called, rel(row(student_id=SID('S1'))))
     >>> print(x.display('student_id', 'name', 'course_id'))
@@ -1672,7 +1672,7 @@ the relations so specified:
     +------------+------+-----------+
 
 A mismatched header error in a multi-join also indicates in which argument the
-error was detected:
+error was detected::
 
     >>> join(is_enrolled_on, is_called, permissive_is_called)
     ...
@@ -1685,7 +1685,7 @@ error was detected:
         'student_id': SID})'> and <class 'dinsd.rel({'name': str,
         'student_id': str})'> (error detected while processing argument 2)
 
-If we join with an empty relation, we get an empty relation:
+If we join with an empty relation, we get an empty relation::
 
     >>> print(IsCalled() & is_enrolled_on)
     +-----------+------+------------+
@@ -1695,7 +1695,7 @@ If we join with an empty relation, we get an empty relation:
 
 Join is idempotent: if we join a relation to itself, or if we join a relation
 to the result of a previous join involving that relation, we get back the
-original join:
+original join::
 
     >>> j = is_enrolled_on & is_called
     >>> j == j & j
@@ -1703,12 +1703,12 @@ original join:
     >>> j == j & is_called
     True
 
-Join is commutative:
+Join is commutative::
 
     >>> is_enrolled_on & is_called == is_called & is_enrolled_on
     True
 
-Join is associative:
+Join is associative::
 
     >>> last_year = IsEnrolledOn(
     ...         ('student_id', 'course_id'),
@@ -1721,13 +1721,13 @@ Join is associative:
     True
 
 Given the above, a monadic join simply returns the argument
-relation:rel({row({})})
+relation::
 
     >>> join(last_year) == last_year
     True
 
 While an empty join gets us an empty relation with no attributes and one row
-with no attributes:
+with no attributes::
 
     >>> join()
     rel({row({})})
@@ -1740,7 +1740,7 @@ intersect
 
 This is a special case of ``join``: the case where all of the attributes of
 the two relations being joined are the same.  It is equivalent to the
-set-intersection of the two relations:
+set-intersection of the two relations::
 
     >>> repeat_enrollment = intersect(is_enrolled_on, last_year)
     >>> print(repeat_enrollment.display('student_id', 'course_id'))
@@ -1756,7 +1756,7 @@ There are two reasons to use ``intersect`` instead of ``join``.  The first is
 that because the domain of operation is constrained, the implementation may be
 faster.  The better reason to use it is that it declares your intention to
 join two sets with the same attributes, and will raise an error if the two
-sets do not have the same attributes:
+sets do not have the same attributes::
 
     >>> intersect(is_called, is_enrolled_on)
     Traceback (most recent call last):
@@ -1765,7 +1765,7 @@ sets do not have the same attributes:
 
 Unlike *Tutorial D*, dinsd does not have an infix form of this operator.
 
-Like ``join``, ``intersect`` may be called with more than two arguments:
+Like ``join``, ``intersect`` may be called with more than two arguments::
 
     >>> two_years_ago = IsEnrolledOn()
     >>> print(intersect(is_enrolled_on, last_year, two_years_ago))
@@ -1785,7 +1785,7 @@ are *no* attributes in common between the two relations, and the result of the
 join is the Cartesian product of the two sets of values.
 
 Use cases for this are not common, so we won't even try to come up with a
-sensible example:
+sensible example::
 
     >>> Foo = rel(bar=str)
     >>> foo = Foo(('bar',), ('fizz',), ('gin',))
@@ -1803,7 +1803,7 @@ sensible example:
 
 Here there is not likely to be any performance gain by using ``times``, but
 the feature of getting an error if you try to ``times`` relations that share
-columns is probably even more valuable.
+columns is probably even more valuable. ::
 
     >>> times(is_called, last_year)
     Traceback (most recent call last):
@@ -1814,7 +1814,7 @@ There is no infix form of ``times``, though we may choose to assign it to
 ``*`` at some point.
 
 Like ``join`` and ``intersect``, ``times`` may be called with more than two
-relations:
+relations::
 
     >>> bar = rel(foo=str)(('foo',), ('gin',), ('fiz',))
     >>> print(times(last_year, bar, foo))
@@ -1847,13 +1847,13 @@ names.  This is required in order to perform logical operations on relations
 where we need to *not* treat the attributes as the same, even though they have
 the same data in them (we'll see an example of this below).
 
-In *Tutorial D* (example 4.2) this is written:
+In *Tutorial D* (example 4.2) this is written::
 
     IS_CALLED RENAME ( StudentId AS Sid )
 
 Unlike the ``join`` operators, ``rename`` is a function of a single relation.
 In Python, the natural notation for this is the postfix object method
-invocation syntax:
+invocation syntax::
 
     >>> r = is_called.rename(student_id='sid')
     >>> print(r.display('sid', 'name'))
@@ -1869,13 +1869,13 @@ invocation syntax:
 
 This gives us the equivalent result as that shown in figure 4.4 in AIRDT.
 
-As is standard for dinsd, there is also a prefix form:
+As is standard for dinsd, there is also a prefix form::
 
     >>> from dinsd import rename
     >>> r == rename(is_called, student_id='sid')
     True
 
-We can also rename multiple attributes:
+We can also rename multiple attributes::
 
     >>> r2 = is_called.rename(student_id='sid', name='called')
     >>> print(r2.display('sid', 'called'))
@@ -1890,7 +1890,7 @@ We can also rename multiple attributes:
     +-----+----------+
 
 We support the revised semantics of *Tutorial D* that allows attribute names
-to be swapped in one call:
+to be swapped in one call::
 
     >>> rswap = is_called.rename(student_id='name', name='student_id')
     >>> print(rswap)
@@ -1907,13 +1907,13 @@ to be swapped in one call:
 This is the natural interpretation in Python: even though we don't use the
 ``{}`` notation above to indicate that the renames are an unordered set, the
 Python keyword semantics are that of a set.  And in fact Python allows us to
-use the dictionary notation, which makes this explicit:
+use the dictionary notation, which makes this explicit::
 
     >>> rswap == rename(is_called, **{'student_id': 'name',
     ...                               'name': 'student_id'})
     True
 
-Rename is a read-only operation, it does not modify the source relation:
+Rename is a read-only operation, it does not modify the source relation::
 
     >>> r  == is_called
     False
@@ -1931,7 +1931,7 @@ Rename is a read-only operation, it does not modify the source relation:
     +------------+----------+
 
 Example 4.3 on page 98 of AIRDT uses ``rename`` and ``join`` to discover all
-pairs of students that share the same name:
+pairs of students that share the same name::
 
     >>> shared_name = join(is_called.rename(student_id='sid1'),
     ...                    is_called.rename(student_id='sid2'))
@@ -1949,7 +1949,7 @@ pairs of students that share the same name:
     +------+----------+------+
 
 This table doesn't quite look like the one on page 98.  We can fix that using
-the 'sort' keyword of ``display``:
+the 'sort' keyword of ``display``::
 
     >>> print(shared_name.display('sid1', 'name', 'sid2',
     ...                 sort=('name', 'sid1', 'sid2')))
@@ -1965,7 +1965,7 @@ the 'sort' keyword of ``display``:
     | S4   | Devinder | S4   |
     +------+----------+------+
 
-We can't rename a non-existent attribute:
+We can't rename a non-existent attribute::
 
     >>> is_called.rename(fred='called')
     Traceback (most recent call last):
@@ -1973,7 +1973,7 @@ We can't rename a non-existent attribute:
     KeyError: 'fred'
 
 Specifying a name as the target of more than one attribute rename is also an
-error:
+error::
 
     >>> is_called.rename(student_id='foo', name='foo')
     Traceback (most recent call last):
@@ -1981,7 +1981,7 @@ error:
     ValueError: Duplicate relational attribute name 'foo'
 
 Rename with no attributes renamed returns a relation equal to the relation on
-which rename is called:
+which rename is called::
 
     >>> is_called.rename() == is_called
     True
@@ -1994,11 +1994,11 @@ project
 relation containing just those attributes (and the corresponding values).
 
 This is not an explicit named operator in *Tutorial D*, but an implicit one
-arising from a particular syntax.  From example 4.4:
+arising from a particular syntax.  From example 4.4::
 
     IS_ENROLLED_ON { StudentId }
 
-For the dinsd version of this we use overload the ``>>`` operator:
+For the dinsd version of this we use overload the ``>>`` operator::
 
     >>> sids = is_enrolled_on >> {'student_id'}
     >>> print(sids)
@@ -2011,7 +2011,7 @@ For the dinsd version of this we use overload the ``>>`` operator:
     | S4         |
     +------------+
 
-There is, as is standard for dinsd, a functional version of this:
+There is, as is standard for dinsd, a functional version of this::
 
     >>> from dinsd import project
     >>> sids == project(is_enrolled_on, {'student_id'})
@@ -2019,7 +2019,7 @@ There is, as is standard for dinsd, a functional version of this:
 
 It is often more convenient to list the attribute we want to drop instead
 of the attributes we want to keep.  *Tutorial D* does this by prefixing 
-the keyword ``ALL BUT`` to the list of attribute names:
+the keyword ``ALL BUT`` to the list of attribute names::
 
     IS_ENROLLED_ON { ALL BUT CourseId }
 
@@ -2028,35 +2028,35 @@ projection on to ``student_id``.
 
 dinsd's equivalent to ``ALL BUT`` is a functional wrapper (that is, a function
 that returns a lazy result that can later be used to compute the inverse of
-the specified set of attribute names):
+the specified set of attribute names)::
 
     >>> from dinsd import all_but
     >>> sids == project(is_enrolled_on, all_but({'course_id'}))
     True
 
-We could also write this as:
+We could also write this as::
 
     >>> sids == is_enrolled_on >> all_but({'course_id'})
     True
 
 It is a common operation, though, so dinsd also overloads the ``<<`` operator
-to mean "all but":
+to mean "all but"::
 
     >>> sids == is_enrolled_on << {'course_id'}
     True
 
-Inverting an inversion is of questionable utility, but it is legal:
+Inverting an inversion is of questionable utility, but it is legal::
 
     >>> sids == is_enrolled_on << all_but({'student_id'})
     True
 
 In AIRDT, figure 4.7 on page 101, the name matching expression is improved
-using project as follows:
+using project as follows::
 
     ( ( IS_CALLED RENAME ( StudentId AS Sid1 ) ) JOIN
       ( IS_CALLED RENAME ( StudentId AS Sid2 ) ) ) { ALL BUT Name }
 
-In dinsd, this becomes:
+In dinsd, this becomes::
 
     >>> same_name = (is_called.rename(student_id='sid1') &
     ...              is_called.rename(student_id='sid2')) << {'name'}
@@ -2084,13 +2084,13 @@ the result of the join, we need to enclose the join expression in parenthesis.
 (In dinsd this operator precedence is fortuitous, since although we can
 overload operators in Python we cannot change their relative precedence.)
 
-An ``all_but`` projection of the empty set produces an identical relation:
+An ``all_but`` projection of the empty set produces an identical relation::
 
     >>> same_name << {} == same_name
     True
 
 In dinsd this is explicitly *not* the same object that was passed in to
-the operation:
+the operation::
 
     >>> same_name << {} is same_name
     False
@@ -2101,18 +2101,18 @@ does seem natural.  Technically, ``{}`` is an empty *dictionary* not an
 empty set.  Python's literal notation for an empty set is ``set()``.  But
 we can easily interpret an empty dictionary as an empty set *in this
 context*, and so we do.  Using ``set()`` will of course produce the same
-result, if you prefer to keep your data types straight:
+result, if you prefer to keep your data types straight::
 
     >>> same_name << set() == same_name
     True
 
 Obversely, projecting to the empty set yields a relation of no attributes
-having a single row with no attributes.
+having a single row with no attributes. ::
 
     >>> same_name >> {}
     rel({row({})})
 
-Trying to project using a name that is not a valid attribute is an error:
+Trying to project using a name that is not a valid attribute is an error::
 
     >>> shared_name << {'foo'}
     Traceback (most recent call last):
@@ -2124,8 +2124,8 @@ Trying to project using a name that is not a valid attribute is an error:
     TypeError: Attribute list included unknown attributes: {'foo'}
 
 On page 102 of AIRDT example 4.5 demonstrates using projection to split
-the original enrollment relation into ``is_enrolled_on`` and ``is_called``:
-in *Tutorial D*:
+the original enrollment relation into ``is_enrolled_on`` and ``is_called``
+in *Tutorial D*::
 
     VAR IS_CALLED BASE
     INIT (ENROLMENT { StudentId, Name })
@@ -2135,7 +2135,7 @@ in *Tutorial D*:
     KEY { StudentId, CourseId } ;
     DROP VAR ENROLMENT ;
 
-in dinsd, that looks like this:
+in dinsd, that looks like this::
 
     >>> is_enrolled_on_split = enrollment >> {'student_id', 'course_id'}
     >>> is_called_split = enrollment >> {'student_id', 'name'}
@@ -2148,7 +2148,7 @@ though, because I'm ignoring the issue of persisting the database here, which
 will add a few characters and one additional statement when we get to it.  I
 think *Tutorial D* does the persistence automatically.  But more, we haven't
 dealt with constraints at all yet, and establishing those for a table is a bit
-more complicated.
+more complicated. ::
 
     >>> print(is_enrolled_on_split.display('student_id', 'course_id'))
     +------------+-----------+
@@ -2172,7 +2172,7 @@ more complicated.
 
 ``is_enrolled_on_split`` is identical to the original ``is_enrolled_on``
 relation, but ``is_called`` is not, since the ``enrollment`` relation did not
-include any entry for the student who was to enrolled in any courses:
+include any entry for the student who was to enrolled in any courses::
 
     >>> is_enrolled_on_split == is_enrolled_on
     True
@@ -2193,16 +2193,16 @@ practice has quickly become to refer to them as ``Dum`` (or ``DUM``) and
 capitalization for the analogous logical constants``True`` and ``False``.
 
 In *Tutorial D*, the literal for ``TABLE_DUM``, which is the relation with
-no attributes and no rows, is:
+no attributes and no rows, is::
 
     RELATION { } { }
 
-and ``TABLE_DEE``, which is the relation with no attributes and one row is:
+and ``TABLE_DEE``, which is the relation with no attributes and one row is::
 
     RELATION { TUPLE { } }
 
 We've already seen the dinsd equivalents of these, but now we note that they
-are also defined as named constants:
+are also defined as named constants::
 
     >>> from dinsd import Dum, Dee
     >>> Dum
@@ -2222,14 +2222,14 @@ are also defined as named constants:
     ++
 
 These, especially ``Dee``, should look very familiar, as we have encountered
-their reprs previous, in the results of edge cases for various operators:
+their reprs previous, in the results of edge cases for various operators::
 
     >>> is_called >> {} == Dee
     True
     >>> join() == intersect() == times() == Dee
     True
 
-The boolean value of ``Dum`` is ``False``, while that of ``Dee`` is ``True``:
+The boolean value of ``Dum`` is ``False``, while that of ``Dee`` is ``True``::
 
     >>> bool(Dum)
     False
@@ -2243,7 +2243,7 @@ while ``Dee`` has one row, and being non-empty is ``True``.
 Note that unlike Python's ``True`` and ``False``, which are singletons, there
 may be other relation instances equivalent to ``Dum`` and ``Dee`` besides the
 two defined as constants.  Conceptually they are the "same" relation, but in
-Python object terms they may be different objects:
+Python object terms they may be different objects::
 
     >>> is_called >> {} is Dee
     False
@@ -2253,7 +2253,7 @@ might make ``Dum`` and ``Dee`` singletons.
 
 As per the discussion on page 104 of AIRDT, ``Dee`` is an identity value for
 the ``join`` operator.  And, again, in dinsd what is produced is an equivalent
-relation, not an identity at the object level:
+relation, not an identity at the object level::
 
     >>> is_called & Dee == is_called
     True
@@ -2266,12 +2266,12 @@ where
 ~~~~~
 
 Example 4.6 on page 105 at the start of section 4.7 shows how to select
-rows from a relation using join and projection:
+rows from a relation using join and projection::
 
     ( IS_CALLED JOIN RELATION { TUPLE { Name NAME ( 'Boris' ) } } )
     { StudentId }
 
-In dinsd we write this:
+In dinsd we write this::
 
     >>> borises = (is_called & rel(row(name='Boris'))) >> {'student_id'}
     >>> print(borises)
@@ -2282,12 +2282,12 @@ In dinsd we write this:
     | S5         |
     +------------+
 
-Example 4.7 shows the same computation using the ``where`` operator:
+Example 4.7 shows the same computation using the ``where`` operator::
 
     ( IS_CALLED WHERE Name = NAME ( 'Boris' ) )
 
 ``where``, like projection, is a function of one relation, so in dinsd it
-is a method of relation objects:
+is a method of relation objects::
 
     >>> b2 = is_called.where(lambda row: row.name == 'Boris')
     >>> print(b2)
@@ -2317,7 +2317,7 @@ attribute of ``Boris``.  All such rows are included in the returned relation,
 and no rows that fail the test are included in the returned relation.
 
 In addition to this fully general method for specifying a condition, dinsd
-provides a less general but also less wordy method:
+provides a less general but also less wordy method::
 
     >>> b2 == is_called.where("name == 'Boris'")
     True
@@ -2339,7 +2339,7 @@ to get values (that might have come from outside input) into the expression.
 Later we'll see how to get such values into a string valued expression safely.
 
 There is also a prefix version of `where``, though there is seldom reason
-to use it:
+to use it::
 
     >>> from dinsd import where
     >>> b2 == where(is_called, "name == 'Boris'")
@@ -2348,14 +2348,14 @@ to use it:
 The place where using ``join`` for restriction breaks down is when the
 number of values we'd have to put in the joined relation is too large
 to be practical, or may even be an infinite set.  The example from AIRDT
-of this is example 4.8:
+of this is example 4.8::
 
     IS_CALLED WHERE STARTS_WITH(THE_C(Name), 'B')
 
 Enumerating all possible names that start with 'B' is not possible, but
 a programmatic test is.
 
-Here is example 4.8 written in dinsd:
+Here is example 4.8 written in dinsd::
 
     >>> print(is_called.where("name.startswith('B')"))
     +-------+------------+
@@ -2368,7 +2368,7 @@ Here is example 4.8 written in dinsd:
 Here we are using the Python ``startswith`` method of string objects,
 which is analogous to the ``Rel`` ``STARTS_WITH`` function.
 
-With Python, it is easy to make this a bit more interesting:
+With Python, it is easy to make this a bit more interesting::
 
     >>> print(where(is_called, "name.startswith(('B', 'A'))"))
     +-------+------------+
@@ -2379,7 +2379,7 @@ With Python, it is easy to make this a bit more interesting:
     | Boris | S5         |
     +-------+------------+
 
-Here are the edge cases from the bottom of page 106:
+Here are the edge cases from the bottom of page 106::
 
     >>> is_called.where("True") == is_called
     True
@@ -2387,14 +2387,14 @@ Here are the edge cases from the bottom of page 106:
     True
 
 Using ``where`` we can further improve the problem of finding just those student_ids
-that designate students with the same name (figure 4.8 on page 107):
+that designate students with the same name (figure 4.8 on page 107)::
 
     ( ( IS_CALLED RENAME ( StudentId AS Sid1 ) )
       JOIN
       ( IS_CALLED RENAME ( StudentId AS Sid2 ) )
     WHERE NOT (Sid1 = Sid2) ) { Sid1, Sid2 }
 
-In dinsd:
+In dinsd::
 
     >>> x = (is_called.rename(student_id='sid1') &
     ...      is_called.rename(student_id='sid2')).where(
@@ -2409,14 +2409,14 @@ In dinsd:
 
 Our ``SID`` class is based on dinsd's ``Scaler`` class, it does
 indeed have a total ordering, and thus we can write our version
-of:
+of::
 
     ( ( IS_CALLED RENAME ( StudentId AS Sid1 ) )
       JOIN
       ( IS_CALLED RENAME ( StudentId AS Sid2 ) )
     WHERE NOT (Sid1 < Sid2) ) { Sid1, Sid2 }
 
-as:
+as::
     
     >>> x = (is_called.rename(student_id='sid1') &
     ...      is_called.rename(student_id='sid2')).where(
@@ -2437,7 +2437,7 @@ relation by performing a computation on the attributes of the initial
 relation, and creating a new attribute whose values are the computed values.
 
 Figure 4.10 of AIRDT shows the result of the following *Tutorial D*
-expression:
+expression::
 
     EXTEND IS_CALLED ADD ( FirstLetter ( Name ) AS Initial )
 
@@ -2447,7 +2447,7 @@ equivalent to ``FirstLetter``: ``name[0]`` refers to the first letter of the
 string pointed to by ``name``.
 
 ``extend`` is again a function of a single relation, and so in dinsd it is
-a method of relations:
+a method of relations::
 
     >>> x = is_called.extend(initial="name[0]")
     >>> print(x.display('student_id', 'name', 'initial'))
@@ -2465,13 +2465,13 @@ Here dinsd requires the keyword form, where the new column name is equated
 to the expression (``lambda`` or string) the evaluation of which yields
 the value for the new attribute.  There can be any number of new attributes,
 including none.  In the case of no attributes, we have an identity relation,
-and the resulting value is equivalent to the source relation:
+and the resulting value is equivalent to the source relation::
 
     >>> is_called.extend() == is_called
     True
 
 Here is an example with more than one new attribute, and we also demonstrate
-here mixing ``lambda`` expressions and string expressions:
+here mixing ``lambda`` expressions and string expressions::
 
     >>> x2 = is_called.extend(caps="name.upper()",
     ...                       hello=lambda row: "hello")
@@ -2498,13 +2498,13 @@ the advantage that it preserves internal consistency in dinsd: keywords
 arguments in Python are an unordered set, and to break that expectation would
 be surprising.
 
-There is, as usual, a prefix version of ``extend``:
+There is, as usual, a prefix version of ``extend``::
 
     >>> from dinsd import extend
     >>> x == extend(is_called, initial="name[0]")
     True
 
-``extend`` not be used to add a duplicate attribute:
+``extend`` not be used to add a duplicate attribute::
 
     >>> is_called.extend(name="'hello'")
     Traceback (most recent call last):
@@ -2512,7 +2512,7 @@ There is, as usual, a prefix version of ``extend``:
     ValueError: Duplicate relational attribute name 'name'
 
 Python's restriction on duplicate keywords keeps us from adding two new
-attributes with the same name:
+attributes with the same name::
 
     >>> is_called.extend(foo="'hello'", foo="'foobar'")
     Traceback (most recent call last):
@@ -2526,7 +2526,7 @@ union
 In the relational algebra, ``union`` corresponds to the ``or`` logical
 operator, but is restricted to being an operator on relations whose
 types are equal.  Example 4.9 on page 111 shows a legal ``union``
-operation in *Tutorial D*:
+operation in *Tutorial D*::
 
     ( IS_CALLED WHERE Name = NAME ('Devinder') ) { StudentId }
     UNION
@@ -2534,7 +2534,7 @@ operation in *Tutorial D*:
 
 dinsd, like *Tutorial D*, provides ``union`` both as a prefix function and as
 an infix operator.  In dinsd the operator is ``|``.  The dinsd version of
-example 4.9 is:
+example 4.9 is::
 
     >>> ex49 = (is_called.where("name == 'Devinder'") >> {'student_id'} |
     ...       is_enrolled_on.where("course_id == CID('C1')") >> {'student_id'})
@@ -2549,21 +2549,21 @@ example 4.9 is:
 
 This result matches that from figure 4.11.
 
-Using the prefix version of ``union`` it looks like this:
+Using the prefix version of ``union`` it looks like this::
 
     >>> from dinsd import union
     >>> ex49 == union(is_called.where("name == 'Devinder'") >> {'student_id'},
     ...       is_enrolled_on.where("course_id == CID('C1')") >> {'student_id'})
     True
 
-It is an error to try to form the union of relations of disparate types:
+It is an error to try to form the union of relations of disparate types::
 
     >>> is_called | is_enrolled_on
     Traceback (most recent call last):
         ...
     TypeError: Union operands must of equal types
 
-Union is commutative and associative:
+Union is commutative and associative::
 
     >>> x = is_called >> {'student_id'}
     >>> y = is_enrolled_on >> {'student_id'}
@@ -2573,25 +2573,25 @@ Union is commutative and associative:
     >>> (x | y) | z == x | (y | z) == union(x, y, z)
     True
 
-The union of a single relation, or a relation with itself, is that relation.
+The union of a single relation, or a relation with itself, is that relation. ::
 
     >>> union(is_called) == is_called | is_called == is_called
     True
 
 The union of a relation with an empty relation is also equal to the original
-relation:
+relation::
 
     >>> is_called | type(is_called)() == is_called
     True
 
-The union of no relations is ``Dum``:
+The union of no relations is ``Dum``::
 
     >>> union() == Dum
     True
 
 *Tutorial D* has the ability to return an empty union if you specify a
 heading.  The closest equivalent in dinsd is to pass an empty relation defined
-via ``rel``:
+via ``rel``::
 
     >>> print(union(rel(name=str, student_id=SID)()))
     +------+------------+
@@ -2602,7 +2602,7 @@ via ``rel``:
 This is just the union of a single empty relation.
 
 On the other hand, calling ``union`` with no arguments does do the obvious
-thing, by returning ``Dum``:
+thing, by returning ``Dum``::
 
     >>> union()
     rel({})()
@@ -2616,21 +2616,21 @@ same columns, as was the case for ``union``.  The result is a new relation of
 the same type, whose body contains those rows from the first relation that
 do not occur in the second relation.
 
-Here is the *Tutorial D* example 4.10:
+Here is the *Tutorial D* example 4.10::
 
     ( IS_CALLED WHERE Name = NAME ('Devinder') ) { StudentId }
     MINUS
     ( IS_ENROLLED_ON WHERE CourseId = CID ('C1') ) { StudentId }
 
 In dinsd we have no infix operator for ``minus`` (we'll see why in a moment), so
-this is written in dinsd using ``minus`` as a prefix operator:
+this is written in dinsd using ``minus`` as a prefix operator::
 
     >>> from dinsd import minus
     >>> minus(is_called.where("name == 'Devinder'") >> {'student_id'},
     ...       is_enrolled_on.where("course_id == CID('C1')") >> {'student_id'})
     rel({'student_id': SID})()
 
-Hmm.  That wasn't very interesting (or a very good test).  How about this one:
+Hmm.  That wasn't very interesting (or a very good test).  How about this one::
     
     >>> anne = rel(row(student_id=SID('S1'), name='Anne'))
     >>> print(minus(is_called, anne))
@@ -2643,7 +2643,7 @@ Hmm.  That wasn't very interesting (or a very good test).  How about this one:
     | Devinder | S4         |
     +----------+------------+
 
-As indicated, ``minus`` only works for relations of like type:
+As indicated, ``minus`` only works for relations of like type::
 
     >>> minus(is_called, rel(student_id=SID)())
     Traceback (most recent call last):
@@ -2651,18 +2651,18 @@ As indicated, ``minus`` only works for relations of like type:
     TypeError: Relation types must match for minus operation
 
 Subtracting an empty relation yields a relation equivalent to the first
-relation:
+relation::
 
     >>> minus(is_called, type(is_called)()) == is_called
     True
 
-Subtracting a relation from itself yields an empty relation of the same type:
+Subtracting a relation from itself yields an empty relation of the same type::
 
     >>> minus(is_called, is_called)
     rel({'name': str, 'student_id': SID})()
 
 ``minus`` is *only* a dyadic function, so there is no call form with no
-arguments or one argument or more than two arguments:
+arguments or one argument or more than two arguments::
 
     >>> minus()                             # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -2678,7 +2678,7 @@ arguments or one argument or more than two arguments:
         ...
     TypeError: minus() takes 2 positional arguments but 3 were given
 
-``minus`` is not commutative:
+``minus`` is not commutative::
 
     >>> print(minus(anne, is_called))
     +------+------------+
@@ -2686,7 +2686,7 @@ arguments or one argument or more than two arguments:
     +------+------------+
     +------+------------+
 
-Nor is it associative:
+Nor is it associative::
 
     >>> boris = rel(row(student_id=SID('S5'), name='Boris'))
     >>> print(minus(minus(is_called, anne), boris))
@@ -2716,12 +2716,12 @@ attributes that the two relations have in *common* be of the same type.  We
 return all rows from the first relation that do *not* have rows in the second
 relation with matching values for the common attributes.
 
-Example 4.11 from AIRDT:
+Example 4.11 from AIRDT::
 
     IS_CALLED NOT MATCHING IS_ENROLLED_ON
 
 In dinsd we assign this operator (the more general of the two "subtraction"
-operators) to the ``-`` infix operator.  So in dinsd we write this:
+operators) to the ``-`` infix operator.  So in dinsd we write this::
 
     >>> not_enrolled = is_called - is_enrolled_on
     >>> print(not_enrolled)
@@ -2737,7 +2737,7 @@ students who are not enrolled on any class.
  
 There is of course also a prefix version.  Although the name is a bit more
 awkward in dinsd than *Tutorial D*, we prefer the name ``notmatching`` to
-``semidifference``:
+``semidifference``::
 
     >>> from dinsd import notmatching
     >>> notmatching(is_called, is_enrolled_on) == not_enrolled
@@ -2749,7 +2749,7 @@ Since we are using the '-' operator and the operation is also referred to as a
 
 If we subtract any relation from an empty relation we get an empty relation.
 On the other hand, if we subtract an empty relation we get the original
-relation (we subtract nothing).
+relation (we subtract nothing). ::
 
     >>> type(is_called)() - is_enrolled_on == type(is_called)()
     True
@@ -2759,7 +2759,7 @@ relation (we subtract nothing).
 If we subtract a relation that has no common attributes, then if that
 dissimilar relation is empty (no matching rows) we get back the original
 relation.  If, however, it is not empty, then by the relational rules *all*
-the rows match, and we get back the empty relation.
+the rows match, and we get back the empty relation. ::
 
     >>> is_called - rel(foo=str)() == is_called
     True
@@ -2769,14 +2769,14 @@ the rows match, and we get back the empty relation.
 Given this, we can see that subtracting ``Dum`` we'll get the original
 relation, and subtracting ``Dee`` we'll get an empty relation.  You can
 think of this as ``Dum`` (``False``) not matching any rows, whereas
-``Dee`` (``True``) matches all rows:
+``Dee`` (``True``) matches all rows::
 
     >>> is_called - Dum == is_called
     True
     >>> is_called - Dee == type(is_called)()
     True
 
-It is an error for match columns with the same name to have different types.
+It is an error for match columns with the same name to have different types::
 
     >>> is_called - rel(student_id=str)()     # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -2786,7 +2786,7 @@ It is an error for match columns with the same name to have different types.
          match relation (relation types are <class 'dinsd.rel({'name': str,
          'student_id': SID})'> and <class 'dinsd.rel({'student_id': str})'>)
 
-Like ``minus``, ``notmatching`` is a dyadic-only operation:
+Like ``minus``, ``notmatching`` is a dyadic-only operation::
 
     >>> notmatching()                         # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -2802,7 +2802,7 @@ Like ``minus``, ``notmatching`` is a dyadic-only operation:
         ...
     TypeError: notmatching() takes 2 positional arguments but 3 were given
 
-Also like ``minus``, ``notmatching`` is neither commutative nor associative:
+Also like ``minus``, ``notmatching`` is neither commutative nor associative::
 
     >>> print(is_enrolled_on - is_called)
     +-----------+------------+
@@ -2843,7 +2843,7 @@ explanation here, just code.
 
 Note that we still aren't dealing with keys or other constraints yet.
 
-Exercise 2:
+Exercise 2::
 
     >>> from datetime import date
     >>> class date_type(date):
@@ -2889,7 +2889,7 @@ Exercise 2:
     | 0003 | 2201  | 16000.0 |
     +------+-------+---------+
 
-Exercise 3:
+Exercise 3::
 
     >>> exam_marks = rel(student_id=SID, course_id=CID, mark=int)(
     ...     ('student_id', 'course_id', 'mark'),
@@ -2915,7 +2915,7 @@ Exercise 3:
     | C3        | S1   | S3   | 19  |
     +-----------+------+------+-----+
 
-Exercise 4:
+Exercise 4::
 
     >>> is_called - Dee
     rel({'name': str, 'student_id': SID})()
@@ -2929,14 +2929,14 @@ Exercise 4:
     True
 
 Oh, and for completeness: ``rename`` can be written in terms of
-``extend``:
+``extend``::
 
     >>> x = rename(is_called, student_id='sid')
     >>> y = extend(is_called, sid="student_id") << {'student_id'}
     >>> x == y
     True
 
-Or, if we want to be more general:
+Or, if we want to be more general::
 
     >>> def rename2(relation, **kw):
     ...     temps = {'XXtemp'+str(i): old for i, old in enumerate(kw)}
@@ -2987,7 +2987,7 @@ matching
 
 Following along in Chapter 5 of AIRDT, we need to another couple of relations
 to use in the subsequent examples.  We already defined the ``exam_marks``
-relation instance in one of the problems above.  Now we'll add courses.
+relation instance in one of the problems above.  Now we'll add courses. ::
 
     >>> courses = rel(course_id=CID, title=str)(
     ...             ('course_id',   'title'),
@@ -3017,11 +3017,11 @@ relation instance in one of the problems above.  Now we'll add courses.
     | S4         | C1        | 93   |
     +------------+-----------+------+
 
-*Tutorial D*'s expression:
+*Tutorial D*'s expression::
 
    ``( COURSE JOIN EXAM_MARK ) { ALL BUT StudentId, Mark }``
 
-becomes the dinsd expression:
+becomes the dinsd expression::
 
     >>> print((courses & exam_marks) << {'student_id', 'mark'})
     +-----------+------------+
@@ -3035,7 +3035,7 @@ becomes the dinsd expression:
 giving us the table from figure 5.2.
 
 The ``matching`` relational operator encapsulates this (union plus projecting
-away any columns obtained from the second relation):
+away any columns obtained from the second relation)::
 
     >>> from dinsd import matching
     >>> print(matching(courses, exam_marks))
@@ -3052,7 +3052,7 @@ it is not an intuitive match for ``+`` the way ``notmatching`` is for
 ``-``.  Hence we do not overload any Python operators for this relational
 operator.
 
-A match against an empty relation is empty:
+A match against an empty relation is empty::
 
     >>> matching(type(courses)(), courses)
     rel({'course_id': CID, 'title': str})()
@@ -3060,7 +3060,7 @@ A match against an empty relation is empty:
 In the reverse of the case for ``notmatching``, if there are no common
 attributes matching against an empty relation produces an empty relation,
 while matching against a non-empty relation produces the original
-relation:
+relation::
 
     >>> matching(courses, Dum)
     rel({'course_id': CID, 'title': str})()
@@ -3068,7 +3068,7 @@ relation:
     True
 
 We can't match relations with attributes having the same name but different
-types:
+types::
 
     >>> matching(courses, rel(row(course_id='S1')))
     ...
@@ -3081,7 +3081,7 @@ types:
      'title': str})'> and <class 'dinsd.rel({'course_id': str})'>)
 
 For completeness, the definition of ``matching`` in terms of the existing
-operands (which is not how it is implemented) would be:
+operands (which is not how it is implemented) would be::
 
     >>> def matching2(first, second):
     ...     return (first & second) >> first.header.keys()
@@ -3093,11 +3093,11 @@ compose
 ~~~~~~~
 
 ``compose`` joins its operands and then projects away the attributes
-that the two relations have in common, eg:
+that the two relations have in common, eg::
 
     ( COURSE JOIN EXAM_MARK ) { ALL BUT CourseId }
 
-In *Tutorial D* this is written the ``COMPOSE`` operator as:
+In *Tutorial D* this is written the ``COMPOSE`` operator as::
 
     COURSE COMPOSE EXAM_MARK
     
@@ -3107,13 +3107,13 @@ not directly analogous to arithmetic or set addition, but it is close enough
 that it seems to make sense to overload the Python ``+`` operator as the
 relational compose.  The other justification for this is that there is not
 another relational operator (other than join, for which we already have ``&``)
-whose meaning is anywhere near as close.
+whose meaning is anywhere near as close. ::
 
     >>> course_marks = (courses & exam_marks) << {'course_id'}
     >>> courses + exam_marks == course_marks
     True
 
-which gives us our equivalent of the table from Figure 5.3:
+which gives us our equivalent of the table from Figure 5.3::
 
     >>> print(course_marks.display('title', 'student_id', 'mark',
     ...                             sort=('student_id', 'title')))
@@ -3128,13 +3128,13 @@ which gives us our equivalent of the table from Figure 5.3:
     | Database   | S4         | 93   |
     +------------+------------+------+
 
-There is also a prefix functional version:
+There is also a prefix functional version::
 
     >>> from dinsd import compose
     >>> compose(courses, exam_marks) == course_marks
     True
 
-If there are no common attributes, ``compose`` is the same as ``join``:
+If there are no common attributes, ``compose`` is the same as ``join``::
 
     >>> r1 = rel(row(foo=1, bar=2), row(foo=3, bar=4))
     >>> r2 = rel(row(bing=5, bang=6), row(bing=7, bang=8))
@@ -3142,13 +3142,13 @@ If there are no common attributes, ``compose`` is the same as ``join``:
     True
 
 If all the attributes are in common, they all get projected away and we get
-``Dee``:
+``Dee``::
 
     >>> course_marks + course_marks == Dee
     True
 
 Compose is commutative, but not associative (which is an argument
-against using ``+``, but we're ignoring that):
+against using ``+``, but we're ignoring that)::
 
     >>> courses + exam_marks == exam_marks + courses
     True
@@ -3226,7 +3226,7 @@ len (count)
 ~~~~~~~~~~~
 
 The *Tutorial D* operator ``COUNT`` returns the number of rows in a relation
-(Example 5.1):
+(Example 5.1)::
 
     COUNT ( EXAM_MARK )
 
@@ -3234,7 +3234,7 @@ Just as we can overload the meaning of (most of) the standard infix operators
 in Python, there are also certain prefix operators that we can overload.
 One of these is ``len``, which is the standard Python way to get the "count"
 of the number of elements in an object.  This is clearly analogous to
-``COUNT``, and so in dinsd we so overload ``len``:
+``COUNT``, and so in dinsd we so overload ``len``::
 
     >>> len(exam_marks)
     6
@@ -3242,11 +3242,11 @@ of the number of elements in an object.  This is clearly analogous to
     5
 
 Example 5.2 demonstrates using a relational expression as an argument
-to ``COUNT``:
+to ``COUNT``::
 
     COUNT ( ( EXAM_MARK WHERE Mark > 50 ) {StudentId} )
 
-In dinsd we write this:
+In dinsd we write this::
 
     >>> len(exam_marks.where("mark > 50") >> {'student_id'})
     3
@@ -3273,7 +3273,7 @@ row of the relation in turn, and the result of the function applied to that
 row is yielded as the next value of the iterator.
 
 For example, we can extract the scores from the ``mark`` column of the
-``exam_marks`` table like this:
+``exam_marks`` table like this::
 
     >>> sorted(compute(exam_marks, "mark"))
     [49, 49, 66, 85, 85, 93]
@@ -3284,18 +3284,18 @@ from the compute generator, and it gives the returned values a predictable
 order so that the result can be used as part of the doctest.
 
 Since ``compute`` is a function of only one relation, it is also available
-as a relation method:
+as a relation method::
 
     >>> sorted(exam_marks.compute("mark"))
     [49, 49, 66, 85, 85, 93]
 
 Although it is often used just to extract a column, it is named ``compute``
-because it's expression argument is an arbitrary computation:
+because it's expression argument is an arbitrary computation::
 
     >>> sorted(exam_marks.compute("'{}%'.format(mark)"))
     ['49%', '49%', '66%', '85%', '85%', '93%']
 
-We can alternatively specify a full ``lambda`` function instead of a string:
+We can alternatively specify a full ``lambda`` function instead of a string::
 
     >>> sorted(exam_marks.compute(lambda r: "{}%".format(r.mark)))
     ['49%', '49%', '66%', '85%', '85%', '93%']
@@ -3303,7 +3303,7 @@ We can alternatively specify a full ``lambda`` function instead of a string:
 Although this works, ``compute``'s value is the access it gives to the
 expression name space.  Anything you can do by passing a ``lambda`` function
 to ``compute`` you can do more easily using a normal Python generator
-expression (or list comprehension):
+expression (or list comprehension)::
 
     >>> sorted("{}%".format(r.mark) for r in exam_marks)
     ['49%', '49%', '66%', '85%', '85%', '93%']
@@ -3315,7 +3315,7 @@ comprehension is that it may give the back end opportunities for optimization,
 but again that works only if you use string expressions.  On the other hand,
 if you have a computation that is too complex to express as a string
 expression, it is probably too complex for the back end to optimize, and you
-you may as well express it as a for loop:
+you may as well express it as a for loop::
 
     >>> for rw in exam_marks:
     ...     # Do something complicated here
@@ -3326,20 +3326,20 @@ sum
 ~~~
 
 The way to write the sum of the values of an attribute in *Tutorial D*
-is shown in Example 5.3:
+is shown in Example 5.3::
 
     SUM ( EXAM_MARK WHERE StudentId = SID ( 'S1' ), Mark )
 
 The Python ``sum`` function can be used to "sum" any values that support
 addition.  The result will be a valid relational aggregation if and only if
 the addition operation is both associative and commutative.  Arithmetic
-addition satisfies this criteria.  Here is AIRDT's example 5.3 in dinsd:
+addition satisfies this criteria.  Here is AIRDT's example 5.3 in dinsd::
 
     >>> sum(exam_marks.where("student_id == SID('S1')").compute("mark"))
     219
 
 Tuple concatenation does not satisfy the criteria for an aggregate operator,
-so while the expression:
+so while the expression::
 
     >>> t = sum(course_marks.compute('(title,)'), ())
     >>> sorted(list(t)) == sorted(course_marks.compute('title'))
@@ -3348,7 +3348,7 @@ so while the expression:
 produces a result, it is neither a useful result nor a valid relational
 aggregation result.  We can't use the result ``t`` above as a doctest result,
 because the titles will be in a random order every time Python is run.  For
-reference, here are two examples from different runs:
+reference, here are two examples from different runs::
 
     ('HCI', 'Database', 'Database', 'Database', 'Op systems', 'Op systems')
     ('Database', 'Database', 'Op systems', 'Op systems', 'HCI', 'Database')
@@ -3357,7 +3357,7 @@ These are *not* equivalent tuples.
 
 If we understand Python's ``sum`` operator as being by default an arithmetic
 operator, it produces the correct result when passed an attribute from an
-empty relation:
+empty relation::
 
     >>> sum(rel(foo=int)().compute('foo'))
     0
@@ -3366,20 +3366,20 @@ empty relation:
 max and min
 ~~~~~~~~~~~
 
-In *Tutorial D*, ``max`` and ``min`` look like this (from Example 5.4):
+In *Tutorial D*, ``max`` and ``min`` look like this (from Example 5.4)::
 
     MAX ( EXAM_MARK WHERE StudentId = SID ( 'S1' ), Mark )
     MIN ( EXAM_MARK WHERE StudentId = SID ( 'S1' ), Mark )
 
 Like ``sum``, the Python ``max`` and ``min`` functions accept iterators as
-input, so we can use them to compute the corresponding relational max and min:
+input, so we can use them to compute the corresponding relational max and min::
 
     >>> max(exam_marks.where("student_id == SID('S1')").compute('mark'))
     85
     >>> min(exam_marks.where("student_id == SID('S1')").compute('mark'))
     49
 
-``min`` and ``max`` do not have defined results on an empty relation:
+``min`` and ``max`` do not have defined results on an empty relation::
 
     >>> min(compute(rel(foo=int)(), 'foo'))
     Traceback (most recent call last):
@@ -3394,7 +3394,7 @@ Python doesn't have a function that corresponds directly to the *Tutorial D*
 ``AVG`` function.  It is a bit tricky to define it as a function that takes a
 single iterator as its argument if that iterator does not support ``len``, and
 ``compute`` does not support ``len`` since it is a generator function.  So
-dinsd provides a suitable ``avg`` function:
+dinsd provides a suitable ``avg`` function::
 
     >>> from dinsd import avg
     >>> round(avg(exam_marks.compute('mark')), 2)
@@ -3403,7 +3403,7 @@ dinsd provides a suitable ``avg`` function:
     3.0
 
 The average of an empty relation involves division by zero, and that is
-exactly the result we get from trying it:
+exactly the result we get from trying it::
 
     >>> avg(rel(foo=int)().compute('foo'))
     Traceback (most recent call last):
@@ -3418,7 +3418,7 @@ The Python/dinsd version of the *Tutorial D* ``AND`` and ``OR`` operators are
 named ``all`` and ``any``, respectively.  Because Python assigns a truth value
 to almost all data types, these functions can be applied to almost any
 attribute.  Whether that is useful or not depends on what is stored under
-that attribute, of course.
+that attribute, of course. ::
 
     >>> any(exam_marks.compute('mark'))
     True
@@ -3431,7 +3431,7 @@ that attribute, of course.
     >>> all(bools.compute('foo'))
     False
 
-``any`` and ``all`` have the correct logical behavior on empty relations:
+``any`` and ``all`` have the correct logical behavior on empty relations::
 
     >>> any(type(bools)().compute('foo'))
     False
@@ -3447,7 +3447,7 @@ with
 ~~~~
 
 Here is a dinsd expression to computes the table in figure 5.4 on page 130 of
-AIRDT, the number of students that have sat for an exam in each course:
+AIRDT, the number of students that have sat for an exam in each course::
 
     >>> x = (courses >> {'course_id'}).extend(
     ...            n=lambda r: len(exam_marks.where(
@@ -3467,7 +3467,7 @@ Because there are two row namespaces involved here, we have to use lambda
 expressions instead of string expressions.  So this is clearly not optimal.
 
 In any case, that is getting ahead of the text.  Here is the dinsd expression
-I naively came up with to compute the table in figure 5.5:
+I naively came up with to compute the table in figure 5.5::
 
     >>> c_er = courses.extend(exam_result=lambda r:
     ...            exam_marks.where(
@@ -3512,7 +3512,7 @@ table, but the complexity is not warranted by the minimal use that such a
 facility would be likely to get.
 
 AIRDT uses the following *Tutorial D* expression to compute the above
-table in Example 5.6:
+table in Example 5.6::
 
     EXTEND COURSE{CourseId} ADD
     ( RELATION { TUPLE { CourseId CourseId } } COMPOSE EXAM_MARK
@@ -3522,7 +3522,7 @@ Here is the simpler, direct equivalent of that expression in dinsd.  Here we
 need to use a dinsd syntax that doesn't have a direct correspondent
 in *Tutorial D* (though there is something that looks almost like it), a ``with
 ns(...):`` block.  We use this to make the ``exam_marks`` relation temporarily
-available under that name in the expression name space:
+available under that name in the expression name space::
 
     >>> from dinsd import ns
     >>> with ns(exam_marks=exam_marks):
@@ -3550,7 +3550,7 @@ special evaluation environment of a string-valued function expression, we use
 
 Having successfully written first expression above, and successfully
 translated example 5.6, I have to admit that I had no clue what AIRDT's
-Example 5.7 was doing:
+Example 5.7 was doing::
 
     WITH
         EXTEND COURSE{CourseId} ADD
@@ -3564,7 +3564,7 @@ After reading the explanation and thinking about it, I believe he uses that
 more complicated expression because *Tutorial D* version 1 did not have a
 general expression facility for aggregate operators.  Although we can do it in
 one step as shown above, for completeness we will translate this two step
-version into dinsd as well: 
+version into dinsd as well::
 
     >>> with ns(exam_marks=exam_marks):
     ...     c_er = (courses >> {'course_id'}).extend(exam_result=
@@ -3581,7 +3581,7 @@ version into dinsd as well:
     | C4        | 0 |
     +-----------+---+
 
-Example 5.8 shows a similar computation for the average grade:
+Example 5.8 shows a similar computation for the average grade::
 
     WITH
         EXTEND EXAM_MARK{CourseId} ADD
@@ -3593,7 +3593,7 @@ Example 5.8 shows a similar computation for the average grade:
     { ALL BUT ExamResult }
 
 Here we will translate this using the ``compose`` form, but taking advantage
-of dinsd's decomposed aggregation operators to do it in one step:
+of dinsd's decomposed aggregation operators to do it in one step::
 
     >>> with ns(exam_marks=exam_marks):
     ...     av = (exam_marks >> {'course_id'}).extend(avg_mark=
@@ -3612,7 +3612,7 @@ of dinsd's decomposed aggregation operators to do it in one step:
 The relation being extended changes to exam_marks here so that we only have
 rows for exams that had marks.  AIRDT notes that if we had continued to use
 courses we'd end up with a division by zero for the course with no marks, and
-indeed we do:
+indeed we do::
 
     >>> with ns(exam_marks=exam_marks):
     ...     av = (courses >> {'course_id'}).extend(avg_mark=
@@ -3629,7 +3629,7 @@ in the next section, there is an even simpler way to do this operation.
 Namespaces can be nested.  This isn't particularly useful in a single piece of
 code (nested with statements), but can be very useful if a called function
 needs to add something to the namespace.  We'll demonstrate the capability with
-a contrived example:
+a contrived example::
 
     >>> def avg_marks():
     ...     with ns(exam_marks=exam_marks):
@@ -3650,7 +3650,7 @@ a contrived example:
     +----------+-----------+
 
 The names placed into the expression namespace by the context manager are
-removed at the end of the context:
+removed at the end of the context::
 
     >>> av = (exam_marks >> {'course_id'}).extend(avg_mark=
     ...           "round(avg((rel(row(course_id=course_id)) + "
@@ -3669,7 +3669,7 @@ removed at the end of the context:
         ...
     NameError: name 'exam_marks' is not defined
 
-The namespace additions are also kept separate across threads:
+The namespace additions are also kept separate across threads::
 
     >>> import threading
     >>> start = threading.Event()
@@ -3722,7 +3722,7 @@ easier to understand.  The basic idea is that the pattern of composing with a
 row containing data from one table to obtain a list of matching data from
 another table (which could be the same table) and then aggregating over that
 extracted data is very common.  So we have an operator that expresses that
-more compactly.  Here is the *Tutorial D* version from Example 5.9:
+more compactly.  Here is the *Tutorial D* version from Example 5.9::
 
     SUMMARIZE EXAM_MARK PER ( COURSE { CourseId } )
                ADD ( COUNT ( ) AS n )
@@ -3735,7 +3735,7 @@ hand, ``summarize`` works exactly as if it is a composition of ``compose`` and
 end.  The temporary column is named ``_summary_``, which is guaranteed not to
 collide with any real attributes since it would be an invalid attribute name.
 
-The dinsd version is:
+The dinsd version is::
 
     >>> x = summarize(exam_marks, courses >> {'course_id'},
     ...               n="len(_summary_)")
@@ -3750,7 +3750,7 @@ The dinsd version is:
     +-----------+---+
 
 ``summarize`` will of course also take a real function as the value for a new
-attribute:
+attribute::
 
     >>> x == summarize(exam_marks, courses >> {'course_id'},
     ...               n=lambda r: len(r._summary_))
@@ -3761,7 +3761,7 @@ construct.  The dinsd equivalent of *Tutorial D*'s ``SUMMARIZE BY`` looks
 almost exactly the same, except that the second argument is a set of attribute
 names, instead of a relation.  Those names are used to project the main
 relation for composition with itself.  We used that pattern in the average
-computation:
+computation::
 
     >>> av == summarize(exam_marks, {'course_id'},
     ...                 avg_mark="round(avg(_summary_.compute('mark')), 2)")
@@ -3770,7 +3770,7 @@ computation:
 Definitely a worthwhile simplification.
 
 This ``BY`` form is a function of a single relation, and so can also be used
-in the form of a relation method:
+in the form of a relation method::
 
     >>> av == exam_marks.summarize({'course_id'},
     ...                 avg_mark="round(avg(_summary_.compute('mark')), 2)")
@@ -3779,7 +3779,7 @@ in the form of a relation method:
 Because debugging a summarization can be tricky without being able to see the
 data computed by the compose, ``summarize`` supports a special boolean keyword
 argument ``_deubg``.  If set to ``True``, the intermediate table extended with
-the composed data is printed to stdout:
+the composed data is printed to stdout::
 
     >>> x = exam_marks.summarize({'course_id'}, _debug_=True,
     ...              avg_mark="round(avg(_summary_.compute('mark')), 2)")
@@ -3810,7 +3810,7 @@ the composed data is printed to stdout:
     +-----------------------+-----------+
 
 Summarize can take any number of new column computations functions, and they
-may be a mix of strings and lambda expressions:
+may be a mix of strings and lambda expressions::
 
     >>> x = exam_marks.summarize({'course_id'},
     ...               attendees=lambda r: len(r._summary_),
@@ -3825,7 +3825,7 @@ may be a mix of strings and lambda expressions:
     +-----------+-----------+----------+
 
 If no additional attributes are specified, the result is equal to the
-projection:
+projection::
 
     >>> exam_marks.summarize({'course_id'}) == exam_marks >> {'course_id'}
     True
@@ -3838,22 +3838,22 @@ group
 ~~~~~
 
 ``group`` encapsulates the ``extend``/``compose`` sub-operation of summarize.
-In Example 5.8 we had the subexpression:
+In Example 5.8 we had the subexpression::
 
     EXTEND EXAM_MARK{CourseId} ADD
     ( RELATION { TUPLE { CourseId CourseId } } COMPOSE EXAM_MARK
       AS ExamResult )
 
 Example 5.12 shows an alternative *Tutorial D* formulation that produces the
-same result for this case:
+same result for this case::
 
     EXAM_MARK GROUP ( { StudentId, Mark } AS ExamResult )
 
-In dinsd we write this:
+In dinsd we write this::
 
     >>> results = exam_marks.group(exam_results={'student_id', 'mark'})
 
-Which gives us our version of Figure 5.6:
+Which gives us our version of Figure 5.6::
 
     >>> print(results)
     +-----------+-----------------------+
@@ -3882,14 +3882,14 @@ Which gives us our version of Figure 5.6:
     |           |                       |
     +-----------+-----------------------+
 
-There is also a prefix version of ``group``:
+There is also a prefix version of ``group``::
 
     >>> from dinsd import group
     >>> results == group(exam_marks, exam_results={'student_id', 'mark'})
     True
 
 Since the grouping specification is an attribute name set, we can also use
-the ``all_but`` wrapper with it:
+the ``all_but`` wrapper with it::
 
     >>> results == exam_marks.group(exam_results=all_but({'course_id'}))
     True
@@ -3898,7 +3898,7 @@ The grouping refers implicitly to both the set of columns being grouped and
 the set of columns not being grouped.  This leads to an ambiguity as to which
 columns are involved if there are multiple grouping specifications.  Rather
 than trying to sort this out and greatly complicating the implementation for
-little practical benefit, the group function only accepts one new column name:
+little practical benefit, the group function only accepts one new column name::
 
     >>> group(exam_marks, res1={'marks'}, res2={'student_id'})
     Traceback (most recent call last):
@@ -3908,7 +3908,7 @@ little practical benefit, the group function only accepts one new column name:
 In this we follow *Tutorial D*, which dropped support for multiple grouping
 columns in Version 2.
 
-It is an error to try to group on a non-existent column:
+It is an error to try to group on a non-existent column::
 
     >>> group(exam_marks, foo={'bar'})
     Traceback (most recent call last):
@@ -3916,7 +3916,7 @@ It is an error to try to group on a non-existent column:
     TypeError: Attribute list included unknown attributes: {'bar'}
 
 Grouping on no attributes produces a column consisting of instances of
-``Dee``:
+``Dee``::
 
     >>> print(group(exam_marks, foo={}))
     +-----------+-----+------+------------+
@@ -3961,7 +3961,7 @@ Grouping on no attributes produces a column consisting of instances of
     +-----------+-----+------+------------+
 
 Grouping on *all* of the attributes, on the other hand, produces a relation
-with a single attribute, whose single value is the original relation:
+with a single attribute, whose single value is the original relation::
 
     >>> print(group(exam_marks, foo=all_but({})))
     +-----------------------------------+
@@ -3984,24 +3984,24 @@ with a single attribute, whose single value is the original relation:
 ungroup
 ~~~~~~~
 
-Example 5.13 shows the *Tutorial D* ``UNGROUP`` operator:
+Example 5.13 shows the *Tutorial D* ``UNGROUP`` operator::
 
     C_ER2 UNGROUP ( ExamResult )
 
 ``ungroup`` effectively undoes what ``group`` does.  Here is the
-dinsd version:
+dinsd version::
 
     >>> results.ungroup('exam_results') == exam_marks
     True
 
-There is also a prefix version:
+There is also a prefix version::
 
     >>> from dinsd import ungroup
     >>> ungroup(results, 'exam_results') == exam_marks
     True
 
 AIRDT gives a formal definition for ``ungroup`` in terms of the
-operators already introduced (see page 141):
+operators already introduced (see page 141)::
 
     r UNGROUP ( a ):
         UNION (
@@ -4012,7 +4012,7 @@ operators already introduced (see page 141):
     t = TUPLE { b1 b1, …, bn bn }, where b1, …, bn
     are the attributes of r{ALL BUT a}.
 
-We can implement this recipe in dinsd:
+We can implement this recipe in dinsd::
 
     >>> def ungroup2(r, a):
     ...     return union(r.extend(x=lambda z, typ=type(r):
@@ -4027,7 +4027,7 @@ that iterator.  That is, it acts as an aggregation function.  The built-in
 ``ungroup`` is more efficient, though.
 
 We can also do this using a string valued expression, by using the special
-variable ``_row_`` to access the entire row:
+variable ``_row_`` to access the entire row::
 
     >>> def ungroup3(r, a):
     ...     with ns(typ=type(r), a=a):
@@ -4041,14 +4041,14 @@ The ``locals()[a]`` is a dodge to get around the fact that what we have in
 ``_row_`` special variable is always defined when a string expression is
 evaluated, but it is seldom needed.
 
-It is an error to pass ``ungroup`` a column not in the relation:
+It is an error to pass ``ungroup`` a column not in the relation::
 
     >>> ungroup(results, 'foo')
     Traceback (most recent call last):
         ...
     KeyError: 'foo'
 
-The column specified must of course be a relation valued attribute:
+The column specified must of course be a relation valued attribute::
 
     >>> ungroup(results, 'course_id')
     Traceback (most recent call last):
@@ -4059,21 +4059,21 @@ The column specified must of course be a relation valued attribute:
 wrap
 ~~~~
 
-Example 5.14 shows how to turn attribute data into rows as an attribute value:
+Example 5.14 shows how to turn attribute data into rows as an attribute value::
 
     ( EXTEND CONTACT_INFO ADD
         ( TUPLE{ House House, Street Street, City City , Zip Zip }
           AS Address ) )
         { ALL BUT House, Street, City, Zip }
 
-Given a suitable relation instance:
+Given a suitable relation instance::
 
     >>> contact_info = rel(name=str, house=str, street=str, city=str, zip=str)(
     ...                     ('name',  'house', 'street',  'city',   'zip'),
     ...                     ('Anne',  '120',   'Peach',   'London', '00111'),
     ...                     ('Boris', '5',     'Rose',    'Kiev',   '00112'))
 
-So we can write the dinsd equivalent of 5.14 as follows:
+So we can write the dinsd equivalent of 5.14 as follows::
 
     >>> addrs = contact_info.extend(address=
     ...             "row(dict(house=house, street=street, city=city, zip=zip))"
@@ -4087,23 +4087,23 @@ So we can write the dinsd equivalent of 5.14 as follows:
     +-------+---------------------------------------------------+
 
 Example 5.5 shows how the *Tutorial D* ``WRAP`` operator does the same thing
-more compactly:
+more compactly::
 
     CONTACT_INFO WRAP ( { House, Street, City, Zip } AS Address )
 
 ``wrap`` is a function of a single relation, and so is available as a method
-in dinsd:
+in dinsd::
 
     >>> addrs == contact_info.wrap(address={'house', 'street', 'city', 'zip'})
     True
 
-as well as a prefix function:
+as well as a prefix function::
 
     >>> from dinsd import wrap
     >>> addrs == wrap(contact_info, address={'house', 'street', 'city', 'zip'})
     True
 
-It is possible (though usually pointless) to wrap all the attributes:
+It is possible (though usually pointless) to wrap all the attributes::
 
     >>> print(contact_info.wrap(all=all_but({})))
     +--------------------------------------------------------------+
@@ -4114,7 +4114,7 @@ It is possible (though usually pointless) to wrap all the attributes:
     +--------------------------------------------------------------+
 
 Wrapping no attributes results in the new attribute having empty rows as its
-values:
+values::
 
     >>> print(contact_info.wrap(none={}))
     +--------+-------+-------+------+--------+-------+
@@ -4124,7 +4124,7 @@ values:
     | London | 120   | Anne  | {}   | Peach  | 00111 |
     +--------+-------+-------+------+--------+-------+
 
-You can't wrap a non-existent attribute:
+You can't wrap a non-existent attribute::
 
     >>> contact_info.wrap(bad={'foo'})
     Traceback (most recent call last):
@@ -4132,7 +4132,7 @@ You can't wrap a non-existent attribute:
     TypeError: Attribute list included unknown attributes: {'foo'}
 
 And for the same reasons that applied in the ``compose`` case, you can only
-specify a single new attribute in a ``wrap``:
+specify a single new attribute in a ``wrap``::
 
     >>> contact_info.wrap(one={'home'}, two={'zip'})
     Traceback (most recent call last):
@@ -4144,7 +4144,7 @@ unwrap
 ~~~~~~
 
 ``unwrap`` is the opposite of ``wrap``.  Expressing this in *Tutorial D*
-introduces a new expression (``FROM``):
+introduces a new expression (``FROM``)::
 
     r UNWRAP ( a )
 
@@ -4153,7 +4153,7 @@ introduces a new expression (``FROM``):
 
     where b1, …, bn are the attributes of a.
 
-The dinsd equivalent of ``FROM`` is Python's attribute access syntax:
+The dinsd equivalent of ``FROM`` is Python's attribute access syntax::
 
     >>> contact_info == extend(addrs,
     ...                        house="address.house",
@@ -4162,22 +4162,22 @@ The dinsd equivalent of ``FROM`` is Python's attribute access syntax:
     ...                        zip="address.zip") << {'address'}
     True
 
-``unrwap`` is of course much simpler:
+``unrwap`` is of course much simpler::
 
     CONTACT_INFO_WRAPPED UNWRAP ( Address )
 
-and, in dinsd:
+and, in dinsd::
 
     >>> contact_info == addrs.unwrap('address')
     True
 
-or, in prefix form:
+or, in prefix form::
 
     >>> from dinsd import unwrap
     >>> contact_info == unwrap(addrs, 'address')
     True
 
-And here are the errors and edge cases:
+And here are the errors and edge cases::
 
     >>> unwrap(addrs, 'bad')
     Traceback (most recent call last):
@@ -4202,7 +4202,7 @@ Aside: join operators as aggregators
 
 We already saw an example of ``union`` being used as an aggregator (which
 means, in dinsd, taking an iterator as input).  This also works for the
-join-type operators, which we will now prove for testing completeness.
+join-type operators, which we will now prove for testing completeness. ::
 
     >>> R = rel(a=int, b=int)
     >>> a = R(('a', 'b'), (1, 2), (3, 4))
@@ -4222,14 +4222,14 @@ Relation Comparison
 -------------------
 
 Python meets the requirements on the equality relation expounded upon in
-section 5.9 or AIRDT.  In particular, string equality is a strict test:
+section 5.9 or AIRDT.  In particular, string equality is a strict test::
 
     >>> 'this ' == 'this'
     False
 
 It is possible to define Python types that do not support equality testing,
 but you have to go out of your way to do it.  Instances of objects are
-compared by identity if no other equality test is defined:
+compared by identity if no other equality test is defined::
 
     >>> object() == object()
     False
@@ -4243,7 +4243,7 @@ work with relations of like type, and except for equality do not work with
 relations of unlike type.
 
 Like ``Rel``, Python uses ``<=`` and ``>=`` for the subset and superset
-(respectively) comparisons on relations.
+(respectively) comparisons on relations. ::
 
     >>> R = rel(foo=int, bar=int)
     >>> r1 = R(('foo', 'bar'), (1, 2), (3, 4), (5, 6))
@@ -4251,12 +4251,12 @@ Like ``Rel``, Python uses ``<=`` and ``>=`` for the subset and superset
     >>> r3 = R(('foo', 'bar'), (3, 4))
     >>> r4 = R(('foo', 'bar'), (3, 4))
 
-Observe that r3 and r4 are different objects:
+Observe that r3 and r4 are different objects::
 
     >>> r3 is not r4
     True
 
-So, the expected relationships hold:
+So, the expected relationships hold::
 
     >>> r1 <= r1
     True
@@ -4275,7 +4275,7 @@ So, the expected relationships hold:
     >>> r1 >= r2 >= r3 >= r4
     True
 
-Python also supports proper subset and proper superset via ``<`` and ``>``:
+Python also supports proper subset and proper superset via ``<`` and ``>``::
 
 
     >>> r1 < r1
@@ -4294,7 +4294,7 @@ Python also supports proper subset and proper superset via ``<`` and ``>``:
 dinsd does not define an equivalent for the *Tutorial D* ``IS_EMPTY``,
 because it would be redundant, as we'll see in a moment.
 
-We could define ``IS_EMTPY`` using the ``TABLE_DUM`` test from AIRDT:
+We could define ``IS_EMTPY`` using the ``TABLE_DUM`` test from AIRDT::
 
     >>> def is_empty(r):
     ...     return r >> {} == Dum
@@ -4303,7 +4303,7 @@ We could define ``IS_EMTPY`` using the ``TABLE_DUM`` test from AIRDT:
     >>> is_empty(r1)
     False
 
-Or using the dinsd equivalent of the ``COUNT`` test:
+Or using the dinsd equivalent of the ``COUNT`` test::
 
     >>> def is_empty(r):
     ...     return len(r)==0
@@ -4314,7 +4314,7 @@ Or using the dinsd equivalent of the ``COUNT`` test:
 
 However, python objects usually have a boolean value (all the built in types
 do).  For relations, dinsd makes the boolean value ``True`` if the relation
-has at least one row, and ``False`` if it has no rows:
+has at least one row, and ``False`` if it has no rows::
 
     >>> bool(R())
     False
@@ -4322,7 +4322,7 @@ has at least one row, and ``False`` if it has no rows:
     True
 
 This means you can use a relation in an ``if`` statement directly to check if
-it is empty:
+it is empty::
 
     >>> if r1:
     ...     print("not empty")
@@ -4333,7 +4333,7 @@ it is empty:
 
 Relations of different types can be tested for equality (if they are different
 types they are by Python convention unequal), but are otherwise not
-comparable:
+comparable::
 
     >>> r1 == is_enrolled_on
     False
@@ -4362,14 +4362,14 @@ Example 5.16 in AIRDT demonstrates computing a relation listing the names of
 all the students that have taken an exam for every course in which they are
 enrolled.  To make this interesting, we need at least one student enrolled on
 a course where they do not have an exam mark, so let's update
-``is_enrolled_on`` with an entry for which that is true:
+``is_enrolled_on`` with an entry for which that is true::
 
     >>> is_enrolled_on = union(is_enrolled_on,
     ...                        rel(row(student_id=SID('S2'),
     ...                              course_id=CID('C3'))))
 
 I tried working the "problem", using relational comparison somehow, without
-looking at the solution, and came up with:
+looking at the solution, and came up with::
 
     >>> m = join(is_enrolled_on, is_called).group(courses={'course_id', 'name'})
     >>> c = join(is_enrolled_on, exam_marks).group(marks={'course_id', 'mark'})
@@ -4389,12 +4389,12 @@ looking at the solution, and came up with:
     +----------+------------+-----------+
 
 Well, that was much more complicated than AIRDT's solution...and I seem to
-have misread the problem statement.  In *Tutorial D* he solved this via:
+have misread the problem statement.  In *Tutorial D* he solved this via::
 
     IS_CALLED NOT MATCHING ( ENROLMENT NOT MATCHING EXAM_MARK )
 
 On the other hand, this solution doesn't use relational comparison.  In dinsd
-translates to:
+translates to::
 
     >>> print(is_called - ((is_enrolled_on & is_called) - exam_marks))
     +----------+------------+
@@ -4416,7 +4416,7 @@ lost him because of the joins, making mine the answer to the different
 question: "which students who have sat at least one exam have sat the exams
 for all of the courses on which they are enrolled?".
 
-Then I noticed that this gives the same result:
+Then I noticed that this gives the same result::
 
     >>> print(is_called - (is_enrolled_on - exam_marks))
     +----------+------------+
@@ -4432,7 +4432,7 @@ I wondered why he didn't use that formulation, but in fact I think he intended
 to, as we'll see below.
 
 Example 5.17 shows how to do this computation with logic that is easier to
-derive from the problem statement, by using relational comparision:
+derive from the problem statement, by using relational comparision::
 
     IS_CALLED WHERE
     ENROLMENT COMPOSE RELATION {TUPLE {StudentId StudentId}}
@@ -4442,7 +4442,7 @@ derive from the problem statement, by using relational comparision:
 
 Here is the dinsd equivalent, in which we use a slightly different form of the
 ``ns`` context manager to get our two component relations into the expression
-namespace:
+namespace::
 
     >>> with ns() as n:                     # doctest: +NORMALIZE_WHITESPACE
     ...     n['exam_marks'] = exam_marks
@@ -4461,7 +4461,7 @@ Hmm.  Composing enrollment gives us ``course_id`` and ``name``.  Composing
 ``exam_marks`` gives us ``course_id`` and ``marks``... and we then get
 rid of ``marks``, leaving us with ``course_id`` (as we can see from the
 projection relation names in the error message).  So, no, those two
-aren't comparable.  We can do:
+aren't comparable.  We can do::
 
     >>> with ns() as n:
     ...     n['exam_marks'] = exam_marks
@@ -4484,7 +4484,7 @@ aren't comparable.  We can do:
     XXX: The above is a bug in ns...the names aren't supposed to remain in
          the expression namespace.
 
-Which gets us the expected result.  So does:
+Which gets us the expected result.  So does::
 
     >>> with ns(exam_marks=exam_marks, is_enrolled_on=is_enrolled_on):
     ...    print(is_called.where(
@@ -4513,12 +4513,12 @@ Other Operators on Relations and Rows
 in and ~ (extract_only_row)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In section 5.10, AIRDT talks about the tuple membership test:
+In section 5.10, AIRDT talks about the tuple membership test::
 
     t ∈ r
 
 In ``Rel`` this is spelled ``IN``, and in dinsd it is spelled ``in`` (which
-is a standard Python operator):
+is a standard Python operator)::
 
     >>> row(student_id=SID('S1'), name='Anne') in is_called
     True
@@ -4534,12 +4534,12 @@ type is not an element of a relation of type ``t2``.)
 We've already mentioned the dinsd equivalent of the *Tutorial D* ``FROM``
 operation in the context of extracting attributes from tuples.  *Tutorial D*
 also has a ``TUPLE FROM`` operation it uses to extra the row from a relation
-that only contains one row:
+that only contains one row::
 
     TUPLE FROM COURSE WHERE CourseId = CID('C1')
 
 For the dinsd equivalent we follow a convention that exists in other Python's
-database libraries, and use the operator ``~``:
+database libraries, and use the operator ``~``::
 
     >>> c1 = ~courses.where("course_id == CID('C1')")
     >>> print(c1)
@@ -4552,7 +4552,7 @@ rationalize its use a small bit by noting that the name of the Python operator
 is "invert", and there is a (colloquial) sense in which the inversion of a
 relation of a single row is the row.
 
-It is also available as a prefix function, if using the operator bothers you:
+It is also available as a prefix function, if using the operator bothers you::
 
     >>> from dinsd import extract_only_row
     >>> extract_only_row(courses.where("course_id == CID('C1')")) == c1
@@ -4561,7 +4561,7 @@ It is also available as a prefix function, if using the operator bothers you:
 The name is explicit, if not very convenient to type.
 
 As you might gather from the function name, it is an error to use this
-operator on a relation that has more than one row:
+operator on a relation that has more than one row::
 
     >>> ~rel(courses)                       # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -4569,11 +4569,11 @@ operator on a relation that has more than one row:
     ValueError: <class 'dinsd.rel({'course_id': CID, 'title': str})'> object
         has more than one row
 
-For completeness, the example of compound use of ``FROM``:
+For completeness, the example of compound use of ``FROM``::
 
     Title FROM TUPLE FROM COURSE WHERE CourseId = CID('C1')
 
-is written in dinsd as follows:
+is written in dinsd as follows::
 
     >>> (~courses.where("course_id == CID('C1')")).title
     'Database'
@@ -4597,31 +4597,31 @@ doesn't really seem worthwhile.  This means we don't have an n-adic version of
 row join, but if you need it you can use the Python ``accumulate`` function
 from ``itertools``.
 
-We'll use the following rows in the test examples:
+We'll use the following rows in the test examples::
 
     >>> rw1 = row(student_id=SID('S1'), name='Anne')
     >>> rw2 = row(student_id=SID('S1'), course_id=CID('C1'))
 
-row rename:
+row rename::
 
     >>> rw1.rename(student_id='SID')
     row({'SID': SID('S1'), 'name': 'Anne'})
 
-row projection:
+row projection::
 
     >>> rw1 >> {'name'}
     row({'name': 'Anne'})
     >>> rw1 << {'name'}
     row({'student_id': SID('S1')})
 
-row extension:
+row extension::
 
     >>> rw1.extend(capname="name.upper()")
     row({'capname': 'ANNE', 'name': 'Anne', 'student_id': SID('S1')})
 
 Extending by a constant expression is much more useful with rows, but
 keep in mind that the value is a *string* expression or *function*, not
-a Python expression:
+a Python expression::
 
     >>> rw1.extend(foo=1)
     Traceback (most recent call last):
@@ -4630,25 +4630,25 @@ a Python expression:
     >>> rw1.extend(foo="1")
     row({'foo': 1, 'name': 'Anne', 'student_id': SID('S1')})
 
-row join:
+row join::
 
     >>> rw1 & rw2
     row({'course_id': CID('C1'), 'name': 'Anne', 'student_id': SID('S1')})
 
-row compose:
+row compose::
 
     >>> rw1 + rw2
     row({'course_id': CID('C1'), 'name': 'Anne'})
 
 We also have one function that *Tutorial D* does not.  The ``invert``
 operator, ``~``, can also be applied to a row, producing a single
-relation with the same header:
+relation with the same header::
 
     >>> ~rw1
     rel({row({'name': 'Anne', 'student_id': SID('S1')})})
 
 This gives a little more strength to the operator choice, since the operation
-is functionally an inverse:
+is functionally an inverse::
 
     >>> ~~rw1 == rw1
     True
@@ -4662,7 +4662,7 @@ Extended Example
 Now that we've got all the basics under out belts, let's take a look at an
 extended example of actually using the relational algebra in dinsd, by
 working the exercises from the end of chapter 5 of AIRDT.  To do this
-we'll need the relations described in figure 4.13:
+we'll need the relations described in figure 4.13::
 
     >>> S = rel(sn=str, sname=str, status=str, city=str)(
     ...        ('sn',  'sname',    'status',   'city'),
@@ -4740,13 +4740,13 @@ we'll need the relations described in figure 4.13:
 I added ('S5', 'P2') in the SP table so that exercise (e) below would have at
 least one row in the result.
 
-(a) Get the total number of parts supplied by supplier S1:
+(a) Get the total number of parts supplied by supplier S1::
 
     >>> sum(SP.where("sn == 'S1'").compute('qty'))
     1300
 
 (b) Get supplier numbers for suppliers whose city is first in the alphabetic
-list of such cities:
+list of such cities::
 
     >>> with ns(S=S):
     ...     r = S.where("city == min(S.compute('city'))") >> {'sn'}
@@ -4757,7 +4757,7 @@ list of such cities:
     | S5 |
     +----+
 
-(c) Get part numbers for parts supplied by all suppliers in London:
+(c) Get part numbers for parts supplied by all suppliers in London::
 
     >>> print((S.where("city == 'London'") & SP) >> {'pn'})
     +----+
@@ -4772,7 +4772,7 @@ list of such cities:
     +----+
 
 (d) Get supplier numbers and names for suppliers who supply all the Red parts
-(I made it Red instead of purple so there would be some results):
+(I made it Red instead of purple so there would be some results)::
 
     >>> print((P.where("color=='Red'") >> {'pn'} & SP & S) >> {'sn', 'sname'})
     +----+-------+
@@ -4784,7 +4784,7 @@ list of such cities:
     +----+-------+
 
 (e) Get all pairs of supplier numbers Sx and Sy such that Sx and Sy supply
-exactly the same set of parts each.
+exactly the same set of parts each::
 
     >>> sns = S >> {'sn'}
     >>> with ns() as names:
@@ -4799,13 +4799,13 @@ exactly the same set of parts each.
     +----+-----+
 
 (f) Write a truth-valued expression to determine whether all supplier names
-are unique in S.
+are unique in S::
 
     >>> len(S) == len(S >> {'sname'})
     True
 
 (g) Write a truth-valued expression to determine whether all part numbers
-appearing in SP also appear in P.
+appearing in SP also appear in P::
 
     >>> SP >> {'pn'} == P >> {'pn'}
     True

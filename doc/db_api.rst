@@ -27,7 +27,7 @@ more than one.
 In order to use this as an API validation document, we need to make the import
 of the names we will be testing conditional on which database module we are
 testing.  We do this via an environment variable set by the testing
-infrastructure:
+infrastructure::
 
     >>> import os
     >>> test_mod_name = os.getenv('DINSD_DB_MODULE_TO_TEST',
@@ -51,16 +51,16 @@ store.
 To create or access a database, you create a ``Database`` connection object
 and tell it how to connect to the database by passing it a database URI.
 Since the URI is database-specific, we'll need to fetch that from the
-test environment as well:
+test environment as well::
 
     >>> dburi = os.getenv('DINSD_TEST_DB_URI')
 
-Creating the database connection is simple:
+Creating the database connection is simple::
 
     >>> db = Database(dburi)
 
 If the test infrastructure is working correctly, this database will initially
-be empty:
+be empty::
 
     >>> db
     Database({})
@@ -68,7 +68,7 @@ be empty:
 We need some relations to work with, which means replicating the data
 definitions from ``Relational Python``, since we are still following AIRDT.
 To make this easier the ``SID`` and ``CID`` classes are defined in
-our ``test_support`` test module.
+our ``test_support`` test module. ::
 
     >>> from dinsd import rel, row, expression_namespace
     >>> from test_support import SID, CID
@@ -114,7 +114,7 @@ helpful to think of the dictionary as the "``TUPLE`` of relations" discussed in
 AIRDT, and the rest of the attributes of the ``Database`` objects as the
 controls for the database management system.
 
-We persist a relation into the database by storing it in the ``Database``:
+We persist a relation into the database by storing it in the ``Database``::
 
     >>> db['is_called'] = is_called
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
@@ -130,7 +130,7 @@ equivalent *type*, but all empty).
 
 Using attribute syntax to access the persistent relations is often much more
 convenient than using dictionary syntax, so dinsd databases also support it,
-though a special attribute ``r``:
+though a special attribute ``r``::
 
     >>> print(db.r.is_called)
     +----------+------------+
@@ -143,7 +143,7 @@ though a special attribute ``r``:
     | Devinder | S4         |
     +----------+------------+
 
-We can also create a persistent relation by supplying just the type:
+We can also create a persistent relation by supplying just the type::
 
     >>> db['is_enrolled_on'] = IsEnrolledOn
     >>> db                                  # doctest: +NORMALIZE_WHITESPACE
@@ -152,7 +152,7 @@ We can also create a persistent relation by supplying just the type:
          'dinsd.PersistentRelation({'course_id': CID, 'student_id': SID})'>})
 
 At this point, ``db.r.is_called`` has content, but ``is_enrolled_on`` is an
-empty relation:
+empty relation::
 
     >>> len(db.r.is_called)
     5
@@ -160,18 +160,18 @@ empty relation:
     0
 
 We can provide content for ``is_enrolled_on`` by assigning our relation that
-has content to the attribute:
+has content to the attribute::
 
     >>> db.r.is_enrolled_on = is_enrolled_on
     >>> len(db.r.is_enrolled_on)
     6
 
-We can create a relation via the ``r`` attribute as well:
+We can create a relation via the ``r`` attribute as well::
 
     >>> db.r.exam_marks = exam_marks
 
 It is an error to try to assign a relation of the wrong type to a relation
-attribute:
+attribute::
 
     >>> db.r.is_enrolled_on = is_called       # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
@@ -181,7 +181,7 @@ attribute:
          <class 'dinsd.PersistentRelation({'course_id': CID,
          'student_id': SID})'>
 
-Indeed, it is an error to try to anything that is not of the correct type:
+Indeed, it is an error to try to anything that is not of the correct type::
 
     >>> db.r.is_enrolled_on = 1
     Traceback (most recent call last):
@@ -192,17 +192,17 @@ However, wholesale assignment is not the typical way to update a relation in a
 database.  We'll talk about the alternatives later.
 
 A very important note: unlike a normal dictionary, the relation sorted in the
-``Database`` is *not* the same object that we assigned to it:
+``Database`` is *not* the same object that we assigned to it::
 
     >>> db.r.exam_marks is exam_marks
     False
 
-As we saw in the ``Database`` repr above, it isn't even the same Python type:
+As we saw in the ``Database`` repr above, it isn't even the same Python type::
 
     >>> type(db.r.exam_marks) == type(exam_marks)
     False
 
-The *headers*, however, are the same:
+The *headers*, however, are the same::
 
     >>> db.r.exam_marks.header == exam_marks.header
     True
@@ -215,7 +215,7 @@ below), so it is best to be aware of it.
 
 Because this is Python, we don't have to always reference the relation through
 the db (although that is often best, as we will see in a moment), we can
-instead put a reference to it into another name:
+instead put a reference to it into another name::
 
     >>> x = db.r.is_enrolled_on
     >>> print(x)
@@ -231,7 +231,7 @@ instead put a reference to it into another name:
     +-----------+------------+
 
 We prove that the backing store works by closing the database, reopening it,
-and verifying that the data is still be there:
+and verifying that the data is still be there::
 
     >>> db.close()
     >>> db.r.is_called
@@ -302,7 +302,7 @@ Row Level Constraints
 Following AIRDT, our example of using the row level constraint mechanism is
 actually a value level constraint.  We will constrain the integer values of
 the ``mark`` attribute in ``exam_marks`` to be between ``0`` and ``100``,
-inclusive:
+inclusive::
 
     >>> db.constrain_rows('exam_marks', valid_mark="0 <= mark <= 100")
 
@@ -318,7 +318,7 @@ specified database relation.
 
 With this constraint in place, we can no longer assign a relation that
 contains values outside of that range to the database's ``exam_marks``
-relation attribute:
+relation attribute::
 
     >>> db.r.exam_marks = ~row(student_id=SID('S1'),
     ...                        course_id=CID('C1'),
@@ -331,7 +331,7 @@ relation attribute:
          '0 <= mark <= 100' is not satisfied by row({'course_id': CID('C1'),
          'mark': 102, 'student_id': SID('S1')})
 
-When a constraint violation happens, the database relation is not updated:
+When a constraint violation happens, the database relation is not updated::
 
     >>> print(db.r.exam_marks)
     +-----------+------+------------+
@@ -346,7 +346,7 @@ When a constraint violation happens, the database relation is not updated:
     +-----------+------+------------+
 
 Conversely, if we attempt to define a constraint that the existing database
-relation does not satisfy, we will also get a constraint violation:
+relation does not satisfy, we will also get a constraint violation::
 
 
     >>> db.constrain_rows('exam_marks', valid_mark="50 <= mark <= 100")
@@ -358,7 +358,7 @@ relation does not satisfy, we will also get a constraint violation:
         '50 <= mark <= 100' is not satisfied by row({'course_id': CID('C1'),
          'mark': 49, 'student_id': SID('S2')})
 
-In this case, it is the list of constraints that is not updated:
+In this case, it is the list of constraints that is not updated::
 
     >>> db.row_constraints['exam_marks']
     {'valid_mark': '0 <= mark <= 100'}
@@ -367,7 +367,7 @@ The database relation is again unchanged, and the database still conforms to
 all of the active constraints.
 
 We can define more than one constraint for a database relation, and we
-can define more than one in a single call:
+can define more than one in a single call::
 
     >>> db.constrain_rows('exam_marks', valid_sid="student_id!=SID('S0')",
     ...                                   valid_cid="course_id!=CID('C0')")
@@ -401,7 +401,7 @@ can define more than one in a single call:
         'mark': 99, 'student_id': SID('S0')})
 
 Unlike other dinsd functions that take expressions, it is *not* valid to use
-a function or lambda as a constraint:
+a function or lambda as a constraint::
 
     >>> db.constrain_rows('exam_marks', invalid=lambda r: r.mark < 100)
     ...
@@ -415,7 +415,7 @@ a function or lambda as a constraint:
 
 This is because the constraints are stored in the persistent store, and it is
 not necessarily practical to store Python function definitions in the
-persistent store.
+persistent store. ::
 
     >>> x = db.row_constraints.copy()
     >>> db.close()
@@ -425,7 +425,7 @@ persistent store.
     >>> db.row_constraints == x
     True
 
-You cannot define a row constraint on a relation that doesn't exist:
+You cannot define a row constraint on a relation that doesn't exist::
 
     >>> db.constrain_rows('foo', bar='True')
     Traceback (most recent call last):
@@ -439,7 +439,7 @@ persistent store, which is likely to lead to undesirable results.  So don't do
 that unless you've thought of a really good reason and are willing to risk
 shooting yourself in the foot and screwing up your data.
 
-Constraint names may be any valid Python identifier:
+Constraint names may be any valid Python identifier::
 
     >>> db.constrain_rows('is_called', no_föos_allowed="name!='foo'")
     >>> db.r.is_called = ~row(name='foo', student_id=SID('S42'))
@@ -451,7 +451,7 @@ Constraint names may be any valid Python identifier:
         "name!='foo'" is not satisfied by row({'name': 'foo', 'student_id':
         SID('S42')})
 
-Constraints may also be deleted:
+Constraints may also be deleted::
 
     >>> db.remove_row_constraints('is_called', 'no_föos_allowed')
     >>> db.row_constraints['is_called']
@@ -462,20 +462,20 @@ Constraints may also be deleted:
     {}
 
 Just as more than one constraint can be added at a time, multiple
-constraints may be deleted in a single call:
+constraints may be deleted in a single call::
 
     >>> db.remove_row_constraints('exam_marks', 'valid_sid', 'valid_cid')
     >>> db.row_constraints['exam_marks']
     {'valid_mark': '0 <= mark <= 100'}
 
-Of course, you can't delete a constraint that doesn't exist:
+Of course, you can't delete a constraint that doesn't exist::
 
     >>> db.remove_row_constraints('exam_marks', 'valid_sid')
     Traceback (most recent call last):
         ...
     KeyError: 'valid_sid'
 
-Or from a relation that doesn't exist:
+Or from a relation that doesn't exist::
 
     >>> db.remove_row_constraints('foo', 'bar')
     Traceback (most recent call last):
@@ -505,7 +505,7 @@ that follows a relation declaration.  We've seen an example of this before::
     INIT (ENROLMENT { StudentId, CourseId })
     KEY { StudentId, CourseId } ;
 
-In dinsd, we use the ``set_key`` method of the ``Database`` object:
+In dinsd, we use the ``set_key`` method of the ``Database`` object::
 
     >>> db.set_key('is_called', {'student_id'})
     >>> db.set_key('is_enrolled_on', {'student_id', 'course_id'})
@@ -513,13 +513,13 @@ In dinsd, we use the ``set_key`` method of the ``Database`` object:
 
 As with row constraints, the key constraint is a property of a relation stored
 in a database, and not a property of the relation itself.  So to query the
-keys we ask the ``Database`` object:
+keys we ask the ``Database`` object::
 
     >>> sorted(db.key('is_enrolled_on'))
     ['course_id', 'student_id']
 
 The ``display`` function indicates the keys of a database relation by
-using ``=`` characters in the table header separator for key columns:
+using ``=`` characters in the table header separator for key columns::
 
     >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
@@ -536,7 +536,7 @@ using ``=`` characters in the table header separator for key columns:
 This, by the way, is the first of those places where it matters whether the
 relation is the database object or not.  The original relation (the
 non-database one) doesn't have a key constraint, and so display does not show
-any '='s:
+any '='s::
 
     >>> print(exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
@@ -551,7 +551,7 @@ any '='s:
     +------------+-----------+------+
 
 With the key constraint in place, we can no longer add a row with an existing
-``SID``, ``CID`` pair, even if it has a different mark:
+``SID``, ``CID`` pair, even if it has a different ``mark``::
 
     >>> db.r.exam_marks = exam_marks | ~row(student_id=SID('S1'),
     ...                                     course_id=CID('C1'),
@@ -579,7 +579,7 @@ In *Tutorial D*, this is supported using specific statements:
 ``START TRANSACTION``, ``COMMIT``, and ``ROLLBACK``, which do the
 obvious things.  In Python, the natural way to implement a
 "transaction block" is by using a transaction context manager in
-a ``with`` block.  So in dinsd, a transaction looks like this:
+a ``with`` block.  So in dinsd, a transaction looks like this::
 
     >>> with db.transaction():
     ...     db.r.is_called = (db.r.is_called |
@@ -592,7 +592,7 @@ a ``with`` block.  So in dinsd, a transaction looks like this:
     ...                             ~row(student_id=SID('S9'),
     ...                                  course_id=CID('C3')))
 
-At the end of the ``with`` block, the transaction is automatically committed:
+At the end of the ``with`` block, the transaction is automatically committed::
 
     >>> print(db.r.is_called)
     +----------+------------+
@@ -630,7 +630,7 @@ At the end of the ``with`` block, the transaction is automatically committed:
     | C3        | S9         |
     +-----------+------------+
 
-If any exception occurs, then the transaction is automatically rolled back:
+If any exception occurs, then the transaction is automatically rolled back::
 
     >>> with db.transaction():
     ...     db.r.is_called = (db.r.is_called |
@@ -684,7 +684,7 @@ If any exception occurs, then the transaction is automatically rolled back:
 
 dinsd provides the special exception ``Rollback`` for intentionally rolling
 back a transaction.  This exception is caught by the ``transaction``
-context manager and does not cause a program abort:
+context manager and does not cause a program abort::
 
     >>> from dinsd.db import Rollback
     >>> with db.transaction():
@@ -734,7 +734,7 @@ context manager and does not cause a program abort:
     | C3        | S9         |
     +-----------+------------+
 
-Transactions may be nested:
+Transactions may be nested::
 
     >>> with db.transaction():
     ...     db.r.is_called = (db.r.is_called |
@@ -787,7 +787,7 @@ Transactions may be nested:
     +-----------+------------+
 
 An exception in an inner transaction that is not caught will roll back the
-outer transaction as well:
+outer transaction as well::
 
     >>> with db.transaction():
     ...     db.r.is_called = (db.r.is_called |
@@ -847,7 +847,7 @@ outer transaction as well:
     +-----------+------------+
 
 Explicitly rolling back an inner transaction, on the other hand, does not
-affect the outer transaction:
+affect the outer transaction::
 
     >>> with db.transaction():
     ...     db.r.is_called = (db.r.is_called |
@@ -904,7 +904,7 @@ affect the outer transaction:
 
 Another advantage of using transactions is that inside a transaction scope all
 of the database relations are available by name in the expression namespace
-automatically:
+automatically::
 
     >>> from dinsd import matching
     >>> with db.transaction():
@@ -925,7 +925,7 @@ automatically:
 
 When you make changes to the database inside a transaction, those changes are
 visible only to the current thread until the end of the outermost transaction,
-at which time they are committed to the DB and are visible to other threads:
+at which time they are committed to the DB and are visible to other threads::
 
     >>> import threading
     >>> start = threading.Event()
