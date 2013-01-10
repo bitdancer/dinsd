@@ -591,24 +591,19 @@ that it is a set rather than an ordered tuple::
     >>> str(x)
     '{course_id=C1, name=Anne, student_id=S1}'
 
-As we saw above, identifiers that start with an ``_`` are rejected by ``rel``.
-This is so that row objects can have Python attributes in addition to their
-relational-specific attributes.  In Python's standard programming conventions,
-names that begin with a ``_`` are usually intended to be "private" names,
-names that are not part of the public API.  Disallowing such names as
-relational attributes is a small price to pay for the flexibility it gives us,
-and doing so is in any case in-line with Python's standard conventions.
+In Python's standard programming conventions, names that begin with a ``_`` are
+usually intended to be "private" names, names that are not part of the public
+API.  However, we have some attributes that we want as part of the *public*
+API, but we don't want to use names without a leading underscore, because those
+might conflict with attribute names.  In a similar situation (the "named tuple"
+type), Python just ignores this dichotomy and uses names that start with ``_``
+as part of the public API.  dinsd is a little more strict about its naming, by
+also *appending* a ``_`` to names that start with a ``_`` but are nonetheless
+intended to be part of the public API.
 
-However, we have some attributes that we want as part of the *public* API, but
-we've just constrained ourselves to marking them as private.  In a similar
-situation (the "named tuple" type), Python just ignores this dichotomy and
-uses names that start with ``_`` as part of the public API.  dinsd is a little
-more strict about its naming, by also *appending* a ``_`` to names that start
-with a ``_`` but are nonetheless intended to be part of the public API.
-
-So, rows have two public non-relational attributes of interest.  These
-correspond to the ``degree`` and ``header`` attributes of relations, but named
-as explained above::
+Rows have two public non-relational attributes of interest.  These correspond
+to the ``degree`` and ``header`` attributes of relations, but named as
+explained above::
 
     >>> x._degree_
     3
