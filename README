@@ -24,26 +24,27 @@ currently used.  Indeed, SQLite (which is used for the current persistence
 layer) will be the first smarter persistence layer, if everything goes well.
 
 Currently there is no project infrastructure other than for running the tests
-('make test' in the root directory).  The entire library consists of one
-file, dinsd.py, and you can just copy that to wherever you want in order
-to play with it.  The only external requirement is sqlite3.
+('make test' in the root directory).  You can copy the package directory
+(src/dinsd) to wherever you want it in order to play with it.  The only
+external requirement is sqlite3.
 
-The documentation consists of the literate test document:
+The documentation consists of literate test documents:
 
-    src/test/tutorial_d_book.txt
+    doc/relational_python.rst
+    doc/db_api.rst
 
-which is evolving along with the code and so may not be completely internally
+which are evolving along with the code and so may not be completely internally
 consistent at any given checkin.  The tests should always be passing, but the
 text may not be 100% consistent with itself if I'm in the middle of a major
-refactoring.  Most of the time it should be, though, and the document should
+refactoring.  Most of the time it should be, though, and the documents should
 therefore provide a thorough introduction to the project and its current
 capabilities.
 
 dinsd currently requires Python 3.4 (as of this writing that means Python built
 from the head of the Python "default" branch in Mercurial).  Mostly it will run
-fine using Python 3.3, and I will officially support the whatever the most
-recent Python release is at the point where other people start wanting to play
-with it.
+fine using Python 3.3, and I will officially support whatever the most recent
+Python release is at the point where other people start wanting to play with
+it.
 
 Note that there is another project with a similar goal:
 
