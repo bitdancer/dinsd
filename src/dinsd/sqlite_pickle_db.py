@@ -74,24 +74,38 @@ class _R:
         self._db[name] = val
 
 
+class _DBCon(_threading.local):
+
+    def __init__(self, storage):
+        self.storage = storage
+        self.con = storage.new_con()
+
+    def __enter__(self):
+        return self.con.__enter__()
+
+    def __exit__(self, *args, **kw):
+        self.con.__exit__(*args, **kw)
+
+
 class Database(dict):
 
     def __init__(self, fn, debug_sql=False):
-        self.r = _R(self)
-        storage = self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
+        self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
         self._init()
-        self.row_constraints.update(storage.get_row_constraints())
-        for name, r in self._storage.relations():
-            super().__setitem__(name, _get_persistent_type(r)(self, name, r))
+        self.r = _R(self)
+        with self._con as con:
+            con.initialize_sqlite_db_if_needed()
+            self.row_constraints.update(con.get_row_constraints())
+            for name, r in con.relations():
+                super().__setitem__(name, _get_persistent_type(r)(self, name, r))
 
     def _init(self):
         self.row_constraints = _collections.defaultdict(dict)
         self._system_relations = {}
         self._system_ns = _dinsd._NS(self._system_relations)
         self._constraints = {}
-        self._transaction_ns = _dinsd._NS(self,
-                                          in_getitem=False,
-                                          dbcon=lambda: self._storage.new_con())
+        self._transaction_ns = _dinsd._NS(self, in_getitem=False)
+        self._con = _DBCon(self._storage)
 
     def _as_locals(self):
         n = [_dinsd.ns.current]
@@ -126,13 +140,13 @@ class Database(dict):
         return len(self._transaction_ns) - 1
 
     def _update_db_rels(self, updated_rels):
-        with self._transaction_ns.dbcon():
+        with self._con as con:
             for name, val in updated_rels.items():
                 oldval = self.get(name)
                 if oldval is None:
-                    self._storage.add_reltype(name, val.header)
+                    con.add_reltype(name, val.header)
                 if val != oldval:
-                    self._storage.update_relation(name, val)
+                    con.update_relation(name, val)
         for name, val in updated_rels.items():
             # XXX this can be made more efficient.
             super().__setitem__(name, _get_persistent_type(val)(self, name, val))
@@ -231,13 +245,15 @@ class Database(dict):
         except Exception:
             self.row_constraints[relname] = existing
             raise
-        self._storage.add_row_constraints(relname, kw)
+        with self._con as con:
+            con.add_row_constraints(relname, kw)
 
     def remove_row_constraints(self, relname, *args):
         self[relname]          # Key Error if no such rel.
         for arg in args:
             del self.row_constraints[relname][arg]
-        self._storage.del_row_constraints(relname, args)
+        with self._con as con:
+            con.del_row_constraints(relname, args)
 
     # Key Constraints
 
@@ -277,16 +293,38 @@ class Database(dict):
 # Dumb persistence infrastructure using sqlite.
 #
 
+import sys
 class _dumb_sqlite_persistence:
 
-    con_max = 10  # XXX Need to make this configurable.
-
-    def __init__(self, fn, debug_sql=False):
+    def __init__(self, fn, debug_sql=sys.stderr):
         self.dbfn = fn
         self.debug_sql = debug_sql
-        self.con_pool = _collections.deque()
-        con = self.con = self.new_con()
-        c = con.cursor()
+
+    def new_con(self):
+        con = _sqlite.connect(self.dbfn, isolation_level=None)
+        if self.debug_sql:
+            outfile = None if self.debug_sql is True else self.debug_sql
+            con.set_trace_callback(lambda x: print(x, file=outfile))
+        return _dumb_sqlite_connection(con)
+
+
+class _dumb_sqlite_connection:
+
+    def __init__(self, con):
+        self.con = con
+
+    def __enter__(self):
+        self.con.cursor().execute("savepoint _dinsd")
+        return self
+
+    def __exit__(self, exc_type, exc_info, tb):
+        if exc_type is None:
+            self.con.cursor().execute("release _dinsd")
+        else:
+            self.con.cursor().execute("rollback to _dinsd")
+
+    def initialize_sqlite_db_if_needed(self):
+        c = self.con.cursor()
         c.execute('PRAGMA foreign_keys = ON')
         c.execute('create table if not exists "_relnames" ('
                     '"relname" varchar unique not null)')
@@ -308,31 +346,21 @@ class _dumb_sqlite_persistence:
                     '"constraint" varchar,'
                     'primary key ("relname", "constraint_name")'
                     ') ')
-        # This is a performance thing and not really required.
+        # This is a minor performance thing and not really required.
         c.execute('create index if not exists "_row_constraints_relname_index" '
                     'on "_row_constraints" ("relname")')
 
-    def new_con(self):
-        con = _sqlite.connect(self.dbfn)
-        if self.debug_sql:
-            outfile = None if self.debug_sql is True else self.debug_sql
-            con.set_trace_callback(lambda x: print(x, file=outfile))
-        return con
-
     def add_reltype(self, name, header):
-        db = self.con
-        c = db.cursor()
+        c = self.con.cursor()
         columns = ', '.join('"{}" blob'.format(n) for n in header)
         c.execute('create table "{}" ({})'.format(name, columns))
         c.execute('insert into "_relnames" ("relname") values (?)', (name,))
         for n, t in header.items():
             c.execute('insert into "_reldefs" ("relname", "attrname", "attrtype") '
                         'values (?, ?, ?)', (name, n, _pickle.dumps(t)))
-        db.commit()
 
     def update_relation(self, name, val):
-        db = self.con
-        c = db.cursor()
+        c = self.con.cursor()
         c.execute('delete from "{}"'.format(name))
         names = sorted(val.header.keys())
         for rw in val:
@@ -341,11 +369,9 @@ class _dumb_sqlite_persistence:
                             ' ,'.join('"{}"'.format(n) for n in names),
                             ' ,'.join(['?'] * len(names))), 
                       [_pickle.dumps(getattr(rw, n)) for n in names])
-        db.commit()
 
     def relations(self):
-        db = self.con
-        c = db.cursor()
+        c = self.con.cursor()
         c.execute('select "relname", "attrname", "attrtype" from "_reldefs"')
         headers = _collections.defaultdict(dict)
         for relname, attrname, attrtype in c:
@@ -362,34 +388,29 @@ class _dumb_sqlite_persistence:
         return rels
 
     def get_row_constraints(self):
-        db = self.con
         constraints = _collections.defaultdict(dict)
-        c = db.cursor()
+        c = self.con.cursor()
         c.execute('select "relname", "constraint_name", "constraint" '
-                    'from _row_constraints')
+                      'from _row_constraints')
         for relname, constraint_name, constraint in c:
             constraints[relname][constraint_name] = constraint
         return constraints
 
     def add_row_constraints(self, relname, constraints):
-        db = self.con
-        c = db.cursor()
+        c = self.con.cursor()
         for constraint_name, constraint in constraints.items():
-            db.execute('insert into "_row_constraints" '
+            c.execute('insert into "_row_constraints" '
                           '("relname", "constraint_name", "constraint") '
                           'values (?, ?, ?)',
                        (relname, constraint_name, constraint))
-        db.commit()
 
     def del_row_constraints(self, relname, names):
-        db = self.con
-        c = db.cursor()
+        c = self.con.cursor()
         in_qs = ', '.join('?'*len(names))
         c.execute('delete from "_row_constraints" '
-                    'where "relname"=? and '
-                    '"constraint_name" in ({})'.format(in_qs),
-                  (relname,) + names)
-        db.commit()
+                      'where "relname"=? and '
+                      '"constraint_name" in ({})'.format(in_qs),
+                      (relname,) + names)
 
 
 #Licensed under the Apache License, Version 2.0 (the "License");
