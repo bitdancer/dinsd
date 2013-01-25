@@ -1,16 +1,16 @@
 #Copyright 2012, 2013 R. David Murray (see end comment for terms).
 import collections as _collections
 import contextlib as _contextlib
-import weakref as _weakref
+import functools as _functools
 import pickle as _pickle
 import sqlite3 as _sqlite
 import threading as _threading
+import weakref as _weakref
 import dinsd as _dinsd
 from dinsd import (rel as _rel, expression_namespace as _all, _Relation,
                    _hsig, display as _display)
 from dinsd.db import (ConstraintError, RowConstraintError, DBConstraintLoop,
                       Rollback)
-_null = _contextlib.ExitStack()
 
 # For debugging only.
 import sys as _sys
@@ -139,6 +139,17 @@ class Database(dict):
     def transactions(self):
         return len(self._transaction_ns) - 1
 
+    # Local Decorator.
+    def _transaction_required(meth):
+        @_functools.wraps(meth)
+        def wrapper(self, *args, **kw):
+            if self.transactions:
+                meth(self, *args, **kw)
+            else:
+                with self.transaction():
+                    meth(self, *args, **kw)
+        return wrapper
+
     def _update_db_rels(self, updated_rels):
         with self._con as con:
             for name, val in updated_rels.items():
@@ -151,6 +162,7 @@ class Database(dict):
             # XXX this can be made more efficient.
             super().__setitem__(name, _get_persistent_type(val)(self, name, val))
 
+    @_transaction_required
     def __setitem__(self, name, val):
         if not hasattr(val, 'header'):
             raise ValueError("Only relations may be stored in database, "
@@ -167,8 +179,7 @@ class Database(dict):
             val = val()
         # XXX Do we need to use the DB relation in _check_constraints?
         self._check_constraints(name, val)
-        with _null if self.transactions else self.transaction():
-            self._transaction_ns.current[name] = val
+        self._transaction_ns.current[name] = val
 
     def __getitem__(self, name):
         # XXX I wonder if there is a more elegant way to to do this.
@@ -184,14 +195,13 @@ class Database(dict):
             ', '.join("{!r}: {!r}".format(n, type(r))
                       for n, r in sorted(self.items())))
 
+    @_transaction_required
     def _check_constraints(self, relname, r):
         row_validator = ' and '.join(
                            "({})".format(v)
                            for v in self.row_constraints[relname].values())
         if row_validator:
-            # We need a transaction here to get the db relation names in scope.
-            with (_null if self.transactions else
-                    self.transaction()), _dinsd.ns(self._system_ns.current):
+            with _dinsd.ns(self._system_ns.current):
                 invalid = r.where("not ({})".format(row_validator))
                 if invalid:
                     # figure out one constraint and one row to put in error
