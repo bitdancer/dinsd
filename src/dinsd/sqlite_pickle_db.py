@@ -195,8 +195,14 @@ class Database(dict):
             ', '.join("{!r}: {!r}".format(n, type(r))
                       for n, r in sorted(self.items())))
 
-    @_transaction_required
+    # Constraint checking support.  A transaction MUST be active when the
+    # constraint checks are called.
+
     def _check_constraints(self, relname, r):
+        self._check_row_constraints(relname, r)
+        self._check_db_constraints()
+
+    def _check_row_constraints(self, relname, r):
         row_validator = ' and '.join(
                            "({})".format(v)
                            for v in self.row_constraints[relname].values())
@@ -212,6 +218,8 @@ class Database(dict):
                         if not eval(exp, _all, rw._as_locals()):
                             raise RowConstraintError(relname, c, exp, rw)
                     raise AssertionError("Expected failure did not happen")
+
+    def _check_db_constraints(self):
         for i in range(10):
             done = True
             for name, (constraint, fixer) in self._constraints.items():
@@ -246,6 +254,7 @@ class Database(dict):
 
     # Row Constraints
 
+    @_transaction_required
     def constrain_rows(self, relname, **kw):
         r = self[relname]
         existing = self.row_constraints[relname].copy()
