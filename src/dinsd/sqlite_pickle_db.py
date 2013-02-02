@@ -201,6 +201,14 @@ class Database(dict):
                                                                     name,
                                                                     val))
 
+    def __getitem__(self, name):
+        # XXX I wonder if there is a more elegant way to to do this.
+        if self._transaction_ns.in_getitem:
+            self._transaction_ns.in_getitem = False
+            return super().__getitem__(name)
+        self._transaction_ns.in_getitem = True
+        return self._transaction_ns.current[name]
+
     @_transaction_required
     def __setitem__(self, name, val):
         if not hasattr(val, 'header'):
@@ -219,14 +227,6 @@ class Database(dict):
         # XXX Do we need to use the DB relation in _check_constraints?
         self._check_constraints(name, val)
         self._transaction_ns.current[name] = val
-
-    def __getitem__(self, name):
-        # XXX I wonder if there is a more elegant way to to do this.
-        if self._transaction_ns.in_getitem:
-            self._transaction_ns.in_getitem = False
-            return super().__getitem__(name)
-        self._transaction_ns.in_getitem = True
-        return self._transaction_ns.current[name]
 
     def _insert_row(self, relname, rw):
         with self._con as con:
