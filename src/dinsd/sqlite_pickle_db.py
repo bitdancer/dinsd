@@ -22,10 +22,21 @@ _all['___'] = ___
 
 class PersistentRelation(_Relation):
 
-    def __init__(self, db, name, r):
+    def __init__(self, db, name, *args):
         self.db = db
         self.name = name
-        super().__init__(r)
+        super().__init__(*args)
+
+    # Local Decorator.
+    def _transaction_required(meth):
+        @_functools.wraps(meth)
+        def wrapper(self, *args, **kw):
+            if self.db.transactions:
+                meth(self, *args, **kw)
+            else:
+                with self.db.transaction():
+                    meth(self, *args, **kw)
+        return wrapper
 
     def __str__(self):
         return self.display(*sorted(self.header))
@@ -34,6 +45,29 @@ class PersistentRelation(_Relation):
         if 'highlight' not in kw:
             kw['highlight'] = getattr(self, 'key', [])
         return _display(self, *args, **kw)
+
+    def copy(self):
+        new = type(self)(self.db, self.name)
+        new._rows_ = self._rows_.copy()
+        new.key = self.key
+        return new
+
+    @_transaction_required
+    def insert(self, rows):
+        if hasattr(rows, '_header_'):
+            rows = ~rows
+        new = self.copy()
+        for rw in rows:
+            if rw in new._rows_:
+                raise ConstraintError("row {} already in relation".format(rw))
+            if rw._header_ != self.header:
+                raise TypeError("Type of inserted row ({}) does not match "
+                                "type of relation ({})".format(rw._header_,
+                                                               self.header))
+            self.db._check_row_constraint(self.name, new, rw)
+            self.db._insert_row(self.name, rw)
+        new._rows_ = new._rows_ | rows._rows_
+        self.db._transaction_ns.current[self.name] = new
 
 
 class DisconnectedPersistentRelation:
@@ -160,7 +194,12 @@ class Database(dict):
                     con.update_relation(name, val)
         for name, val in updated_rels.items():
             # XXX this can be made more efficient.
-            super().__setitem__(name, _get_persistent_type(val)(self, name, val))
+            if getattr(val, 'db', None) == self:
+                super().__setitem__(name, val)
+            else:
+                super().__setitem__(name, _get_persistent_type(val)(self,
+                                                                    name,
+                                                                    val))
 
     @_transaction_required
     def __setitem__(self, name, val):
@@ -189,6 +228,10 @@ class Database(dict):
         self._transaction_ns.in_getitem = True
         return self._transaction_ns.current[name]
 
+    def _insert_row(self, relname, rw):
+        with self._con as con:
+            con.insert_row(relname, rw)
+
     def __repr__(self):
         return "{}({{{}}})".format(
             self.__class__.__name__,
@@ -201,6 +244,19 @@ class Database(dict):
     def _check_constraints(self, relname, r):
         self._check_row_constraints(relname, r)
         self._check_db_constraints()
+
+    def _check_row_constraint(self, relname, r, rw):
+        row_validator = ' and '.join(
+                           "({})".format(v)
+                           for v in self.row_constraints[relname].values())
+        if row_validator:
+            with _dinsd.ns(self._system_ns.current):
+                if not eval(row_validator, _all, rw._as_locals()):
+                    # find first failing constraint to put in error message
+                    for c, exp in sorted(self.row_constraints[relname].items()):
+                        if not eval(exp, _all, rw._as_locals()):
+                            raise RowConstraintError(relname, c, exp, rw)
+                    raise AssertionError("Expected failure did not happen")
 
     def _check_row_constraints(self, relname, r):
         row_validator = ' and '.join(
@@ -388,6 +444,15 @@ class _dumb_sqlite_connection:
                             ' ,'.join('"{}"'.format(n) for n in names),
                             ' ,'.join(['?'] * len(names))), 
                       [_pickle.dumps(getattr(rw, n)) for n in names])
+
+    def insert_row(self, name, rw):
+        c = self.con.cursor()
+        names = sorted(rw._header_.keys())
+        c.execute('insert into "{}" ({}) values ({})'.format(
+            name,
+            ' ,'.join('"{}"'.format(n) for n in names),
+            ' ,'.join(['?'] * len(names))),
+            [_pickle.dumps(getattr(rw, n)) for n in names])
 
     def relations(self):
         c = self.con.cursor()

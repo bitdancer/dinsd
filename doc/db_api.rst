@@ -565,6 +565,54 @@ XXX: key constraints are not saved yet.
 
 
 
+Insert, Update, and Delete
+--------------------------
+
+While assignment of a complete new value to a database relation works to update
+the database, it is not the most convenient or efficient way to do so.  Like
+all database management systems of whatever kind, dinsd provides convenience
+methods for specifying just the changes to be made relative to the existing
+value:  all database relations provide the methods ``insert``, ``update``, and
+``delete`` that do the obvious things.  As is standard for Python methods that
+mutate their object, these methods return ``None``.  This is analogous to the
+equivalent *Tutorial D* operators, which return no value, and for exactly the
+same reason.
+
+
+insert
+~~~~~~
+
+``insert`` adds rows, leaving all existing rows intact.  In *Tutorial D*
+you'd add a single row to a relation like this:
+
+    INSERT IS_ENROLLED_ON RELATION { TUPLE { StudentId SID('S3'),
+                                             CourseId('C2') } } ;
+
+By this point you can probably guess what the dinsd version looks like:
+
+    >>> db.r.is_enrolled_on.insert(row(student_id=SID('S3'),
+    ...                                course_id=CID('C2')))
+    >>> print(db.r.is_enrolled_on)
+    +-----------+------------+
+    | course_id | student_id |
+    +===========+============+
+    | C1        | S1         |
+    | C1        | S2         |
+    | C1        | S4         |
+    | C2        | S1         |
+    | C2        | S3         |
+    | C3        | S2         |
+    | C3        | S3         |
+    +-----------+------------+
+
+XXX Temporary reset
+
+    >>> db.r.is_enrolled_on = (db.r.is_enrolled_on -
+    ...                          ~row(course_id = CID('C2'),
+    ...                               student_id = SID('S3')))
+
+
+
 Transactions
 ------------
 
