@@ -521,6 +521,16 @@ keys we ask the ``Database`` object::
 The ``display`` function indicates the keys of a database relation by
 using ``=`` characters in the table header separator for key columns::
 
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +============+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    +------------+----------+
     >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
     +------------+-----------+------+
     | student_id | course_id | mark |
@@ -550,8 +560,8 @@ any '='s::
     | S4         | C1        | 93   |
     +------------+-----------+------+
 
-With the key constraint in place, we can no longer add a row with an existing
-``SID``, ``CID`` pair, even if it has a different ``mark``::
+With the ``exam_marks`` key constraint in place, we can no longer add a row
+with an existing ``SID``, ``CID`` pair, even if it has a different ``mark``::
 
     >>> db.r.exam_marks = exam_marks | ~row(student_id=SID('S1'),
     ...                                     course_id=CID('C1'),
@@ -583,34 +593,79 @@ insert
 ~~~~~~
 
 ``insert`` adds rows, leaving all existing rows intact.  In *Tutorial D*
-you'd add a single row to a relation like this:
+you'd add a single row to a relation like this::
 
     INSERT IS_ENROLLED_ON RELATION { TUPLE { StudentId SID('S3'),
                                              CourseId('C2') } } ;
 
-By this point you can probably guess what the dinsd version looks like:
+By this point you can probably guess what the dinsd version looks like::
+
+    >>> db.r.is_enrolled_on.insert(~row(student_id=SID('S3'),
+    ...                                 course_id=CID('C2')))
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +============+===========+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    +------------+-----------+
+
+We can only insert rows if the relation we pass in has the same ``header``
+as the table into which we are inserting it::
+
+    >>> db.r.is_enrolled_on.insert(~row(course_id=CID('C1'), name='foo'))
+    Traceback (most recent call last):
+        ...
+    TypeError: ...
+
+Note that the argument to ``insert`` above is a *relation*, not a row.  This is
+important to note, because in SQL the insert of a single row came first, and
+inserting multiple rows was an afterthought (and not supported by all SQL
+dialects).
+
+However, inserting a row is a very common operation.  Unlike *Tutorial D*,
+dinsd is not primarily a teaching language, so we opt for practicality over
+purity here and also support passing a single row to ``insert``::
 
     >>> db.r.is_enrolled_on.insert(row(student_id=SID('S3'),
-    ...                                course_id=CID('C2')))
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +===========+============+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C2        | S3         |
-    | C3        | S2         |
-    | C3        | S3         |
-    +-----------+------------+
+    ...                                 course_id=CID('C2')))
+    Traceback (most recent call last):
+        ...
+    dinsd.db.ConstraintError: ...
 
-XXX Temporary reset
+Of course, since we've already inserted that row, we get a constraint error
+trying to do it again.
 
-    >>> db.r.is_enrolled_on = (db.r.is_enrolled_on -
-    ...                          ~row(course_id = CID('C2'),
-    ...                               student_id = SID('S3')))
+The reason that it is important to realize that the argument to ``insert`` can
+be a relation is that one can use an expression to compute that relation.
+AIRDT example 6.13 demonstrates adding zero marks for any student who has not
+sat an exam for a course on which they are enrolled::
 
+    INSERT EXAM_MARK EXTEND ( IS_ENROLLED_ON NOT MATCHING
+                              EXAM_MARK ) ADD ( 0 AS Mark ) ;
+
+which in dinsd is::
+
+    >>> db.r.exam_marks.insert(
+    ...     (db.r.is_enrolled_on - db.r.exam_marks).extend(mark="0"))
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +============+===========+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
 
 
 Transactions
@@ -642,41 +697,44 @@ a ``with`` block.  So in dinsd, a transaction looks like this::
 
 At the end of the ``with`` block, the transaction is automatically committed::
 
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    | Foo      | S9         |
-    +----------+------------+
-    >>> print(db.r.exam_marks)
-    +-----------+------+------------+
-    | course_id | mark | student_id |
-    +-----------+------+------------+
-    | C1        | 49   | S2         |
-    | C1        | 85   | S1         |
-    | C1        | 93   | S4         |
-    | C2        | 49   | S1         |
-    | C3        | 66   | S3         |
-    | C3        | 85   | S1         |
-    | C3        | 87   | S9         |
-    +-----------+------+------------+
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C3        | S2         |
-    | C3        | S3         |
-    | C3        | S9         |
-    +-----------+------------+
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    | S9         | Foo      |
+    +------------+----------+
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    | S9         | C3        | 87   |
+    +------------+-----------+------+
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    | S9         | C3        |
+    +------------+-----------+
 
 If any exception occurs, then the transaction is automatically rolled back::
 
@@ -694,41 +752,44 @@ If any exception occurs, then the transaction is automatically rolled back::
     Traceback (most recent call last):
         ...
     Exception: oops
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    | Foo      | S9         |
-    +----------+------------+
-    >>> print(db.r.exam_marks)
-    +-----------+------+------------+
-    | course_id | mark | student_id |
-    +-----------+------+------------+
-    | C1        | 49   | S2         |
-    | C1        | 85   | S1         |
-    | C1        | 93   | S4         |
-    | C2        | 49   | S1         |
-    | C3        | 66   | S3         |
-    | C3        | 85   | S1         |
-    | C3        | 87   | S9         |
-    +-----------+------+------------+
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C3        | S2         |
-    | C3        | S3         |
-    | C3        | S9         |
-    +-----------+------------+
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    | S9         | Foo      |
+    +------------+----------+
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    | S9         | C3        | 87   |
+    +------------+-----------+------+
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    | S9         | C3        |
+    +------------+-----------+
 
 dinsd provides the special exception ``Rollback`` for intentionally rolling
 back a transaction.  This exception is caught by the ``transaction``
@@ -746,41 +807,44 @@ context manager and does not cause a program abort::
     ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
     ...                             ~row(student_id=SID('S8'),
     ...                                  course_id=CID('C3')))
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    | Foo      | S9         |
-    +----------+------------+
-    >>> print(db.r.exam_marks)
-    +-----------+------+------------+
-    | course_id | mark | student_id |
-    +-----------+------+------------+
-    | C1        | 49   | S2         |
-    | C1        | 85   | S1         |
-    | C1        | 93   | S4         |
-    | C2        | 49   | S1         |
-    | C3        | 66   | S3         |
-    | C3        | 85   | S1         |
-    | C3        | 87   | S9         |
-    +-----------+------+------------+
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C3        | S2         |
-    | C3        | S3         |
-    | C3        | S9         |
-    +-----------+------------+
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    | S9         | Foo      |
+    +------------+----------+
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    | S9         | C3        | 87   |
+    +------------+-----------+------+
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    | S9         | C3        |
+    +------------+-----------+
 
 Transactions may be nested::
 
@@ -795,44 +859,47 @@ Transactions may be nested::
     ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
     ...                             ~row(student_id=SID('S8'),
     ...                                  course_id=CID('C3')))
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    | Foo      | S8         |
-    | Foo      | S9         |
-    +----------+------------+
-    >>> print(db.r.exam_marks)
-    +-----------+------+------------+
-    | course_id | mark | student_id |
-    +-----------+------+------------+
-    | C1        | 49   | S2         |
-    | C1        | 85   | S1         |
-    | C1        | 93   | S4         |
-    | C2        | 49   | S1         |
-    | C3        | 66   | S3         |
-    | C3        | 85   | S1         |
-    | C3        | 87   | S8         |
-    | C3        | 87   | S9         |
-    +-----------+------+------------+
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C3        | S2         |
-    | C3        | S3         |
-    | C3        | S8         |
-    | C3        | S9         |
-    +-----------+------------+
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    | S8         | Foo      |
+    | S9         | Foo      |
+    +------------+----------+
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    | S8         | C3        | 87   |
+    | S9         | C3        | 87   |
+    +------------+-----------+------+
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    | S8         | C3        |
+    | S9         | C3        |
+    +------------+-----------+
 
 An exception in an inner transaction that is not caught will roll back the
 outer transaction as well::
@@ -849,50 +916,50 @@ outer transaction as well::
     ...                             ~row(student_id=SID('S7'),
     ...                                  course_id=CID('C3')))
     ...
-    ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
         ...
-    dinsd.db.RowConstraintError: exam_marks constraint valid_mark violated:
-         '0 <= mark <= 100' is not satisfied by row({'course_id': CID('C3'),
-         'mark': 187, 'student_id': SID('S7')})
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    | Foo      | S8         |
-    | Foo      | S9         |
-    +----------+------------+
-    >>> print(db.r.exam_marks)
-    +-----------+------+------------+
-    | course_id | mark | student_id |
-    +-----------+------+------------+
-    | C1        | 49   | S2         |
-    | C1        | 85   | S1         |
-    | C1        | 93   | S4         |
-    | C2        | 49   | S1         |
-    | C3        | 66   | S3         |
-    | C3        | 85   | S1         |
-    | C3        | 87   | S8         |
-    | C3        | 87   | S9         |
-    +-----------+------+------------+
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C3        | S2         |
-    | C3        | S3         |
-    | C3        | S8         |
-    | C3        | S9         |
-    +-----------+------------+
+    dinsd.db.RowConstraintError: ...
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    | S8         | Foo      |
+    | S9         | Foo      |
+    +------------+----------+
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    | S8         | C3        | 87   |
+    | S9         | C3        | 87   |
+    +------------+-----------+------+
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    | S8         | C3        |
+    | S9         | C3        |
+    +------------+-----------+
 
 Explicitly rolling back an inner transaction, on the other hand, does not
 affect the outer transaction::
@@ -909,46 +976,49 @@ affect the outer transaction::
     ...     db.r.is_enrolled_on = (db.r.is_enrolled_on |
     ...                             ~row(student_id=SID('S7'),
     ...                                  course_id=CID('C3')))
-    >>> print(db.r.is_called)
-    +----------+------------+
-    | name     | student_id |
-    +----------+------------+
-    | Anne     | S1         |
-    | Boris    | S2         |
-    | Boris    | S5         |
-    | Cindy    | S3         |
-    | Devinder | S4         |
-    | Foo      | S7         |
-    | Foo      | S8         |
-    | Foo      | S9         |
-    +----------+------------+
-    >>> print(db.r.exam_marks)
-    +-----------+------+------------+
-    | course_id | mark | student_id |
-    +-----------+------+------------+
-    | C1        | 49   | S2         |
-    | C1        | 85   | S1         |
-    | C1        | 93   | S4         |
-    | C2        | 49   | S1         |
-    | C3        | 66   | S3         |
-    | C3        | 85   | S1         |
-    | C3        | 87   | S8         |
-    | C3        | 87   | S9         |
-    +-----------+------+------------+
-    >>> print(db.r.is_enrolled_on)
-    +-----------+------------+
-    | course_id | student_id |
-    +-----------+------------+
-    | C1        | S1         |
-    | C1        | S2         |
-    | C1        | S4         |
-    | C2        | S1         |
-    | C3        | S2         |
-    | C3        | S3         |
-    | C3        | S7         |
-    | C3        | S8         |
-    | C3        | S9         |
-    +-----------+------------+
+    >>> print(db.r.is_called.display('student_id', 'name'))
+    +------------+----------+
+    | student_id | name     |
+    +------------+----------+
+    | S1         | Anne     |
+    | S2         | Boris    |
+    | S3         | Cindy    |
+    | S4         | Devinder |
+    | S5         | Boris    |
+    | S7         | Foo      |
+    | S8         | Foo      |
+    | S9         | Foo      |
+    +------------+----------+
+    >>> print(db.r.exam_marks.display('student_id', 'course_id', 'mark'))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    | S8         | C3        | 87   |
+    | S9         | C3        | 87   |
+    +------------+-----------+------+
+    >>> print(db.r.is_enrolled_on.display('student_id', 'course_id'))
+    +------------+-----------+
+    | student_id | course_id |
+    +------------+-----------+
+    | S1         | C1        |
+    | S1         | C2        |
+    | S2         | C1        |
+    | S2         | C3        |
+    | S3         | C2        |
+    | S3         | C3        |
+    | S4         | C1        |
+    | S7         | C3        |
+    | S8         | C3        |
+    | S9         | C3        |
+    +------------+-----------+
 
 Another advantage of using transactions is that inside a transaction scope all
 of the database relations are available by name in the expression namespace
@@ -964,8 +1034,8 @@ automatically::
     | name     | student_id | gpa  |
     +----------+------------+------+
     | Anne     | S1         | 73.0 |
-    | Boris    | S2         | 49.0 |
-    | Cindy    | S3         | 66.0 |
+    | Boris    | S2         | 24.5 |
+    | Cindy    | S3         | 33.0 |
     | Devinder | S4         | 93.0 |
     | Foo      | S8         | 87.0 |
     | Foo      | S9         | 87.0 |
@@ -1003,6 +1073,7 @@ at which time they are committed to the DB and are visible to other threads::
     | C1        | S2         |
     | C1        | S4         |
     | C2        | S1         |
+    | C2        | S3         |
     | C3        | S2         |
     | C3        | S3         |
     | C3        | S7         |
@@ -1026,6 +1097,7 @@ at which time they are committed to the DB and are visible to other threads::
     | C1        | S2         |
     | C1        | S4         |
     | C2        | S1         |
+    | C2        | S3         |
     | C3        | S2         |
     | C3        | S3         |
     +-----------+------------+
@@ -1037,6 +1109,7 @@ at which time they are committed to the DB and are visible to other threads::
     | C1        | S2         |
     | C1        | S4         |
     | C2        | S1         |
+    | C2        | S3         |
     | C3        | S2         |
     | C3        | S3         |
     | C3        | S7         |
@@ -1054,6 +1127,7 @@ at which time they are committed to the DB and are visible to other threads::
     | C1        | S2         |
     | C1        | S4         |
     | C2        | S1         |
+    | C2        | S3         |
     | C3        | S2         |
     | C3        | S3         |
     +-----------+------------+
