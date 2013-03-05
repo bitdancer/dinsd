@@ -619,6 +619,8 @@ We can only insert rows if the relation we pass in has the same ``header``
 as the table into which we are inserting it::
 
     >>> db.r.is_enrolled_on.insert(~row(course_id=CID('C1'), name='foo'))
+    ...
+    ... # doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
     TypeError: ...
@@ -634,6 +636,8 @@ purity here and also support passing a single row to ``insert``::
 
     >>> db.r.is_enrolled_on.insert(row(student_id=SID('S3'),
     ...                                 course_id=CID('C2')))
+    ...
+    ... # doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
     dinsd.db.ConstraintError: ...
@@ -659,6 +663,93 @@ which in dinsd is::
     +============+===========+------+
     | S1         | C1        | 85   |
     | S1         | C2        | 49   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
+
+
+update
+~~~~~~
+
+Update allows us to change some or all of the values of some or all of
+the rows of a persistent relation.  AIRDT gives an example and then shows
+how much more complicated it would be to do without the update operator.
+I'm going to reverse that and show the replacement version first.
+
+The example (example 6.15) is of adding five points to the grade of
+everyone who sat for an exam in course ``C2``::
+
+    EXAM_MARK := EXAM_MARK WHERE NOT ( CourseId = CID('C2') )
+                 UNION
+                 EXTEND ( ( EXAM_MARK WHERE CourseId = CID('C2') )
+                          RENAME ( Mark AS Xmark ) )
+                    ADD ( Xmark + 5 AS Mark ) { ALL BUT Xmark } ;
+
+I'm only going to compute the right hand side here, and not assign it to the
+database variable, since we've seen examples of assignment before::
+
+    >>> x = (db.r.exam_marks.where("course_id != CID('C2')") |
+    ...      db.r.exam_marks.where("course_id == CID('C2')").rename(
+    ...         mark="Xmark").extend(mark="Xmark+5") << {"Xmark"})
+    >>> print(x.display("student_id", "course_id", "mark"))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 54   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 5    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
+
+Hmm.  Giving a five to someone who didn't take the exam probably isn't
+what they had in mind...we can fix that pretty easily in dind/Python::
+
+    >>> x = (db.r.exam_marks.where("course_id != CID('C2')") |
+    ...      db.r.exam_marks.where("course_id == CID('C2')").rename(
+    ...         mark="Xmark").extend(
+    ...         mark="Xmark+5 if Xmark else 0") << {"Xmark"})
+    >>> print(x.display("student_id", "course_id", "mark"))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 54   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
+
+I find the chained operators somewhat ugly and hard to read, so in
+it is nice that we have an alternate notation that is both more
+efficient and more compact.
+
+In AIRDT, the ``UPDATE`` equivalent of the first example above looks like
+this::
+
+    UPDATE EXAM_MARK WHERE CourseId = CID('C2')
+                     ( Mark := Mark + 5 ) ;
+
+The dinsd version (incorporating our 0 fix) looks pretty similar::
+
+    >>> db.r.exam_marks.update("course_id==CID('C2')",
+    ...                        mark="mark+5 if mark else 0")
+    >>> print(db.r.exam_marks.display("student_id", "course_id", "mark"))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +============+===========+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -713,7 +804,7 @@ At the end of the ``with`` block, the transaction is automatically committed::
     | student_id | course_id | mark |
     +------------+-----------+------+
     | S1         | C1        | 85   |
-    | S1         | C2        | 49   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -768,7 +859,7 @@ If any exception occurs, then the transaction is automatically rolled back::
     | student_id | course_id | mark |
     +------------+-----------+------+
     | S1         | C1        | 85   |
-    | S1         | C2        | 49   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -823,7 +914,7 @@ context manager and does not cause a program abort::
     | student_id | course_id | mark |
     +------------+-----------+------+
     | S1         | C1        | 85   |
-    | S1         | C2        | 49   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -876,7 +967,7 @@ Transactions may be nested::
     | student_id | course_id | mark |
     +------------+-----------+------+
     | S1         | C1        | 85   |
-    | S1         | C2        | 49   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -916,6 +1007,7 @@ outer transaction as well::
     ...                             ~row(student_id=SID('S7'),
     ...                                  course_id=CID('C3')))
     ...
+    ... # doctest: +ELLIPSIS
     Traceback (most recent call last):
         ...
     dinsd.db.RowConstraintError: ...
@@ -936,7 +1028,7 @@ outer transaction as well::
     | student_id | course_id | mark |
     +------------+-----------+------+
     | S1         | C1        | 85   |
-    | S1         | C2        | 49   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -994,7 +1086,7 @@ affect the outer transaction::
     | student_id | course_id | mark |
     +------------+-----------+------+
     | S1         | C1        | 85   |
-    | S1         | C2        | 49   |
+    | S1         | C2        | 54   |
     | S1         | C3        | 85   |
     | S2         | C1        | 49   |
     | S2         | C3        | 0    |
@@ -1027,13 +1119,13 @@ automatically::
     >>> from dinsd import matching
     >>> with db.transaction():
     ...     gpas = matching(db.r.is_called, db.r.exam_marks).extend(
-    ...         gpa="avg((exam_marks + ~row(student_id=student_id) "
-    ...                    ").compute('mark'))")
+    ...         gpa="round(avg((exam_marks + ~row(student_id=student_id) "
+    ...                    ").compute('mark')), 1)")
     >>> print(gpas.display('name', 'student_id', 'gpa'))
     +----------+------------+------+
     | name     | student_id | gpa  |
     +----------+------------+------+
-    | Anne     | S1         | 73.0 |
+    | Anne     | S1         | 74.7 |
     | Boris    | S2         | 24.5 |
     | Cindy    | S3         | 33.0 |
     | Devinder | S4         | 93.0 |

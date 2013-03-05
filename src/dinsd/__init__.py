@@ -142,6 +142,11 @@ class _Row(_RichCompareMixin):
     def __len__(self):
         return len(self.__dict__)
 
+    def copy(self):
+        new = type(self).__new__(self.__class__)
+        new.__dict__ = self.__dict__.copy()
+        return new
+
     # Comparison operators (see RichCompareMixin).
 
     def _cmpkey(self):

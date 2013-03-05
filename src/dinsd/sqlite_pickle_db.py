@@ -30,13 +30,13 @@ class PersistentRelation(_Relation):
     # Local Decorator.
     def _transaction_required(meth):
         @_functools.wraps(meth)
-        def wrapper(self, *args, **kw):
+        def transaction_required_wrapper(self, *args, **kw):
             if self.db.transactions:
                 meth(self, *args, **kw)
             else:
                 with self.db.transaction():
                     meth(self, *args, **kw)
-        return wrapper
+        return transaction_required_wrapper
 
     def __str__(self):
         return self.display(*sorted(self.header))
@@ -48,7 +48,7 @@ class PersistentRelation(_Relation):
 
     def copy(self):
         new = type(self)(self.db, self.name)
-        new._rows_ = self._rows_.copy()
+        new._rows_ = set(self._rows_)
         new.key = self.key
         return new
 
@@ -66,10 +66,46 @@ class PersistentRelation(_Relation):
                                                                self.header))
             self.db._check_row_constraint(self.name, new, rw)
             self.db._insert_row(self.name, rw)
-        new._rows_ = new._rows_ | rows._rows_
+            new._rows_.add(rw)
         self.db._transaction_ns.current[self.name] = new
+        self.db._check_db_constraints()
 
+    @_transaction_required
+    def update(self, condition, **kw):
+        if isinstance(condition, str):
+            c = compile(condition, '<update>', 'eval')
+            condition = lambda r, c=c: eval(c, _all, r._as_locals())
+        changes = {}
+        for n, f in kw.items():
+            if n not in self.header:
+                raise ValueError("Unknown attribute name {!r}".format(n))
+            if isinstance(f, str):
+                c = compile(f, '<update-'+n+'>', 'eval')
+                changes[n] = lambda r, c=c: eval(c, _all, r._as_locals())
+        self.db._transaction_ns.current[self.name] = new = self.copy()
+        for rw in self:
+            if not condition(rw):
+                continue
+            new._rows_.remove(rw)
+            # XXX This update can be made WAY more efficient.
+            self.db._update_key(self.name)
+            new_rw = rw.copy()
+            updates = {}
+            for attrname, change in changes.items():
+                val = change(rw)
+                setattr(new_rw, attrname, val)
+                updates[attrname] = val
+            self.db._check_row_constraint(self.name, new, new_rw)
+            # XXX this is very inefficient, but we can't do better until we
+            # learn to parse strings and turn them into SQL...so this is
+            # probably the place to start building that translator.
+            self.db._update_row(self.name, new_rw >> self.key.keys(), updates)
+            new._rows_.add(new_rw)
+            self.db._update_key(self.name)
+        self.db._transaction_ns.current[self.name] = new
+        self.db._check_db_constraints()
 
+            
 class DisconnectedPersistentRelation:
     pass
 
@@ -166,6 +202,8 @@ class Database(dict):
             self._transaction_ns.current.maps[1].update(changes)
             self._system_ns.current.maps[1].update(system_changes)
         else:
+            # These two operations also update the dicts the base chainmaps in
+            # the namespaces are wrapped around.
             self._update_db_rels(changes)
             self._system_relations.update(system_changes)
 
@@ -231,6 +269,10 @@ class Database(dict):
     def _insert_row(self, relname, rw):
         with self._con as con:
             con.insert_row(relname, rw)
+
+    def _update_row(self, relname, key, changes):
+        with self._con as con:
+            con.update_row(relname, key.__dict__, changes)
 
     def __repr__(self):
         return "{}({{{}}})".format(
@@ -332,11 +374,13 @@ class Database(dict):
 
     # Key Constraints
 
+    @_transaction_required
     def set_key(self, relname, keynames):
-        r = self[relname]
+        r = self._transaction_ns.current[relname]
         r._validate_attr_names(keynames)
         k = self._system_ns.current['_sys_key_'+relname] = r >> keynames
         r.key = k.header
+        # XXX I think these need to be transactionized, too.
         self.row_constraints[relname]['_sys_key_'+relname] = (
             "_row_ in {relname} or "
             "_row_ >> _sys_key_{relname}.header.keys() not in "
@@ -346,16 +390,16 @@ class Database(dict):
             lambda r=relname: self._update_key(r))
 
     def _update_key(self, relname):
-        r = self[relname]
+        r = self._transaction_ns.current[relname]
         keyname = '_sys_key_'+relname
         key = self._system_ns.current[keyname]
         if len(r) == len(key):
             raise AssertionError("Relation and key have equal len in key fixer")
-        # We could just re-project the key, but this is more fun...for now.
+        # We could just re-project the key, but this helps us find bugs.
         if len(r) > len(key):
-            new_key = key | (r - key) >> key.header.keys()
+             new_key = key | (r - key) >> key.header.keys()
         else:
-            new_key = _dinsd.matching(key, r)
+             new_key = _dinsd.matching(key, r)
         self._system_ns.current[keyname] = new_key
         return True
 
@@ -453,6 +497,18 @@ class _dumb_sqlite_connection:
             ' ,'.join('"{}"'.format(n) for n in names),
             ' ,'.join(['?'] * len(names))),
             [_pickle.dumps(getattr(rw, n)) for n in names])
+
+    def update_row(self, name, key, changes):
+        c = self.con.cursor()
+        namebits, set_values = zip(*[('"{}"=?'.format(attrname), val)
+                                     for attrname, val in changes.items()])
+        setstr = ', '.join(namebits)
+        namebits, where_values = zip(*[('"{}"=?'.format(attrname), val)
+                                       for attrname, val in key.items()])
+        wherestr = ' and '.join(namebits)
+        # We assume the pickle of a given value is always the same.
+        c.execute('update "{}" set {} where {}'.format(name, setstr, wherestr),
+                        [_pickle.dumps(v) for v in set_values + where_values])
 
     def relations(self):
         c = self.con.cursor()
