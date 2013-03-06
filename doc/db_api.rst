@@ -93,8 +93,7 @@ our ``test_support`` test module. ::
     ...     ('S4',          'C1'),
     ...     ('S2',          'C3'),
     ...     )
-    >>> ExamMarks = rel(course_id=CID, student_id=SID, mark=int)
-    >>> exam_marks = rel(student_id=SID, course_id=CID, mark=int)(
+    >>> exam_marks = rel(course_id=CID, student_id=SID, mark=int)(
     ...     ('student_id', 'course_id', 'mark'),
     ...     ('S1',         'C1',        85),
     ...     ('S1',         'C2',        49),
@@ -102,6 +101,13 @@ our ``test_support`` test module. ::
     ...     ('S2',         'C1',        49),
     ...     ('S3',         'C3',        66),
     ...     ('S4',         'C1',        93),
+    ...     )
+    >>> courses = rel(course_id=CID, title=str)(
+    ...     ('course_id',   'title'),
+    ...     ('C1',          'Database'),
+    ...     ('C2',          'HCI'),
+    ...     ('C3',          'Op systems'),
+    ...     ('C4',          'Programming'),
     ...     )
 
 The database object acts like a Python dictionary: the relations that are
@@ -169,6 +175,7 @@ has content to the attribute::
 We can create a relation via the ``r`` attribute as well::
 
     >>> db.r.exam_marks = exam_marks
+    >>> db.r.courses = courses
 
 It is an error to try to assign a relation of the wrong type to a relation
 attribute::
@@ -573,6 +580,7 @@ with an existing ``SID``, ``CID`` pair, even if it has a different ``mark``::
 
 XXX: key constraints are not saved yet.
 
+XXX: the database constraint interface is missing.
 
 
 Insert, Update, and Delete
@@ -710,7 +718,7 @@ database variable, since we've seen examples of assignment before::
     +------------+-----------+------+
 
 Hmm.  Giving a five to someone who didn't take the exam probably isn't
-what they had in mind...we can fix that pretty easily in dind/Python::
+what they had in mind...we can fix that pretty easily in dinsd/Python::
 
     >>> x = (db.r.exam_marks.where("course_id != CID('C2')") |
     ...      db.r.exam_marks.where("course_id == CID('C2')").rename(
@@ -730,9 +738,9 @@ what they had in mind...we can fix that pretty easily in dind/Python::
     | S4         | C1        | 93   |
     +------------+-----------+------+
 
-I find the chained operators somewhat ugly and hard to read, so in
-it is nice that we have an alternate notation that is both more
-efficient and more compact.
+I find the chained operators somewhat ugly and hard to read, so in it is nice
+that we have, in ``upadate``, an alternate notation that is both more efficient
+and more compact.
 
 In AIRDT, the ``UPDATE`` equivalent of the first example above looks like
 this::
@@ -757,6 +765,41 @@ The dinsd version (incorporating our 0 fix) looks pretty similar::
     | S3         | C3        | 66   |
     | S4         | C1        | 93   |
     +------------+-----------+------+
+
+
+delete
+~~~~~~
+
+``delete`` removes existing tuples from a database relation.  In *Tutorial D*
+it looks like this:
+
+    DELETE COURSE WHERE CourseId = CID('C3') ;
+
+Here we are removing ``C3`` from our list of courses.  In dinsd this is::
+
+    >>> print(db.r.courses)
+    +-----------+-------------+
+    | course_id | title       |
+    +-----------+-------------+
+    | C1        | Database    |
+    | C2        | HCI         |
+    | C3        | Op systems  |
+    | C4        | Programming |
+    +-----------+-------------+
+    >>> db.r.courses.delete("course_id == CID('C3')")
+    >>> print(db.r.courses)
+    +-----------+-------------+
+    | course_id | title       |
+    +-----------+-------------+
+    | C1        | Database    |
+    | C2        | HCI         |
+    | C4        | Programming |
+    +-----------+-------------+
+
+XXX: We have some people enrolled on that course, though.  We didn't get a DB
+constraint error because we don't have a constraint set up to enforce that one
+can only be enrolled on a course that exists.  I'll circle back around to that
+soon.
 
 
 Transactions

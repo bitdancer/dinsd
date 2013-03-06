@@ -25,6 +25,7 @@ class PersistentRelation(_Relation):
     def __init__(self, db, name, *args):
         self.db = db
         self.name = name
+        self.key = None
         super().__init__(*args)
 
     # Local Decorator.
@@ -102,6 +103,19 @@ class PersistentRelation(_Relation):
             self.db._update_row(self.name, new_rw >> self.key.keys(), updates)
             new._rows_.add(new_rw)
             self.db._update_key(self.name)
+        self.db._transaction_ns.current[self.name] = new
+        self.db._check_db_constraints()
+
+    @_transaction_required
+    def delete(self, condition):
+        if isinstance(condition, str):
+            c = compile(condition, '<delete>', 'eval')
+            condition = lambda r, c=c: eval(c, _all, r._as_locals())
+        new = self.copy()
+        for rw in self:
+            if not condition(rw):
+                continue
+            new._rows_.remove(rw)
         self.db._transaction_ns.current[self.name] = new
         self.db._check_db_constraints()
 
