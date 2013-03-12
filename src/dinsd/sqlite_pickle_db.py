@@ -237,21 +237,17 @@ class Database(dict):
         return wrapper
 
     def _update_db_rels(self, updated_rels):
-        with self._con as con:
-            for name, val in updated_rels.items():
-                oldval = self.get(name)
-                if oldval is None:
-                    con.add_reltype(name, val.header)
-                if val != oldval:
-                    con.update_relation(name, val)
         for name, val in updated_rels.items():
-            # XXX this can be made more efficient.
-            if getattr(val, 'db', None) == self:
-                super().__setitem__(name, val)
-            else:
-                super().__setitem__(name, _get_persistent_type(val)(self,
-                                                                    name,
-                                                                    val))
+            val_db = getattr(val, 'db', None)
+            if val_db != self:
+                # We did not get here via insert, update, or delete, so we have
+                # to update the DB with the entire new value.
+                with self._con as con:
+                    if name not in self:
+                        con.add_reltype(name, val.header)
+                    con.update_relation(name, val)
+                val = _get_persistent_type(val)(self, name, val)
+            super().__setitem__(name, val)
 
     def __getitem__(self, name):
         # XXX I wonder if there is a more elegant way to to do this.
