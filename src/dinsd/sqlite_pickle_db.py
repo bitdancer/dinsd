@@ -15,7 +15,8 @@ from dinsd.db import (ConstraintError, RowConstraintError, DBConstraintLoop,
 # For debugging only.
 import sys as _sys
 def ___(*args):
-    print(*args, file=_sys.stderr, flush=True)
+    if _dinsd.___debug:
+        print(*args, file=_sys.stderr, flush=True)
     return args[-1]
 _expns['___'] = ___
 
@@ -84,11 +85,12 @@ class PersistentRelation(_Relation):
                 c = compile(f, '<update-'+n+'>', 'eval')
                 changes[n] = lambda r, c=c: eval(c, _expns, r._as_locals())
         self.db._transaction_ns.current[self.name] = new = self.copy()
+        key = self.header.keys() if self.key is None else self.key
         for rw in self:
             if not condition(rw):
                 continue
             new._rows.remove(rw)
-            # XXX This update can be made WAY more efficient.
+            # XXX This key update can be made WAY more efficient.
             self.db._update_key(self.name)
             new_rw = rw.copy()
             updates = {}
@@ -97,10 +99,9 @@ class PersistentRelation(_Relation):
                 setattr(new_rw, attrname, val)
                 updates[attrname] = val
             self.db._check_row_constraint(self.name, new, new_rw)
-            # XXX this is very inefficient, but we can't do better until we
-            # learn to parse strings and turn them into SQL...so this is
-            # probably the place to start building that translator.
-            self.db._update_row(self.name, new_rw >> self.key.keys(), updates)
+            # XXX this is very inefficient, but we can't do better unless we
+            # learn to parse expression strings and turn them into SQL...
+            self.db._update_row(self.name, rw >> key, updates)
             new._rows.add(new_rw)
             self.db._update_key(self.name)
         self.db._transaction_ns.current[self.name] = new
@@ -111,11 +112,13 @@ class PersistentRelation(_Relation):
         if isinstance(condition, str):
             c = compile(condition, '<delete>', 'eval')
             condition = lambda r, c=c: eval(c, _expns, r._as_locals())
+        key = self.header.keys() if self.key is None else self.key
         new = self.copy()
         for rw in self:
             if not condition(rw):
                 continue
             new._rows.remove(rw)
+            self.db._delete_row(self.name, rw >> key, rw)
         self.db._transaction_ns.current[self.name] = new
         self.db._check_db_constraints()
 
@@ -213,8 +216,8 @@ class Database(dict):
             self._transaction_ns.pop()
             self._system_ns.pop()
         if self.transactions:
-            self._transaction_ns.current.maps[1].update(changes)
-            self._system_ns.current.maps[1].update(system_changes)
+            self._transaction_ns.current.maps[0].update(changes)
+            self._system_ns.current.maps[0].update(system_changes)
         else:
             # These two operations also update the dicts the base chainmaps in
             # the namespaces are wrapped around.
@@ -280,9 +283,13 @@ class Database(dict):
         with self._con as con:
             con.insert_row(relname, rw)
 
-    def _update_row(self, relname, key, changes):
+    def _update_row(self, relname, key_fields, changes):
         with self._con as con:
-            con.update_row(relname, key.__dict__, changes)
+            con.update_row(relname, key_fields.__dict__, changes)
+
+    def _delete_row(self, relname, key_fields, rw):
+        with self._con as con:
+            con.delete_row(relname, key_fields.__dict__, rw)
 
     def __repr__(self):
         return "{}({{{}}})".format(
@@ -508,17 +515,25 @@ class _dumb_sqlite_connection:
             ' ,'.join(['?'] * len(names))),
             [_pickle.dumps(getattr(rw, n)) for n in names])
 
-    def update_row(self, name, key, changes):
+    def update_row(self, name, key_fields, changes):
         c = self.con.cursor()
         namebits, set_values = zip(*[('"{}"=?'.format(attrname), val)
                                      for attrname, val in changes.items()])
         setstr = ', '.join(namebits)
         namebits, where_values = zip(*[('"{}"=?'.format(attrname), val)
-                                       for attrname, val in key.items()])
+                                       for attrname, val in key_fields.items()])
         wherestr = ' and '.join(namebits)
         # We assume the pickle of a given value is always the same.
         c.execute('update "{}" set {} where {}'.format(name, setstr, wherestr),
                         [_pickle.dumps(v) for v in set_values + where_values])
+
+    def delete_row(self, name, key_fields, rw):
+        c = self.con.cursor()
+        namebits, where_values = zip(*[('"{}"=?'.format(attrname), val)
+                                       for attrname, val in key_fields.items()])
+        wherestr = ' and '.join(namebits)
+        c.execute('delete from {} where {}'.format(name, wherestr),
+                        [_pickle.dumps(v) for v in where_values])
 
     def relations(self):
         c = self.con.cursor()

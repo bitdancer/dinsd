@@ -1266,3 +1266,42 @@ at which time they are committed to the DB and are visible to other threads::
     | C3        | S2         |
     | C3        | S3         |
     +-----------+------------+
+
+
+Making sure we really are persistent
+------------------------------------
+
+The final test is to make sure that all of the DB manipulations we've
+done above were actually persisted to the database.  First, we'll make
+a copy of the data in the tables in memory::
+
+    >>> mem_is_called = db.r.is_called.where("True")
+    >>> mem_is_enrolled_on = db.r.is_enrolled_on.where("True")
+    >>> mem_exam_marks = db.r.exam_marks.where("True")
+    >>> mem_courses = db.r.courses.where("True")
+
+Next we close the DB and reopen it::
+
+    >>> db.close()
+    >>> db
+    Database({})
+    >>> db = Database(dburi)
+    >>> db                          # doctest: +NORMALIZE_WHITESPACE
+    Database({'courses': <class 'dinsd.PersistentRelation({'course_id': CID,
+        'title': str})'>, 'exam_marks': <class
+        'dinsd.PersistentRelation({'course_id': CID, 'mark': int, 'student_id':
+        SID})'>, 'is_called': <class 'dinsd.PersistentRelation({'name': str,
+        'student_id': SID})'>, 'is_enrolled_on': <class
+        'dinsd.PersistentRelation({'course_id': CID, 'student_id': SID})'>})
+
+And prove that the relations loaded from disk contain the same data as the ones
+we've been working with::
+
+    >>> db.r.is_called == mem_is_called
+    True
+    >>> db.r.is_enrolled_on == mem_is_enrolled_on
+    True
+    >>> db.r.exam_marks == mem_exam_marks
+    True
+    >>> db.r.courses == mem_courses
+    True

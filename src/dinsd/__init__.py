@@ -10,8 +10,10 @@ import weakref as _weakref
 
 # For debugging only.
 import sys as _sys
+___debug = False
 def ___(*args):
-    print(*args, file=_sys.stderr, flush=True)
+    if ___debug:
+        print(*args, file=_sys.stderr, flush=True)
     return args[-1]
 
 
@@ -386,12 +388,12 @@ class _Relation(_RichCompareMixin):
         return self._rows
 
     def _compare(self, other, method):
-        if type(self) != type(other):
+        if self.header != getattr(other, 'header', None):
             return NotImplemented
         return super()._compare(other, method)
 
     def __eq__(self, other):
-        if type(self) != type(other):
+        if self.header != getattr(other, 'header', None):
             return False
         return self._rows == other._rows
 
