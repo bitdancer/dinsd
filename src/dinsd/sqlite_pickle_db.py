@@ -515,23 +515,25 @@ class _dumb_sqlite_connection:
             ' ,'.join(['?'] * len(names))),
             [_pickle.dumps(getattr(rw, n)) for n in names])
 
+    def _namebits_and_values(self, d):
+        return zip(*[('"{}"=?'.format(n), v) for n, v in d.items()])
+
+    def _build_where(self, d):
+        namebits, where_values = self._namebits_and_values(d)
+        wherestr = ' and '.join(namebits)
+        return wherestr, where_values
+
     def update_row(self, name, key_fields, changes):
         c = self.con.cursor()
-        namebits, set_values = zip(*[('"{}"=?'.format(attrname), val)
-                                     for attrname, val in changes.items()])
+        wherestr, where_values = self._build_where(key_fields)
+        namebits, set_values = self._namebits_and_values(changes)
         setstr = ', '.join(namebits)
-        namebits, where_values = zip(*[('"{}"=?'.format(attrname), val)
-                                       for attrname, val in key_fields.items()])
-        wherestr = ' and '.join(namebits)
-        # We assume the pickle of a given value is always the same.
         c.execute('update "{}" set {} where {}'.format(name, setstr, wherestr),
                         [_pickle.dumps(v) for v in set_values + where_values])
 
     def delete_row(self, name, key_fields, rw):
         c = self.con.cursor()
-        namebits, where_values = zip(*[('"{}"=?'.format(attrname), val)
-                                       for attrname, val in key_fields.items()])
-        wherestr = ' and '.join(namebits)
+        wherestr, where_values = self._build_where(key_fields)
         c.execute('delete from {} where {}'.format(name, wherestr),
                         [_pickle.dumps(v) for v in where_values])
 
