@@ -290,7 +290,7 @@ class _Relation(_RichCompareMixin):
         # which could be a single argument or could be one dict/Row per arg.
         if len(args) == 0:
             # (1) Empty relation.
-            self._rows_ = set()
+            self._rows = set()
             return
         if (len(args)==1 and hasattr(args[0], 'header') and
                 args[0].header == self.header):
@@ -298,7 +298,7 @@ class _Relation(_RichCompareMixin):
             # immutable copy, because the only time this happens is when a
             # relation is the value of an attribute, and when a relation is a
             # value of an attribute it must be immutable.
-            self._rows_ = frozenset(args[0]._rows_)
+            self._rows = frozenset(args[0]._rows)
             return
         rows = []
         first = None
@@ -355,7 +355,7 @@ class _Relation(_RichCompareMixin):
                 raise ValueError(
                     "Duplicate row: {!r} in row {} of input".format(r, i))
             rowset.add(r)
-        self._rows_ = rowset
+        self._rows = rowset
 
     def _validate_attr_list(self, attrlist):
         if len(attrlist) != self.degree:
@@ -375,15 +375,15 @@ class _Relation(_RichCompareMixin):
     # Miscellaneous operators.
 
     def __iter__(self):
-        return iter(self._rows_)
+        return iter(self._rows)
 
     def __len__(self):
-        return len(self._rows_)
+        return len(self._rows)
 
     # Comparison operators (see RichCompareMixin).
 
     def _cmpkey(self):
-        return self._rows_
+        return self._rows
 
     def _compare(self, other, method):
         if type(self) != type(other):
@@ -393,13 +393,13 @@ class _Relation(_RichCompareMixin):
     def __eq__(self, other):
         if type(self) != type(other):
             return False
-        return self._rows_ == other._rows_
+        return self._rows == other._rows
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash(self._rows_)
+        return hash(self._rows)
 
     # Infix relational operators.
 
@@ -459,10 +459,10 @@ class _Relation(_RichCompareMixin):
 
     def __repr__(self):
         names = sorted(self.header)
-        if self._rows_:
+        if self._rows:
             return "rel({{{}}})".format(
                 ', '.join(repr(row)
-                          for row in sorted(self._rows_)))
+                          for row in sorted(self._rows)))
         return self.__class__.__name__ + '()'
 
     def display(self, *args, **kw):
@@ -557,17 +557,17 @@ def _binary_join(first, second):
         matches = lambda key: index[key]
     else:
         getter = lambda row: None
-        matches = lambda key: second._rows_
+        matches = lambda key: second._rows
     # Create an initially empty new relation of the new type, and then extend
     # it with the joined data.  Because the body is a set we don't have to
     # worry about duplicates.
     new_rel = _rel(combined_attrs)()
-    for row in first._rows_:
+    for row in first._rows:
         key = getter(row)
         for row2 in matches(key):
             attrs = vars(row).copy()
             attrs.update(vars(row2))
-            new_rel._rows_.add(new_rel.row(attrs))
+            new_rel._rows.add(new_rel.row(attrs))
     return new_rel
 
 
@@ -579,11 +579,11 @@ def intersect(*relations):
         relations = relations[0]
     first, *relations = relations
     new_rel = type(first)()
-    new_rel._rows_ = first._rows_
+    new_rel._rows = first._rows
     for rel in relations:
         if first.header != rel.header:
             raise TypeError("Cannot take intersection of unlike relations")
-        new_rel._rows_ = new_rel._rows_.intersection(rel._rows_)
+        new_rel._rows = new_rel._rows.intersection(rel._rows)
     return new_rel
 
 
@@ -610,13 +610,13 @@ def rename(relation, **renames):
         holder[new] = new_attrs.pop(old)
     new_attrs.update(holder)
     new_rel = _rel(new_attrs)()
-    for row in relation._rows_:
+    for row in relation._rows:
         row_data = vars(row).copy()
         holder = {}
         for old, new in renames.items():
             holder[new] = row_data.pop(old)
         row_data.update(holder)
-        new_rel._rows_.add(new_rel.row(row_data))
+        new_rel._rows.add(new_rel.row(row_data))
     return new_rel
 
 
@@ -648,10 +648,10 @@ def project(relation, attr_names):
                         "{}".format(attr_names - reduced_attrs.keys()))
     reduced_attr_names = reduced_attrs.keys()
     new_rel = _rel(reduced_attrs)()
-    for row in relation._rows_:
+    for row in relation._rows:
         new_row_data = {n: v for n, v in vars(row).items()
                              if n in reduced_attr_names}
-        new_rel._rows_.add(new_rel.row(new_row_data))
+        new_rel._rows.add(new_rel.row(new_row_data))
     return new_rel
 
 
@@ -660,9 +660,9 @@ def where(relation, condition):
         c = compile(condition, '<where>', 'eval')
         condition = lambda r, c=c: eval(c, _all, r._as_locals())
     new_rel = rel(relation.header)()
-    for row in relation._rows_:
+    for row in relation._rows:
         if condition(row):
-            new_rel._rows_.add(row)
+            new_rel._rows.add(row)
     return new_rel
 
 
@@ -685,7 +685,7 @@ def extend(relation, **new_attrs):
     for row in relation:
         new_values = vars(row).copy()
         new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
-        new_rel._rows_.add(new_rel.row(new_values))
+        new_rel._rows.add(new_rel.row(new_values))
     return new_rel
 
 
@@ -697,11 +697,11 @@ def union(*relations):
         relations = relations[0]
     first, *relations = relations
     new_rel = rel(first.header)()
-    new_rel._rows_.update(first._rows_.copy())
+    new_rel._rows.update(first._rows.copy())
     for r in relations:
         if not first.header == r.header:
             raise TypeError("Union operands must of equal types")
-        new_rel._rows_.update(r._rows_.copy())
+        new_rel._rows.update(r._rows.copy())
     return new_rel
 
 
@@ -730,15 +730,15 @@ def _matcher(first, second, match):
     new_rel = rel(first.header)()
     if not common_attrs:
         if bool(second) == match:   # exclusive or
-            new_rel._rows_.update(first._rows_)
+            new_rel._rows.update(first._rows)
         return new_rel
     getter = _operator.attrgetter(*common_attrs)
     index = set()
     for row in second:
         index.add(getter(row))
-    for row in first._rows_:
+    for row in first._rows:
         if (getter(row) in index) == match:
-            new_rel._rows_.add(row)
+            new_rel._rows.add(row)
     return new_rel
 
 
@@ -777,9 +777,9 @@ def _display(relation, *columns, sort=[], highlight=[]):
     getter = _operator.attrgetter(*columns) if columns else lambda x: x
     # Working around a little Python wart here.
     if len(columns) == 1:
-        rows = [(_printable(getter(row)),) for row in relation._rows_]
+        rows = [(_printable(getter(row)),) for row in relation._rows]
     else:
-        rows = [list(map(_printable, getter(row))) for row in relation._rows_]
+        rows = [list(map(_printable, getter(row))) for row in relation._rows]
     tosort = [sort] if isinstance(sort, str) else sort
     if not tosort:
         tosort = columns
@@ -910,7 +910,7 @@ def ungroup(relation, attrname):
         subrel = new_values.pop(attrname)
         for subrow in subrel:
             new_values.update(vars(subrow))
-            new_rel._rows_.add(new_rel.row(new_values))
+            new_rel._rows.add(new_rel.row(new_values))
     return new_rel
 
     
@@ -937,7 +937,7 @@ def unwrap(relation, attrname):
         new_values = vars(row).copy()
         subrow = new_values.pop(attrname)
         new_values.update(vars(subrow))
-        new_rel._rows_.add(new_rel.row(new_values))
+        new_rel._rows.add(new_rel.row(new_values))
     return new_rel
 
 

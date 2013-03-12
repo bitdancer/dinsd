@@ -49,7 +49,7 @@ class PersistentRelation(_Relation):
 
     def copy(self):
         new = type(self)(self.db, self.name)
-        new._rows_ = set(self._rows_)
+        new._rows = set(self._rows)
         new.key = self.key
         return new
 
@@ -59,7 +59,7 @@ class PersistentRelation(_Relation):
             rows = ~rows
         new = self.copy()
         for rw in rows:
-            if rw in new._rows_:
+            if rw in new._rows:
                 raise ConstraintError("row {} already in relation".format(rw))
             if rw._header_ != self.header:
                 raise TypeError("Type of inserted row ({}) does not match "
@@ -67,7 +67,7 @@ class PersistentRelation(_Relation):
                                                                self.header))
             self.db._check_row_constraint(self.name, new, rw)
             self.db._insert_row(self.name, rw)
-            new._rows_.add(rw)
+            new._rows.add(rw)
         self.db._transaction_ns.current[self.name] = new
         self.db._check_db_constraints()
 
@@ -87,7 +87,7 @@ class PersistentRelation(_Relation):
         for rw in self:
             if not condition(rw):
                 continue
-            new._rows_.remove(rw)
+            new._rows.remove(rw)
             # XXX This update can be made WAY more efficient.
             self.db._update_key(self.name)
             new_rw = rw.copy()
@@ -101,7 +101,7 @@ class PersistentRelation(_Relation):
             # learn to parse strings and turn them into SQL...so this is
             # probably the place to start building that translator.
             self.db._update_row(self.name, new_rw >> self.key.keys(), updates)
-            new._rows_.add(new_rw)
+            new._rows.add(new_rw)
             self.db._update_key(self.name)
         self.db._transaction_ns.current[self.name] = new
         self.db._check_db_constraints()
@@ -115,7 +115,7 @@ class PersistentRelation(_Relation):
         for rw in self:
             if not condition(rw):
                 continue
-            new._rows_.remove(rw)
+            new._rows.remove(rw)
         self.db._transaction_ns.current[self.name] = new
         self.db._check_db_constraints()
 
@@ -360,7 +360,7 @@ class Database(dict):
         # relations.
         self._init()
         for r in self.values():
-            r._rows_ = set()
+            r._rows = set()
             r.__class__ = DisconnectedPersistentRelation
         self.clear()
 
@@ -536,7 +536,7 @@ class _dumb_sqlite_connection:
             c.execute('select * from "{}"'.format(relname))
             names = [t[0] for t in c.description]
             for rwdata in c:
-                r._rows_.add(r.row({n: _pickle.loads(v)
+                r._rows.add(r.row({n: _pickle.loads(v)
                                     for n, v in zip(names, rwdata)}))
             rels.append((relname, r))
         return rels
