@@ -7,7 +7,7 @@ import sqlite3 as _sqlite
 import threading as _threading
 import weakref as _weakref
 import dinsd as _dinsd
-from dinsd import (rel as _rel, expression_namespace as _all, _Relation,
+from dinsd import (rel as _rel, expression_namespace as _expns, _Relation,
                    _hsig, display as _display)
 from dinsd.db import (ConstraintError, RowConstraintError, DBConstraintLoop,
                       Rollback)
@@ -17,7 +17,7 @@ import sys as _sys
 def ___(*args):
     print(*args, file=_sys.stderr, flush=True)
     return args[-1]
-_all['___'] = ___
+_expns['___'] = ___
 
 
 class PersistentRelation(_Relation):
@@ -75,14 +75,14 @@ class PersistentRelation(_Relation):
     def update(self, condition, **kw):
         if isinstance(condition, str):
             c = compile(condition, '<update>', 'eval')
-            condition = lambda r, c=c: eval(c, _all, r._as_locals())
+            condition = lambda r, c=c: eval(c, _expns, r._as_locals())
         changes = {}
         for n, f in kw.items():
             if n not in self.header:
                 raise ValueError("Unknown attribute name {!r}".format(n))
             if isinstance(f, str):
                 c = compile(f, '<update-'+n+'>', 'eval')
-                changes[n] = lambda r, c=c: eval(c, _all, r._as_locals())
+                changes[n] = lambda r, c=c: eval(c, _expns, r._as_locals())
         self.db._transaction_ns.current[self.name] = new = self.copy()
         for rw in self:
             if not condition(rw):
@@ -110,7 +110,7 @@ class PersistentRelation(_Relation):
     def delete(self, condition):
         if isinstance(condition, str):
             c = compile(condition, '<delete>', 'eval')
-            condition = lambda r, c=c: eval(c, _all, r._as_locals())
+            condition = lambda r, c=c: eval(c, _expns, r._as_locals())
         new = self.copy()
         for rw in self:
             if not condition(rw):
@@ -307,10 +307,10 @@ class Database(dict):
                            for v in self.row_constraints[relname].values())
         if row_validator:
             with _dinsd.ns(self._system_ns.current):
-                if not eval(row_validator, _all, rw._as_locals()):
+                if not eval(row_validator, _expns, rw._as_locals()):
                     # find first failing constraint to put in error message
                     for c, exp in sorted(self.row_constraints[relname].items()):
-                        if not eval(exp, _all, rw._as_locals()):
+                        if not eval(exp, _expns, rw._as_locals()):
                             raise RowConstraintError(relname, c, exp, rw)
                     raise AssertionError("Expected failure did not happen")
 
@@ -327,7 +327,7 @@ class Database(dict):
                     # and all of the failed rows.
                     rw = sorted(invalid)[0]
                     for c, exp in sorted(self.row_constraints[relname].items()):
-                        if not eval(exp, _all, rw._as_locals()):
+                        if not eval(exp, _expns, rw._as_locals()):
                             raise RowConstraintError(relname, c, exp, rw)
                     raise AssertionError("Expected failure did not happen")
 
@@ -338,12 +338,12 @@ class Database(dict):
                 if callable(constraint):
                     valid = constraint()
                 else:
-                    valid = eval(constraint, _all, self._as_locals())
+                    valid = eval(constraint, _expns, self._as_locals())
                 if not valid and fixer is not None:
                     if callable(fixer):
                         valid = fixer()
                     else:
-                        valid = eval(fixer, _all, self._as_locals())
+                        valid = eval(fixer, _expns, self._as_locals())
                     if valid:
                         done = False
                 if not valid:

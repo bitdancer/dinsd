@@ -658,7 +658,7 @@ def project(relation, attr_names):
 def where(relation, condition):
     if isinstance(condition, str):
         c = compile(condition, '<where>', 'eval')
-        condition = lambda r, c=c: eval(c, _all, r._as_locals())
+        condition = lambda r, c=c: eval(c, _expns, r._as_locals())
     new_rel = rel(relation.header)()
     for row in relation._rows:
         if condition(row):
@@ -677,7 +677,7 @@ def extend(relation, **new_attrs):
                              "{!r}".format(n))
         if isinstance(f, str):
             c = compile(f, '<extend>', 'eval')
-            new_attrs[n] = lambda r, c=c: eval(c, _all, r._as_locals())
+            new_attrs[n] = lambda r, c=c: eval(c, _expns, r._as_locals())
     attrs = relation.header.copy()
     row1 = next(iter(relation))
     attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
@@ -851,7 +851,7 @@ def _tline(parts, widths):
 def compute(relation, expr):
     if isinstance(expr, str):
         c = compile(expr, '<compute>', 'eval')
-        expr = lambda r, c=c: eval(c, _all, r._as_locals())
+        expr = lambda r, c=c: eval(c, _expns, r._as_locals())
     for row in relation:
         yield expr(row)
 
@@ -955,8 +955,8 @@ def extract_only_row(relation):
 
 
 # Expression global namespace.
-_all = {n: v for n, v in globals().items() if not n.startswith('_')}
-expression_namespace = _all
+_expns = {n: v for n, v in globals().items() if not n.startswith('_')}
+expression_namespace = _expns
 
 
 # 'with ns()' support.
@@ -996,7 +996,7 @@ ns = _NS()
 
 
 # 'from dinsd import *' support for interactive shell.
-__all__ = list(_all) + ['expression_namespace', 'ns']
+__expns__ = list(_expns) + ['expression_namespace', 'ns']
 
 
 #Licensed under the Apache License, Version 2.0 (the "License");
