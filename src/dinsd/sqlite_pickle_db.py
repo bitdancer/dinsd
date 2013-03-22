@@ -163,9 +163,9 @@ class _R:
 
 class _DBCon(_threading.local):
 
-    def __init__(self, storage):
+    def __init__(self, storage, debug_sql=False):
         self.storage = storage
-        self.con = storage.new_con()
+        self.con = storage.new_con(debug_sql=debug_sql)
 
     def __enter__(self):
         return self.con.__enter__()
@@ -173,11 +173,15 @@ class _DBCon(_threading.local):
     def __exit__(self, *args, **kw):
         self.con.__exit__(*args, **kw)
 
+    def set_trace_callback(self, callback):
+        self.con.set_trace_callback(callback)
+
 
 class Database(dict):
 
     def __init__(self, fn, debug_sql=False):
-        self._storage = _dumb_sqlite_persistence(fn, debug_sql=False)
+        self._debug_sql = debug_sql
+        self._storage = _dumb_sqlite_persistence(fn)
         self._init()
         self.r = _R(self)
         with self._con as con:
@@ -192,7 +196,20 @@ class Database(dict):
         self._system_ns = _dinsd._NS(self._system_relations)
         self._constraints = {}
         self._transaction_ns = _dinsd._NS(self, in_getitem=False)
-        self._con = _DBCon(self._storage)
+        self._con = _DBCon(self._storage, debug_sql=self.debug_sql)
+
+    @property
+    def debug_sql(self):
+        return self._debug_sql
+
+    @debug_sql.setter
+    def debug_sql(self, value):
+        self._debug_sql = value
+        if value is False:
+            self._con.set_trace_callback(None)
+            return
+        output = None if value is True else value
+        self._con.set_trace_callback(lambda x: print(x, file=output))
 
     def _as_locals(self):
         n = [_dinsd.ns.current]
@@ -432,14 +449,13 @@ class Database(dict):
 import sys
 class _dumb_sqlite_persistence:
 
-    def __init__(self, fn, debug_sql=sys.stderr):
+    def __init__(self, fn):
         self.dbfn = fn
-        self.debug_sql = debug_sql
 
-    def new_con(self):
+    def new_con(self, debug_sql=False):
         con = _sqlite.connect(self.dbfn, isolation_level=None)
-        if self.debug_sql:
-            outfile = None if self.debug_sql is True else self.debug_sql
+        if debug_sql:
+            outfile = None if debug_sql is True else debug_sql
             con.set_trace_callback(lambda x: print(x, file=outfile))
         return _dumb_sqlite_connection(con)
 
@@ -458,6 +474,9 @@ class _dumb_sqlite_connection:
             self.con.cursor().execute("release _dinsd")
         else:
             self.con.cursor().execute("rollback to _dinsd")
+
+    def set_trace_callback(self, callback):
+        self.con.set_trace_callback(callback)
 
     def initialize_sqlite_db_if_needed(self):
         c = self.con.cursor()

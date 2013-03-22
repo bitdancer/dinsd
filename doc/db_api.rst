@@ -1305,3 +1305,46 @@ we've been working with::
     True
     >>> db.r.courses == mem_courses
     True
+
+
+Debugging
+---------
+
+The standard dinsd debugging interface includes a way to trace all of the SQL
+sent to the database.  This feature may or may not be supported on all back
+ends, it depends on what features are provided by the back end database.  For
+this API demonstration and test, we will simply confirm that *something* is
+produced...but that something may be a message saying that the back end does
+not support SQL debugging.
+
+Debugging is controlled by the ``debug_sql`` property of the Database object.
+If the value is ``True``, debug output is written to ``sys.stdout``.  If the
+value is set to anything else that evaluates as ``True``, the value is assumed
+to be a file-like object, and the output is written to that object.
+
+One way to set the flag is to pass a value for it as a keyword argument
+when creating the ``Database`` object::
+
+    >>> from io import StringIO
+    >>> debug_out = StringIO()
+    >>> db = Database(dburi, debug_sql=debug_out)
+
+Loading the database requires SQL queries, so the above code will already
+have produced output::
+
+    >>> len(debug_out.getvalue().strip()) > 0
+    True
+
+Alternatively, the value of the ``debug_sql`` property can be set at
+any time to turn on debugging for a specific set of operations::
+
+    >>> debug_out.truncate(0)
+    0
+    >>> db.debug_sql = False
+    >>> db.r.is_called.insert(row(student_id=SID('S100'), name='Quebert'))
+    >>> len(debug_out.getvalue()) == 0
+    True
+    >>> db.debug_sql = debug_out
+    >>> db.r.is_called.delete("student_id==SID('S100')")
+    >>> len(debug_out.getvalue().strip()) > 0
+    True
