@@ -1335,8 +1335,8 @@ have produced output::
     >>> len(debug_out.getvalue().strip()) > 0
     True
 
-Alternatively, the value of the ``debug_sql`` property can be set at
-any time to turn on debugging for a specific set of operations::
+Alternatively, the value of the ``debug_sql`` property can be set at any time
+to turn on debugging for a specific set of operations::
 
     >>> debug_out.truncate(0)
     0
@@ -1348,3 +1348,54 @@ any time to turn on debugging for a specific set of operations::
     >>> db.r.is_called.delete("student_id==SID('S100')")
     >>> len(debug_out.getvalue().strip()) > 0
     True
+
+The debug setting is per-thread when multiple threads are running, and starts
+off with whatever value was passed in to the ``Database`` constructor when it
+the ``Database`` object was originally created.  That is, even if you change the
+``debug_sql`` property later, as we did above, new threads will use the
+original setting::
+
+    >>> debug_out.truncate(0)
+    0
+    >>> debug_out_main = StringIO()
+    >>> start.clear()
+    >>> done.clear()
+    >>> def tfunc():
+    ...     assert db.debug_sql is debug_out
+    ...     assert debug_out.getvalue() == ''
+    ...     done.set()
+    ...     wait_for('start1', start)
+    ...     assert db.debug_sql is debug_out
+    ...     assert debug_out.getvalue() == ''
+    ...     start.clear()
+    ...     db.r.is_called.insert(row(student_id=SID('S200'), name='Q'))
+    ...     db.debug_sql = False
+    ...     l = len(debug_out.getvalue().strip())
+    ...     db.r.is_called.delete("student_id==SID('S200')")
+    ...     assert len(debug_out.getvalue().strip()) == l
+    ...     done.set()
+    ...     wait_for('start2', start)
+    ...     assert not db.debug_sql
+    ...     print("subthread exiting")
+    >>> t = threading.Thread(target=tfunc)
+    >>> t.start(); wait_for('done1', done)
+    >>> db.debug_sql = debug_out_main
+    >>> done.clear()
+    >>> db.r.is_called.insert(row(student_id=SID('S100'), name='Quebert'))
+    >>> db.r.is_called.delete("student_id==SID('S100')")
+    >>> len(debug_out_main.getvalue().strip()) > 0
+    True
+    >>> start.set()
+    >>> wait_for('done2', done)
+    >>> db.debug_sql is debug_out_main
+    True
+    >>> start.set()
+    >>> t.join(timeout=5)
+    subthread exiting
+    >>> if len(debug_out_main.getvalue().splitlines()) > 1:
+    ...     assert debug_out_main.getvalue() != debug_out.getvalue()
+
+That last assert means we got different output from our queries in the two
+threads.  The check for the single line is because the 'unsupported' message
+will be a single line, and will of course be equal to itself, whereas if
+we have real debug output we'll have at least two lines.

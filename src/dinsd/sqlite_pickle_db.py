@@ -165,7 +165,8 @@ class _DBCon(_threading.local):
 
     def __init__(self, storage, debug_sql=False):
         self.storage = storage
-        self.con = storage.new_con(debug_sql=debug_sql)
+        self.con = storage.new_con()
+        self.debug_sql = debug_sql
 
     def __enter__(self):
         return self.con.__enter__()
@@ -173,7 +174,18 @@ class _DBCon(_threading.local):
     def __exit__(self, *args, **kw):
         self.con.__exit__(*args, **kw)
 
-    def set_trace_callback(self, callback):
+    @property
+    def debug_sql(self):
+        return self._debug_sql
+
+    @debug_sql.setter
+    def debug_sql(self, value):
+        self._debug_sql = value
+        if value is False:
+            callback = None
+        else:
+            output = None if value is True else value
+            callback = lambda x, output=output: print(x, file=output)
         self.con.set_trace_callback(callback)
 
 
@@ -196,20 +208,15 @@ class Database(dict):
         self._system_ns = _dinsd._NS(self._system_relations)
         self._constraints = {}
         self._transaction_ns = _dinsd._NS(self, in_getitem=False)
-        self._con = _DBCon(self._storage, debug_sql=self.debug_sql)
+        self._con = _DBCon(self._storage, debug_sql=self._debug_sql)
 
     @property
     def debug_sql(self):
-        return self._debug_sql
+        return self._con.debug_sql
 
     @debug_sql.setter
     def debug_sql(self, value):
-        self._debug_sql = value
-        if value is False:
-            self._con.set_trace_callback(None)
-            return
-        output = None if value is True else value
-        self._con.set_trace_callback(lambda x: print(x, file=output))
+        self._con.debug_sql = value
 
     def _as_locals(self):
         n = [_dinsd.ns.current]
