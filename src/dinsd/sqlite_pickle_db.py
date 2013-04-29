@@ -1,4 +1,16 @@
 #Copyright 2012, 2013 R. David Murray (see end comment for terms).
+"""A dinsd persistent database implementation storing pickles in sqlite.
+
+This is the simplest possible implementation of a dinsd back end, and therefore
+has various issues.  For one, it holds the entire database in memory during
+normal processing.  For another, it does not query the sqlite back end when
+data is accessed.  This means that there can only ever be one application
+program reading and writing the database (though that application can run
+multiple threads).  This is not, however, enforced in any way currently, so you
+can shoot yourself in the foot by trying it.
+
+"""
+
 import collections as _collections
 import contextlib as _contextlib
 import functools as _functools

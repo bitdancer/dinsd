@@ -286,7 +286,7 @@ from AIRDT on the general topic of constraints.  I'm only going to talk about,
 and give examples of, defining constraints of various types.
 
 Unlike *Tutorial D*, we are hoping that this API will be useful in production
-code (though probably not this implementation of it), so unlike *Tutorial D*
+code (though probably not all the implementations of it), so unlike *Tutorial D*
 we do provide specific ways to define constraints at each of the four levels
 of interest: value level, row level, relation level, and database level.  As
 explained in Chapter 6 of AIRDT, all of these *can* be implemented as database
@@ -440,7 +440,7 @@ You cannot define a row constraint on a relation that doesn't exist::
     KeyError: 'foo'
 
 dinsd, in the usual Python consenting adults fashion, does not try to protect
-you from modifying the ``row_constraints dictionary``.  If you modify it, the
+you from modifying the ``row_constraints`` dictionary.  If you modify it, the
 in-memory database constraints will cease to match the constraints in the
 persistent store, which is likely to lead to undesirable results.  So don't do
 that unless you've thought of a really good reason and are willing to risk
