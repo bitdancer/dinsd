@@ -22,7 +22,7 @@ import dinsd as _dinsd
 from dinsd import (rel as _rel, expression_namespace as _expns, _Relation,
                    _hsig, display as _display)
 from dinsd.db import (ConstraintError, RowConstraintError, DBConstraintLoop,
-                      Rollback)
+                      Rollback, _R)
 
 # For debugging only.
 import sys as _sys
@@ -154,23 +154,6 @@ def _get_persistent_type(r):
         cls = type(name, (PersistentRelation,), dct)
         _persistent_type_registry[hsig] = cls
     return cls
-
-
-class _R:
-
-    """Provides attribute style access to Database relations."""
-
-    def __init__(self, db):
-        self._db = db
-
-    def __getattr__(self, name):
-        return self._db[name]
-
-    def __setattr__(self, name, val):
-        if name.startswith('_'):
-            super().__setattr__(name, val)
-            return
-        self._db[name] = val
 
 
 class _DBCon(_threading.local):

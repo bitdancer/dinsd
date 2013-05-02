@@ -32,6 +32,23 @@ class DBConstraintLoop(ConstraintError):
         return "Database constrain-and-update loop did not terminate"
 
 
+class _R:
+
+    """Provides attribute style access to Database relations."""
+
+    def __init__(self, db):
+        self._db = db
+
+    def __getattr__(self, name):
+        return self._db[name]
+
+    def __setattr__(self, name, val):
+        if name.startswith('_'):
+            super().__setattr__(name, val)
+            return
+        self._db[name] = val
+
+
 
 #Licensed under the Apache License, Version 2.0 (the "License");
 #you may not use this file except in compliance with the License.
