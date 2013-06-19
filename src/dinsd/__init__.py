@@ -192,8 +192,8 @@ class _Row(_RichCompareMixin):
     def rename(self, **kw):
         return ~(rel(self).rename(**kw))
 
-    def extend(self, **kw):
-        return ~(rel(self).extend(**kw))
+    def extend(self, *args, **kw):
+        return ~(rel(self).extend(*args, **kw))
 
     # Presentation operators.
 
@@ -434,8 +434,8 @@ class _Relation(_RichCompareMixin):
     def where(self, condition):
         return where(self, condition)
 
-    def extend(self, **kw):
-        return extend(self, **kw)
+    def extend(self, *args, **kw):
+        return extend(self, *args, **kw)
 
     def compute(self, expr):
         return compute(self, expr)
@@ -668,11 +668,10 @@ def where(relation, condition):
     return new_rel
 
 
-def extend(relation, **new_attrs):
-    if len(relation) == 0:
-        # Tutorial D can do this, but the fact that we can't probably doesn't
-        # matter much in practice.
-        raise TypeError("Cannot extend empty relation")
+def extend(relation, *args, **new_attrs):
+    if len(args) > 1:
+        raise TypeError("extend() takes at most one positional argument but"
+                        " {} were given".format(len(args)))
     for n, f in new_attrs.items():
         if n in relation.header:
             raise ValueError("Duplicate relational attribute name "
@@ -681,8 +680,13 @@ def extend(relation, **new_attrs):
             c = compile(f, '<extend>', 'eval')
             new_attrs[n] = lambda r, c=c: eval(c, _expns, r._as_locals())
     attrs = relation.header.copy()
-    row1 = next(iter(relation))
-    attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
+    if len(args):
+        attrs.update(args[0].header)
+    else:
+        if len(relation) == 0:
+            raise TypeError("Cannot extend empty relation without prototype")
+        row1 = next(iter(relation))
+        attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
     new_rel = _rel(attrs)()
     for row in relation:
         new_values = vars(row).copy()

@@ -2499,7 +2499,7 @@ There is, as usual, a prefix version of ``extend``::
     >>> x == extend(is_called, initial="name[0]")
     True
 
-``extend`` not be used to add a duplicate attribute::
+``extend`` can not be used to add a duplicate attribute::
 
     >>> is_called.extend(name="'hello'")
     Traceback (most recent call last):
@@ -2513,6 +2513,48 @@ attributes with the same name::
     Traceback (most recent call last):
         ...
     SyntaxError: keyword argument repeated
+
+There is one unfortunate situation in which Python's dynamic typing leaves us
+in a bit of a pickle, and we have to resort to an awkward call form to work
+around it.  We normally determine the type of the extended column by checking
+the type of the value computed from the first row.  But what if the relation is
+empty?  In a statically typed language, one can infer the type of the
+computation from the computation itself.  In Python this is not reliable.  (It
+would probably be possible to guess correctly in 90% of the cases, and that
+might be a feature worth adding later, but we still need a way to handle the
+last 10%).
+
+To solve this, if you are operating on a relation that might be empty, you can
+explictly pass the types of the new columns by providing an initial argument
+that is a ``rel`` with fields of the appropriate type.  The argument ``rel``
+should contain all of the extended fields, and no others::
+
+    >>> empty_is_called = is_called.where('False')
+    >>> x = empty_is_called.extend(rel(xxx=str, yyy=int), xxx="'hello'", yyy=2)
+    >>> print(x)
+    +------+------------+-----+-----+
+    | name | student_id | xxx | yyy |
+    +------+------------+-----+-----+
+    +------+------------+-----+-----+
+
+If the first argument, which we refer to as the "prototype", is not given,
+trying to extend an empty relation is an error::
+
+    >>> x = empty_is_called.extend(xxx="'hello'", yyy=2)
+    Traceback (most recent call last):
+        ...
+    TypeError: Cannot extend empty relation without prototype
+
+If a prototype is given and the relation is *not* empty, the actual computed
+values must match the type given in the prototype::
+
+    >>> is_called.extend(rel(foo=int), foo="'hello'")
+    ...
+    ... # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+        ...
+    ValueError: invalid literal for int() with base 10: 'hello';
+        'hello' invalid for attribute foo
 
 
 union
