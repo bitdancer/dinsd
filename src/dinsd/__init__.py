@@ -683,14 +683,21 @@ def extend(relation, *args, **new_attrs):
     if len(args):
         attrs.update(args[0].header)
     else:
-        if len(relation) == 0:
-            raise TypeError("Cannot extend empty relation without prototype")
-        row1 = next(iter(relation))
-        attrs.update({n: type(new_attrs[n](row1)) for n in new_attrs.keys()})
+        # Try a synthetic row (default values for all types).
+        try:
+            rw = row({n: t() for n, t in relation.header.items()})
+            attrs.update({n: type(new_attrs[n](rw)) for n in new_attrs.keys()})
+        except Exception:
+            # Didn't work, we'll have to fall back on a real row if we can.
+            if len(relation) == 0:
+                raise TypeError("Cannot extend this empty relation without"
+                                " a prototype")
+            rw = next(iter(relation))
+            attrs.update({n: type(new_attrs[n](rw)) for n in new_attrs.keys()})
     new_rel = _rel(attrs)()
-    for row in relation:
-        new_values = vars(row).copy()
-        new_values.update({n: new_attrs[n](row) for n in new_attrs.keys()})
+    for rw in relation:
+        new_values = vars(rw).copy()
+        new_values.update({n: new_attrs[n](rw) for n in new_attrs.keys()})
         new_rel._rows.add(new_rel.row(new_values))
     return new_rel
 

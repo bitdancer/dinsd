@@ -2519,17 +2519,35 @@ in a bit of a pickle, and we have to resort to an awkward call form to work
 around it.  We normally determine the type of the extended column by checking
 the type of the value computed from the first row.  But what if the relation is
 empty?  In a statically typed language, one can infer the type of the
-computation from the computation itself.  In Python this is not reliable.  (It
-would probably be possible to guess correctly in 90% of the cases, and that
-might be a feature worth adding later, but we still need a way to handle the
-last 10%).
+computation from the computation itself.  In Python this is not reliable; we
+can do it in cases where the type function called with no arguments returns
+a default value of the specified type::
 
-To solve this, if you are operating on a relation that might be empty, you can
-explictly pass the types of the new columns by providing an initial argument
-that is a ``rel`` with fields of the appropriate type.  The argument ``rel``
-should contain all of the extended fields, and no others::
+    >>> rel(id=int, name=str)().extend(xxx="'hello'")
+    rel({'id': int, 'name': str, 'xxx': str})()
+
+But not all types follow this strict rule, since in some cases we do not
+want there to be a default value.  ``CID`` and ``SID`` are examples of this.
+In this case, trying to extend the empty relation will result in an error::
 
     >>> empty_is_called = is_called.where('False')
+    >>> x = empty_is_called.extend(xxx="'hello'", yyy=2)
+    Traceback (most recent call last):
+        ...
+    TypeError: Cannot extend this empty relation without a prototype
+
+Note that the full traceback includes the initial traceback that shows why the
+attempt to guess the types didn't work, and the reason won't always be a type
+function that raises if given no arguments.  For instance, the computation
+executed by the extend clause might raise an error when applied to the default
+values (for example, division by zero).
+
+To solve this problem if you are operating on such a relation that might be
+empty, you can explictly pass a "prototype" that specifies the types of the new
+columns by passing ``extend`` an initial argument that is a ``rel`` with fields
+of the appropriate type.  The argument ``rel`` should contain all of the
+extended fields, and no others::
+
     >>> x = empty_is_called.extend(rel(xxx=str, yyy=int), xxx="'hello'", yyy=2)
     >>> print(x)
     +------+------------+-----+-----+
@@ -2537,16 +2555,13 @@ should contain all of the extended fields, and no others::
     +------+------------+-----+-----+
     +------+------------+-----+-----+
 
-If the first argument, which we refer to as the "prototype", is not given,
-trying to extend an empty relation is an error::
+Alternatively, of course, you can make sure your types return a default value
+when called with no arguments, and this is actually the recommended solution,
+though you may still need prototypes if you use extend expressions that can
+raise doing computations on the default values.
 
-    >>> x = empty_is_called.extend(xxx="'hello'", yyy=2)
-    Traceback (most recent call last):
-        ...
-    TypeError: Cannot extend empty relation without prototype
-
-If a prototype is given and the relation is *not* empty, the actual computed
-values must match the type given in the prototype::
+Note that if a prototype is given and the relation is *not* empty, the actual
+computed values must match the type given in the prototype::
 
     >>> is_called.extend(rel(foo=int), foo="'hello'")
     ...
@@ -2555,6 +2570,10 @@ values must match the type given in the prototype::
         ...
     ValueError: invalid literal for int() with base 10: 'hello';
         'hello' invalid for attribute foo
+
+Specifying a prototype can thus also be useful if you are a belt-and-suspenders
+type and want to make sure your extend expressions are producing the type you
+are intending them to produce.
 
 
 union
