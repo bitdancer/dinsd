@@ -128,13 +128,20 @@ class _Row(_RichCompareMixin):
                                 self._degree_, len(attrdict), attrdict))
         for attr, value in attrdict.items():
             try:
-                setattr(self, attr, self._header_[attr](value))
-            except (TypeError, ValueError) as e:
-                raise type(e)(str(e) + "; {!r} invalid for attribute {}".format(
-                                value, attr))
+                typ = self._header_[attr]
             except KeyError:
                 raise TypeError(
                     "Invalid attribute name {}".format(attr)) from None
+            # XXX: the special case here for _Relation is so that the extend
+            # tests, which require the relation to be hashable, work.  Probably
+            # extend should be fixed instead.
+            if not isinstance(value, typ) or isinstance(value, _Relation):
+                try:
+                    value = typ(value)
+                except (TypeError, ValueError) as e:
+                    raise type(e)(str(e) + "; {!r} invalid for attribute {}".format(
+                                    value, attr))
+            setattr(self, attr, value)
 
     # Miscellaneous operators.
 

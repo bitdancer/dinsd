@@ -236,6 +236,9 @@ type accept an instance of itself as valid input, and return an equivalent
 instance.  (Note that this requirement is not true for *Tutorial D*.  We'll
 discuss why it is true for dinsd below.)
 
+XXX: The above restriction needs to be removed!  (I've started to do so,
+starting with ``row``.)
+
 In addition to the conformance checking in the ``__init__`` method, there are
 some auxiliary methods that every user defined scaler type must have.
 Therefore dinsd provides a base type for such user defined scalers, named
@@ -4624,6 +4627,13 @@ operator on a relation that has more than one row::
         ...
     ValueError: <class 'dinsd.rel({'course_id': CID, 'title': str})'> object
         has more than one row
+
+Likewise it cannot be used on an empty relation::
+
+    >>> ~(rel(name=str)())
+    Traceback (most recent call last):
+        ...
+    StopIteration
 
 For completeness, the example of compound use of ``FROM``::
 
