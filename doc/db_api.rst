@@ -799,7 +799,36 @@ Here we are removing ``C3`` from our list of courses.  In dinsd this is::
 XXX: We have some people enrolled on that course, though.  We didn't get a DB
 constraint error because we don't have a constraint set up to enforce that one
 can only be enrolled on a course that exists.  I'll circle back around to that
-soon.
+at some point.
+
+Now let's make sure those DB changes persisted::
+
+    >>> db.close()
+    >>> db = Database(dburi)
+    >>> print(db.r.courses)
+    +-----------+-------------+
+    | course_id | title       |
+    +-----------+-------------+
+    | C1        | Database    |
+    | C2        | HCI         |
+    | C4        | Programming |
+    +-----------+-------------+
+
+XXX: the key constraints are not yet persisted (but the update is)::
+
+    >>> print(db.r.exam_marks.display("student_id", "course_id", "mark"))
+    +------------+-----------+------+
+    | student_id | course_id | mark |
+    +------------+-----------+------+
+    | S1         | C1        | 85   |
+    | S1         | C2        | 54   |
+    | S1         | C3        | 85   |
+    | S2         | C1        | 49   |
+    | S2         | C3        | 0    |
+    | S3         | C2        | 0    |
+    | S3         | C3        | 66   |
+    | S4         | C1        | 93   |
+    +------------+-----------+------+
 
 
 Transactions
