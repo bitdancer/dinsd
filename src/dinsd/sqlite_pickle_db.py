@@ -102,8 +102,10 @@ class PersistentRelation(_Relation):
             if not condition(rw):
                 continue
             new._rows.remove(rw)
-            # XXX This key update can be made WAY more efficient.
-            self.db._update_key(self.name)
+            # XXX This key update can be made WAY more efficient, this
+            # way of doing it is a complete hack.
+            if '_sys_key_'+self.name in self.db._system_ns.current:
+                self.db._update_key(self.name)
             new_rw = rw.copy()
             updates = {}
             for attrname, change in changes.items():
@@ -115,7 +117,8 @@ class PersistentRelation(_Relation):
             # learn to parse expression strings and turn them into SQL...
             self.db._update_row(self.name, rw >> key, updates)
             new._rows.add(new_rw)
-            self.db._update_key(self.name)
+            if '_sys_key_'+self.name in self.db._system_ns.current:
+                self.db._update_key(self.name)
         self.db._transaction_ns.current[self.name] = new
         self.db._check_db_constraints()
 
